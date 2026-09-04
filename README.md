@@ -9,12 +9,12 @@ Atualizações oficiais do Sistema OS para Windows e Android.
 
 Os dois links apontam sempre para os arquivos da atualização marcada como mais recente.
 
-## Atualização 30.5.100 / Android 1.0.72
+## Atualização 30.5.108 / Android 1.0.78
 
-Edição de entregas e garantias no PC e no celular, garantia automática ao preencher o prazo da entrega e sincronização dos dados com a nuvem por operação autorizada por empresa. Inclui correção do bloqueio de sincronização ao reunir fotos dos dois aparelhos.
+Nova aba **Desbloqueios** com autorização profissional de titularidade e riscos, PDF em A4, envio para assinatura no celular e opção de emissão como não assinado. A exclusão dos documentos agora é confirmada na nuvem e não reaparece após reiniciar ou reinstalar o aplicativo.
 
-- [Novidades e instaladores](https://github.com/albertocodexx/sistemaos-updates/releases/tag/v30.5.100)
-- [Código-fonte do PC](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.100/SistemaOS-PC-Codigo-Fonte-v30.5.100.zip)
-- [Código-fonte do Android](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.100/SistemaOS-Android-Codigo-Fonte-v1.0.72.zip)
+- [Novidades e instaladores](https://github.com/albertocodexx/sistemaos-updates/releases/tag/v30.5.108)
+- [Código-fonte do PC](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.108/SistemaOS-PC-Codigo-Fonte-v30.5.108.zip)
+- [Código-fonte do Android](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.108/SistemaOS-Android-Codigo-Fonte-v1.0.78.zip)
 
 Os pacotes de código-fonte não incluem dados de clientes, senhas, certificados privados, dependências instaladas ou caches de compilação.
