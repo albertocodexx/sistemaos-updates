@@ -9,12 +9,12 @@ Atualizações oficiais do Sistema OS para Windows e Android.
 
 Os dois links apontam sempre para os arquivos da atualização marcada como mais recente.
 
-## Atualização 30.5.120 / Android 1.0.80
+## Atualização 30.5.121 / Android 1.0.81
 
-Corrige a troca de conta salva: sessões renovadas permanecem atualizadas; sessões expiradas solicitam a senha sem fechar, reiniciar ou travar o aplicativo. O Android 1.0.80 permanece como o APK oficial desta publicação.
+Adiciona o status **Aguardando peça** aos aparelhos para venda e permite registrar as peças usadas com descrição e valor. O sistema soma o custo automaticamente no financeiro, mas mantém o total editável para ajustes manuais. A busca e os cartões do estoque também mostram esses dados no PC e no Android.
 
-- [Novidades e instaladores](https://github.com/albertocodexx/sistemaos-updates/releases/tag/v30.5.120)
-- [Código-fonte do PC](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.120/SistemaOS-PC-Codigo-Fonte-v30.5.120.zip)
-- [Código-fonte do Android](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.120/SistemaOS-Android-Codigo-Fonte-v1.0.80.zip)
+- [Novidades e instaladores](https://github.com/albertocodexx/sistemaos-updates/releases/tag/v30.5.121)
+- [Código-fonte do PC](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.121/SistemaOS-PC-Codigo-Fonte-v30.5.121.zip)
+- [Código-fonte do Android](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.121/SistemaOS-Android-Codigo-Fonte-v1.0.81.zip)
 
 Os pacotes de código-fonte não incluem dados de clientes, senhas, certificados privados, dependências instaladas ou caches de compilação.
