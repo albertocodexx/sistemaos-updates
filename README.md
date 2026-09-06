@@ -9,12 +9,12 @@ Atualizações oficiais do Sistema OS para Windows e Android.
 
 Os dois links apontam sempre para os arquivos da atualização marcada como mais recente.
 
-## Atualização 30.5.118 / Android 1.0.80
+## Atualização 30.5.120 / Android 1.0.80
 
-Troca rápida imediata, sem rede ou lock no boot, e sincronização entre computadores corrigida com paginação completa e recuperação automática de OS ausentes. O Android 1.0.80 permanece como o APK oficial desta publicação.
+Corrige a troca de conta salva: sessões renovadas permanecem atualizadas; sessões expiradas solicitam a senha sem fechar, reiniciar ou travar o aplicativo. O Android 1.0.80 permanece como o APK oficial desta publicação.
 
-- [Novidades e instaladores](https://github.com/albertocodexx/sistemaos-updates/releases/tag/v30.5.118)
-- [Código-fonte do PC](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.118/SistemaOS-PC-Codigo-Fonte-v30.5.118.zip)
-- [Código-fonte do Android](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.118/SistemaOS-Android-Codigo-Fonte-v1.0.80.zip)
+- [Novidades e instaladores](https://github.com/albertocodexx/sistemaos-updates/releases/tag/v30.5.120)
+- [Código-fonte do PC](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.120/SistemaOS-PC-Codigo-Fonte-v30.5.120.zip)
+- [Código-fonte do Android](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.120/SistemaOS-Android-Codigo-Fonte-v1.0.80.zip)
 
 Os pacotes de código-fonte não incluem dados de clientes, senhas, certificados privados, dependências instaladas ou caches de compilação.
