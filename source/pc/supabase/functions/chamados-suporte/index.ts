@@ -57,11 +57,11 @@ function ehAdministradorEmpresa(contexto: Record<string, any> | null | undefined
   const cargo = texto(contexto?.cargo, 80).toLowerCase();
   const configuracoes = contexto?.permissoes?.configuracoes;
   return ['administrador', 'admin', 'proprietario', 'proprietário'].includes(cargo)
-    || configuracoes === true || configuracoes?.visualizar === true;
+    || configuracoes === true;
 }
 
 function podeAcessarAutenticado(chamado: Record<string, any>, autenticado: Record<string, any> | null) {
-  if (!autenticado || autenticado.contexto?.administrador_global) return false;
+  if (!autenticado || chamado.excluido_em || autenticado.contexto?.administrador_global) return false;
   if (autenticado.contexto?.empresa_id !== chamado.empresa_id) return false;
   return chamado.aberto_por === autenticado.usuario.id || ehAdministradorEmpresa(autenticado.contexto);
 }
@@ -306,7 +306,7 @@ Deno.serve(async (req) => {
       const token = uuidValido(dados.token);
       const { data: chamado, error } = await admin.from('chamados_suporte').select('*').eq('id', chamadoId).maybeSingle();
       if (error) throw error;
-      if (!chamado) return responder(404, { erro: 'Chamado não encontrado.' });
+      if (!chamado || chamado.excluido_em) return responder(404, { erro: 'Chamado não encontrado.' });
       const chamadoToken = token ? await chamadoPorToken(admin, token) : null;
       if (!suporte && !podeAcessarAutenticado(chamado, autenticado) && chamadoToken?.id !== chamado.id) return responder(403, { erro: 'Você não pode acompanhar este chamado.' });
       return responder(200, { chamado: { ...semSegredos(chamado), protocolo: protocolo(chamado.id) }, mensagens: await mensagensDoChamado(admin, chamado.id) });

@@ -49,4 +49,12 @@ assert.doesNotMatch(migration, /set public_token = null/i);
 assert.match(chamados, /Retencao segura/);
 assert.doesNotMatch(chamados, /from\('chamados_suporte'\)\.delete\(\)/);
 
+const funcaoAdmin = chamados.match(/function ehAdministradorEmpresa\([\s\S]*?\n\}/)[0]
+  .replace(/\(contexto: [^\n]+\) \{/, '(contexto) {');
+const verificarAdmin = new Function('texto', funcaoAdmin + '; return ehAdministradorEmpresa;')((v) => String(v || '').trim());
+assert.equal(verificarAdmin({ cargo: 'Tecnico', permissoes: { configuracoes: { visualizar: true } } }), false,
+  'Visualizar configuracoes nao autoriza ler chamados dos colegas.');
+assert.equal(verificarAdmin({ cargo: 'Administrador' }), true);
+assert.equal(verificarAdmin({ cargo: 'Tecnico', permissoes: { configuracoes: false } }), false);
+
 console.log('OK: Trial de 45 dias e chamados estruturados possuem bloqueio, privacidade e retencao segura.');
