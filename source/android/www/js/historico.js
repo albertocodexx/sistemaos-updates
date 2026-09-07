@@ -595,13 +595,15 @@
     });
   }
 
-  function listarDocumentosRecebidos() {
+  function listarDocumentosRecebidos(incluirExcluidos) {
     return abrirBanco().then(function (db) {
       return new Promise(function (resolve, reject) {
         var tx = db.transaction(NOME_LOJA_DOCS, 'readonly');
         var pedido = tx.objectStore(NOME_LOJA_DOCS).getAll();
         pedido.onsuccess = function () {
-          var lista = pedido.result || [];
+          var lista = (pedido.result || []).filter(function (registro) {
+            return incluirExcluidos === true || registro.statusLocal !== 'excluido';
+          });
           lista.sort(function (a, b) { return (b.recebidoEm || '').localeCompare(a.recebidoEm || ''); });
           resolve(lista);
         };
@@ -628,7 +630,9 @@
   // Usado na importação para checar duplicata pelo idEnvioAssinatura (o
   // mesmo pacote do PC importado duas vezes não deve virar dois registros).
   function obterDocumentoRecebidoPorIdEnvio(idEnvioAssinatura) {
-    return listarDocumentosRecebidos().then(function (lista) {
+    // A busca inclui tombstones. Assim um pacote apagado continua sendo
+    // reconhecido e não é importado novamente depois que o app reinicia.
+    return listarDocumentosRecebidos(true).then(function (lista) {
       for (var i = 0; i < lista.length; i++) {
         if (lista[i].idEnvioAssinatura === idEnvioAssinatura) return lista[i];
       }
@@ -646,6 +650,41 @@
           reject(tx.error || new Error('Falha ao excluir este documento.'));
         };
       });
+    });
+  }
+
+  function marcarDocumentoRecebidoExcluido(registro, exclusaoNuvemConfirmada) {
+    if (!registro || !registro.id) return Promise.reject(new Error('Documento não informado.'));
+    // Conserva somente os identificadores necessários para impedir a
+    // reimportação e repetir a exclusão na nuvem. O conteúdo pessoal e as
+    // assinaturas deixam o aparelho imediatamente.
+    return salvarDocumentoRecebido({
+      id: registro.id,
+      recebidoEm: registro.recebidoEm || new Date().toISOString(),
+      tipoDocumento: registro.tipoDocumento || 'os',
+      idEnvioAssinatura: String(registro.idEnvioAssinatura || ''),
+      identificador: registro.identificador || {},
+      _origemSupabase: registro._origemSupabase === true,
+      statusLocal: 'excluido',
+      removidoEm: registro.removidoEm || new Date().toISOString(),
+      exclusaoNuvemConfirmada: exclusaoNuvemConfirmada === true
+    });
+  }
+
+  function listarDocumentosRecebidosExcluidos() {
+    return listarDocumentosRecebidos(true).then(function (lista) {
+      return lista.filter(function (registro) {
+        return registro.statusLocal === 'excluido' && registro.exclusaoNuvemConfirmada !== true;
+      });
+    });
+  }
+
+  function confirmarExclusaoDocumentoRecebido(id) {
+    return obterDocumentoRecebidoPorId(id).then(function (registro) {
+      if (!registro || registro.statusLocal !== 'excluido') return false;
+      registro.exclusaoNuvemConfirmada = true;
+      registro.exclusaoNuvemConfirmadaEm = new Date().toISOString();
+      return salvarDocumentoRecebido(registro).then(function () { return true; });
     });
   }
 
@@ -884,6 +923,9 @@
     obterDocumentoRecebidoPorId: obterDocumentoRecebidoPorId,
     obterDocumentoRecebidoPorIdEnvio: obterDocumentoRecebidoPorIdEnvio,
     excluirDocumentoRecebido: excluirDocumentoRecebido,
+    marcarDocumentoRecebidoExcluido: marcarDocumentoRecebidoExcluido,
+    listarDocumentosRecebidosExcluidos: listarDocumentosRecebidosExcluidos,
+    confirmarExclusaoDocumentoRecebido: confirmarExclusaoDocumentoRecebido,
     salvarRascunho: salvarRascunho,
     obterRascunho: obterRascunho,
     removerRascunho: removerRascunho,

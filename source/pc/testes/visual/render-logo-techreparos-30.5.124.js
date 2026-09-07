@@ -4,9 +4,9 @@ const { app, BrowserWindow } = require('electron');
 const { gerarHtmlOS } = require('../../src/templates/os-template');
 
 const raiz = path.resolve(__dirname, '../..');
-const saida = path.join(raiz, 'output/pdf/Previa-Logo-TechReparos-30.5.124.pdf');
+const saida = path.join(raiz, 'output/pdf/Previa-Logo-TechReparos-30.5.125.pdf');
 const temporario = path.join(raiz, 'tmp/pdfs/previa-logo-techreparos.html');
-const logo = fs.readFileSync('C:/Users/alber/OneDrive/Documents/logos/techreparossemfundo.png');
+const logo = fs.readFileSync(path.join(raiz, 'tmp/pdfs/logo-techreparos-recortada.png'));
 const config = {
   nomeEmpresa: 'TechReparos',
   endereco: 'Rua das Begônias, 649, Jardim Laguna, Linhares - ES, CEP 29904-330',

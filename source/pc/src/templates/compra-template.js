@@ -225,12 +225,12 @@ function gerarHtmlCompra(cp, config) {
 
   /* CABEÇALHO */
   .cabecalho{
-    display:flex;align-items:flex-start;gap:8px;
+    display:flex;align-items:center;gap:8px;
     border-bottom:2px solid ${t.linhasDestaque};
     padding-bottom:6px;margin-bottom:5px;flex-shrink:0;
   }
-  .logo-wrap{flex-shrink:0;background:#fff;border-radius:4px;}
-  .logo-img{height:var(--logo-h,80px);width:auto;max-width:calc(var(--logo-h,80px) * 2.2);object-fit:contain;}
+  .logo-wrap{flex-shrink:0;background:#fff;border-radius:4px;display:flex;align-items:center;justify-content:center;}
+  .logo-img{display:block;height:var(--logo-h,80px);width:auto;max-width:calc(var(--logo-h,80px) * 2.2);object-fit:contain;}
   .logo-pdf-monocromatica{filter:grayscale(1) brightness(0) contrast(1.4);}
   .logo-mono{
     width:var(--logo-h,80px);height:var(--logo-h,80px);border-radius:5px;

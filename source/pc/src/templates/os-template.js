@@ -216,12 +216,12 @@ function gerarHtmlOS(os, config) {
 
   /* CABEÇALHO */
   .cabecalho{
-    display:flex;align-items:flex-start;gap:9px;
+    display:flex;align-items:center;gap:9px;
     border-bottom:2.5px solid ${t.linhasDestaque};
     padding-bottom:7px;margin-bottom:6px;flex-shrink:0;
   }
-  .empresa-logo{flex-shrink:0;background:#fff;border-radius:4px;}
-  .logo-img{max-height:var(--logo-h,80px);max-width:calc(var(--logo-h,80px) * 2.2);object-fit:contain;}
+  .empresa-logo{flex-shrink:0;background:#fff;border-radius:4px;display:flex;align-items:center;justify-content:center;}
+  .logo-img{display:block;max-height:var(--logo-h,80px);max-width:calc(var(--logo-h,80px) * 2.2);object-fit:contain;}
   .logo-pdf-monocromatica{filter:grayscale(1) brightness(0) contrast(1.4);}
   .logo-monograma{
     width:var(--logo-h,80px);height:var(--logo-h,80px);display:flex;align-items:center;justify-content:center;

@@ -1504,36 +1504,78 @@ $('cep').addEventListener('input', e => {
   el.setSelectionRange(pos + diff, pos + diff);
 });
 
+async function normalizarLogoParaDocumentos(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const origem = document.createElement('canvas');
+      origem.width = img.naturalWidth || img.width;
+      origem.height = img.naturalHeight || img.height;
+      const ctxOrigem = origem.getContext('2d', { willReadFrequently: true });
+      ctxOrigem.drawImage(img, 0, 0);
+      const pixels = ctxOrigem.getImageData(0, 0, origem.width, origem.height).data;
+      let temTransparencia = false;
+      for (let i = 3; i < pixels.length; i += 4) {
+        if (pixels[i] < 250) { temTransparencia = true; break; }
+      }
+
+      let esquerda = origem.width;
+      let topo = origem.height;
+      let direita = -1;
+      let base = -1;
+      for (let y = 0; y < origem.height; y++) {
+        for (let x = 0; x < origem.width; x++) {
+          const i = (y * origem.width + x) * 4;
+          const visivel = temTransparencia
+            ? pixels[i + 3] > 8
+            : pixels[i + 3] > 8 && (pixels[i] < 248 || pixels[i + 1] < 248 || pixels[i + 2] < 248);
+          if (!visivel) continue;
+          if (x < esquerda) esquerda = x;
+          if (x > direita) direita = x;
+          if (y < topo) topo = y;
+          if (y > base) base = y;
+        }
+      }
+      if (direita < esquerda || base < topo) {
+        reject(new Error('A imagem da logo está vazia.'));
+        return;
+      }
+
+      const larguraConteudo = direita - esquerda + 1;
+      const alturaConteudo = base - topo + 1;
+      const margem = Math.max(8, Math.round(Math.max(larguraConteudo, alturaConteudo) * 0.025));
+      esquerda = Math.max(0, esquerda - margem);
+      topo = Math.max(0, topo - margem);
+      direita = Math.min(origem.width - 1, direita + margem);
+      base = Math.min(origem.height - 1, base + margem);
+      const larguraRecorte = direita - esquerda + 1;
+      const alturaRecorte = base - topo + 1;
+      const escala = Math.min(1, 1400 / Math.max(larguraRecorte, alturaRecorte));
+      const destino = document.createElement('canvas');
+      destino.width = Math.max(1, Math.round(larguraRecorte * escala));
+      destino.height = Math.max(1, Math.round(alturaRecorte * escala));
+      destino.getContext('2d').drawImage(
+        origem,
+        esquerda, topo, larguraRecorte, alturaRecorte,
+        0, 0, destino.width, destino.height
+      );
+      resolve(destino.toDataURL('image/png'));
+    };
+    img.onerror = () => reject(new Error('Falha ao ler imagem'));
+    img.src = dataUrl;
+  });
+}
+
 $('inputLogo').addEventListener('change', async e => {
   const f = e.target.files[0];
   if (!f) return;
   const reader = new FileReader();
   reader.onload = async ev => {
-    // Compor logo sobre fundo branco sólido para eliminar transparência
-    // (PNGs com canal alfa ficam com fundo preto em vários motores de PDF)
+    // Remove margens vazias e preserva a transparência. Assim a marca usa
+    // a área disponível no papel e permanece alinhada com os dados da empresa.
     let b64 = ev.target.result;
     try {
-      b64 = await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-          const LADO = 512;
-          const MARGEM = 0.06;
-          const canvas = document.createElement('canvas');
-          canvas.width = LADO;
-          canvas.height = LADO;
-          const ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, LADO, LADO);
-          const areaUtil = LADO * (1 - MARGEM * 2);
-          const escala = Math.min(areaUtil / img.width, areaUtil / img.height);
-          const w = img.width * escala;
-          const h = img.height * escala;
-          ctx.drawImage(img, (LADO - w) / 2, (LADO - h) / 2, w, h);
-          resolve(canvas.toDataURL('image/png'));
-        };
-        img.onerror = () => reject(new Error('Falha ao ler imagem'));
-        img.src = ev.target.result;
-      });
+      b64 = await normalizarLogoParaDocumentos(b64);
     } catch { /* mantém base64 original se canvas falhar */ }
     const ext = f.name.split('.').pop();
     try {

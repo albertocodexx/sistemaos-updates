@@ -8,6 +8,7 @@ const raiz = path.resolve(__dirname, '..', '..');
 const html = fs.readFileSync(path.join(raiz, 'renderer', 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(raiz, 'renderer', 'monochrome-theme.css'), 'utf8');
 const runtime = fs.readFileSync(path.join(raiz, 'renderer', 'core', 'legacy-runtime.js'), 'utf8');
+const templateOS = fs.readFileSync(path.join(raiz, 'src', 'templates', 'os-template.js'), 'utf8');
 
 assert(html.includes('monochrome-theme.css'), 'tema monocromático precisa ser carregado no renderer');
 assert(html.indexOf('monochrome-theme.css') > html.indexOf('modules/precos/tabela-precos.css'), 'tema monocromático deve ser a última camada CSS');
@@ -16,6 +17,10 @@ assert(css.includes('--cor-principal: #ffffff !important'), 'modo escuro deve us
 assert(css.includes('--cor-principal: #000000 !important'), 'modo claro deve usar preto como ação principal');
 assert(css.includes('.card-estatistica') === false, 'CSS do PC não deve depender de componentes Android');
 assert(runtime.includes("corPrincipal: '#FFFFFF'"), 'tema salvo de fábrica deve ser monocromático');
+assert(runtime.includes('normalizarLogoParaDocumentos'), 'upload da logo deve remover margens vazias antes de salvar');
+assert(runtime.includes("temTransparencia"), 'normalização da logo deve preservar PNG transparente');
+assert.match(templateOS, /\.cabecalho\{[\s\S]*align-items:center/, 'logo e dados da empresa devem ficar alinhados no PDF');
+assert.match(templateOS, /\.logo-img\{display:block;/, 'a imagem da logo não deve criar desalinhamento de linha no PDF');
 
 for (const arquivo of [
   'renderer/assets/logo-os-black.png',

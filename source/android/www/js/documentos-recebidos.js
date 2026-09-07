@@ -84,6 +84,7 @@
     // se já estiver assinado, para não perder uma assinatura já feita).
     return window.SistemaOSHistorico.obterDocumentoRecebidoPorIdEnvio(pacote.idEnvioAssinatura)
       .then(function (existente) {
+        if (existente && existente.statusLocal === 'excluido') return null;
         var registro = existente || {
           id: 'doc-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
           statusLocal: 'pendente'
@@ -103,7 +104,7 @@
         }
         return window.SistemaOSHistorico.salvarDocumentoRecebido(registro);
       })
-      .then(function () { return true; })
+      .then(function (registroSalvo) { return !!registroSalvo; })
       .catch(function (err) {
         if (!silencioso) {
           mostrarFeedback('Falha ao importar: ' + (err && err.message ? err.message : String(err)), true);
@@ -130,7 +131,7 @@
           });
         }).catch(function () { return []; });
     }
-    return buscarPeloSupabase().then(function (pacotes) {
+    return sincronizarExclusoesPendentes().then(buscarPeloSupabase).then(function (pacotes) {
       if (!pacotes.length) return;
       var importados = 0;
       var promessa = Promise.resolve();
@@ -152,6 +153,42 @@
         }
       });
     }).catch(function () { /* verificação automática nunca deve quebrar a tela */ });
+  }
+
+  function cancelarSolicitacaoNaNuvem(registro) {
+    if (!registro || !String(registro.idEnvioAssinatura || '').trim()) {
+      return Promise.resolve({ confirmada: true, semIdentificadorRemoto: true });
+    }
+    if (!window.SupabaseClientApp) {
+      return Promise.reject(new Error('A conexão com a nuvem ainda não está pronta.'));
+    }
+    var cliente;
+    try { cliente = window.SupabaseClientApp.obterCliente(); } catch (erro) { return Promise.reject(erro); }
+    return cliente.rpc('cancelar_solicitacao_assinatura_remota', {
+      p_id_envio_assinatura: String(registro.idEnvioAssinatura).trim()
+    }).then(function (resposta) {
+      if (resposta.error) throw resposta.error;
+      var dados = Array.isArray(resposta.data) ? resposta.data[0] : resposta.data;
+      if (!dados || dados.cancelada !== true) throw new Error('A solicitação não pôde ser removida da nuvem.');
+      return { confirmada: true, encontrada: dados.encontrada !== false };
+    });
+  }
+
+  function sincronizarExclusoesPendentes() {
+    if (!window.SistemaOSHistorico.listarDocumentosRecebidosExcluidos) return Promise.resolve();
+    return window.SistemaOSHistorico.listarDocumentosRecebidosExcluidos().then(function (registros) {
+      var sequencia = Promise.resolve();
+      registros.forEach(function (registro) {
+        sequencia = sequencia.then(function () {
+          return cancelarSolicitacaoNaNuvem(registro)
+            .then(function () {
+              return window.SistemaOSHistorico.confirmarExclusaoDocumentoRecebido(registro.id);
+            })
+            .catch(function () { return false; });
+        });
+      });
+      return sequencia;
+    });
   }
 
   // ── Importar .json do PC ─────────────────────────────────────────
@@ -304,31 +341,26 @@
       }
       return;
     }
-    var exclusaoNuvem = Promise.resolve();
-    // Registros antigos nem sempre carregavam `_origemSupabase`. Confiar
-    // nesse marcador apagava apenas a cópia local; na próxima abertura o
-    // servidor enviava o mesmo documento novamente. Agora a nuvem confirma
-    // a exclusão antes da remoção do aparelho.
-    if (registro && registro.idEnvioAssinatura && window.SupabaseClientApp) {
-      exclusaoNuvem = window.SupabaseClientApp.obterCliente().rpc('cancelar_solicitacao_assinatura_remota', {
-        p_id_envio_assinatura: registro.idEnvioAssinatura
-      }).then(function (resposta) {
-        if (resposta.error) throw resposta.error;
-        if (!resposta.data || resposta.data.cancelada !== true) {
-          throw new Error('A solicitação não pôde ser removida da nuvem.');
-        }
-      });
-    }
-    exclusaoNuvem.then(function () {
-      return window.SistemaOSHistorico.excluirDocumentoRecebido(registro.id);
-    })
+    // Primeiro grava um tombstone durável e remove os dados pessoais. Mesmo
+    // offline, o documento não volta ao fechar e abrir o app. A exclusão na
+    // nuvem é repetida automaticamente até ser confirmada.
+    window.SistemaOSHistorico.marcarDocumentoRecebidoExcluido(registro, false)
       .then(function () {
         if (elementoItem && elementoItem.parentNode) elementoItem.parentNode.removeChild(elementoItem);
         if (!listaDocs.querySelector('.item-historico')) renderizarLista([]);
-        mostrarFeedback('Documento excluído do celular e da nuvem.');
+        return cancelarSolicitacaoNaNuvem(registro)
+          .then(function () {
+            return window.SistemaOSHistorico.confirmarExclusaoDocumentoRecebido(registro.id);
+          })
+          .then(function () {
+            mostrarFeedback('Documento excluído do celular e da nuvem.');
+          })
+          .catch(function () {
+            mostrarFeedback('Documento excluído do celular. A nuvem será atualizada automaticamente quando houver conexão.');
+          });
       })
       .catch(function (err) {
-        mostrarFeedback('Não foi possível excluir: ' + (err && err.message ? err.message : String(err)) + ' Conecte à internet e tente novamente.', true);
+        mostrarFeedback('Não foi possível excluir: ' + (err && err.message ? err.message : String(err)), true);
       });
   }
 

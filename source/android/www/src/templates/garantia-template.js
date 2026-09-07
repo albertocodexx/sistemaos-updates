@@ -77,12 +77,12 @@ function gerarHtmlGarantia(g, config) {
   .pagina{width:210mm;min-height:297mm;padding:10mm 14mm;display:flex;flex-direction:column;}
 
   .cabecalho{
-    display:flex;align-items:flex-start;gap:10px;
+    display:flex;align-items:center;gap:10px;
     border-bottom:2px solid ${t.linhasDestaque};
     padding-bottom:7px;margin-bottom:10px;flex-shrink:0;
   }
-  .logo-wrap{flex-shrink:0;background:#fff;border-radius:4px;}
-  .logo-img{height:var(--logo-h,80px);width:auto;max-width:calc(var(--logo-h,80px) * 2.2);object-fit:contain;}
+  .logo-wrap{flex-shrink:0;background:#fff;border-radius:4px;display:flex;align-items:center;justify-content:center;}
+  .logo-img{display:block;height:var(--logo-h,80px);width:auto;max-width:calc(var(--logo-h,80px) * 2.2);object-fit:contain;}
   .logo-pdf-monocromatica{filter:grayscale(1) brightness(0) contrast(1.4);}
   .logo-mono{
     width:var(--logo-h,80px);height:var(--logo-h,80px);border-radius:6px;
