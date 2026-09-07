@@ -862,9 +862,18 @@
     <section class="painel-config" id="painel-config" hidden>
 
       <form id="form-config" class="form-os" novalidate>
-        <p class="config-versao-aplicativo">Aplicativo instalado: <strong>1.0.25</strong></p>
+        <p class="config-versao-aplicativo">Aplicativo instalado: <strong>1.0.84</strong></p>
 
-        <fieldset class="secao-config">
+        <fieldset class="secao-config config-empresa-somente-leitura">
+          <legend>Dados da empresa</legend>
+          <p class="aviso">Estes dados vêm do Sistema OS no computador e são atualizados automaticamente.</p>
+          <div class="config-empresa-resumo">
+            <img id="cfg-empresa-logo-readonly" class="config-empresa-logo-readonly" alt="Logo da empresa" hidden />
+            <div id="cfg-empresa-resumo" class="config-empresa-resumo-dados"></div>
+          </div>
+        </fieldset>
+
+        <fieldset class="secao-config config-empresa-edicao" hidden aria-hidden="true">
           <legend>Identificação da assistência</legend>
 
           <label for="cfg-nome-fantasia">Nome fantasia <span class="obrigatorio">*</span></label>
@@ -887,7 +896,7 @@
           </div>
         </fieldset>
 
-        <fieldset class="secao-config">
+        <fieldset class="secao-config config-empresa-edicao" hidden aria-hidden="true">
           <legend>Logo</legend>
 
           <div class="logo-preview-box" id="logo-preview-box">Sem logo</div>
@@ -897,7 +906,7 @@
           </div>
         </fieldset>
 
-        <fieldset class="secao-config">
+        <fieldset class="secao-config config-empresa-edicao" hidden aria-hidden="true">
           <legend>Assinatura padrão da assistência técnica</legend>
           <p class="aviso aviso-tecnico">
             Usada automaticamente em todo documento gerado. Na tela de cada documento,
@@ -924,7 +933,7 @@
           </p>
         </fieldset>
 
-        <fieldset class="secao-config">
+        <fieldset class="secao-config config-empresa-edicao" hidden aria-hidden="true">
           <legend>Contato</legend>
 
           <label for="cfg-telefone">Telefone <span class="opcional">(opcional)</span></label>
@@ -937,7 +946,7 @@
           <input type="email" id="cfg-email" name="cfg-email" inputmode="email" />
         </fieldset>
 
-        <fieldset class="secao-config">
+        <fieldset class="secao-config config-empresa-edicao" hidden aria-hidden="true">
           <legend>Endereço</legend>
 
           <label for="cfg-endereco">Endereço <span class="opcional">(opcional)</span></label>
@@ -953,7 +962,7 @@
           <input type="text" id="cfg-cep" name="cfg-cep" inputmode="numeric" placeholder="00000-000" />
         </fieldset>
 
-        <fieldset class="secao-config">
+        <fieldset class="secao-config config-empresa-edicao" hidden aria-hidden="true">
           <legend>Termos — Ordem de Serviço</legend>
 
           <label class="checkbox-linha" for="cfg-termos-predefinidos-os">
@@ -979,7 +988,7 @@
           </div>
         </fieldset>
 
-        <fieldset class="secao-config">
+        <fieldset class="secao-config config-empresa-edicao" hidden aria-hidden="true">
           <legend>Termos — Venda</legend>
 
           <label class="checkbox-linha" for="cfg-termos-predefinidos-venda">
@@ -1005,7 +1014,7 @@
           </div>
         </fieldset>
 
-        <fieldset class="secao-config">
+        <fieldset class="secao-config config-empresa-edicao" hidden aria-hidden="true">
           <legend>Termos — Compra</legend>
 
           <label class="checkbox-linha" for="cfg-termos-predefinidos-compra">
@@ -1031,7 +1040,7 @@
           </div>
         </fieldset>
 
-        <fieldset class="secao-config">
+        <fieldset class="secao-config config-empresa-edicao" hidden aria-hidden="true">
           <legend>Fonte dos Termos no PDF</legend>
 
           <label for="cfg-tamanho-fonte-termos" class="label-slider">
@@ -1055,7 +1064,7 @@
           </p>
         </fieldset>
 
-        <fieldset class="secao-config">
+        <fieldset class="secao-config config-empresa-edicao" hidden aria-hidden="true">
           <legend>Garantia</legend>
 
           <label for="cfg-garantia-dias-padrao">Prazo de garantia padrão (dias)</label>
@@ -1204,7 +1213,7 @@
 
         <p class="erro-geral" id="erro-geral-config" hidden></p>
 
-        <button type="submit" id="btn-salvar-config" class="btn-primario">Salvar configurações</button>
+        <button type="submit" id="btn-salvar-config" class="btn-primario" hidden aria-hidden="true">Salvar configurações</button>
         <p class="feedback-acao" id="feedback-config" hidden></p>
       </form>
     </section>

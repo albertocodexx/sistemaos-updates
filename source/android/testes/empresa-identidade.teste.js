@@ -27,13 +27,13 @@ const crypto = require('crypto');
   assert.equal(servico.ehAdministrador({ cargo: 'Atendente' }), false);
   await assert.rejects(
     () => servico.atualizarLogoEmpresa({ empresa_id: empresa, cargo: 'Atendente' }, ''),
-    /administrador|propriet/i
+    /PC/i
   );
   const dataUrl = 'data:image/png;base64,' + Buffer.from('logo-padrao').toString('base64');
-  const resposta = await servico.atualizarLogoEmpresa({ empresa_id: empresa, cargo: 'Administrador' }, dataUrl);
-  assert.equal(resposta.possuiLogo, true);
-  assert(chamadas.some((item) => item.tipo === 'upload' && item.caminho === empresa + '/logo.png'));
-  assert(chamadas.some((item) => item.nome === 'definir_logo_empresa'));
-  assert(chamadas.some((item) => item.tipo === 'config' && item.patch.logoBase64 === dataUrl));
-  console.log('OK - logo unica por empresa e alteracao exclusiva do administrador validadas.');
+  await assert.rejects(
+    () => servico.atualizarLogoEmpresa({ empresa_id: empresa, cargo: 'Administrador' }, dataUrl),
+    /PC/i
+  );
+  assert.equal(chamadas.length, 0, 'nem administrador deve alterar a logo pelo Android');
+  console.log('OK - logo da empresa e somente leitura no Android.');
 })().catch((erro) => { console.error(erro); process.exit(1); });

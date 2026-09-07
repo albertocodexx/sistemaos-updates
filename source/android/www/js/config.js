@@ -57,6 +57,7 @@
   var CONFIG_PADRAO = {
     // Identificação
     configAtualizadaEm: '',
+    nomeEmpresa: '',
     nomeFantasia: '',
     razaoSocial: '',
     possuiCnpj: false,
@@ -68,11 +69,16 @@
 
     // Contato
     telefone: '',
+    telefoneFixo: '',
     whatsapp: '',
     email: '',
+    site: '',
 
     // Endereço
     endereco: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
     cidade: '',
     estado: '',
     cep: '',
@@ -113,6 +119,10 @@
     // em OS/Compra, 8.5pt em Venda), preservando o visual atual para quem
     // nunca mexeu neste controle.
     tamanhoFonteTermosPdf: 0,
+    tamanhoLogoPdf: 80,
+    logoPdfMonocromatica: false,
+    textoRodapePdf: '',
+    exibirCnpjDocumentos: true,
 
     // Aparência
     temaModo: 'escuro', // 'claro' | 'escuro'
@@ -227,20 +237,27 @@
     var cfg = carregarConfig();
     return {
       // Lidos por empresa-compositor.js (nomes de ENTRADA do compositor).
-      nomeFantasia: cfg.nomeFantasia || '',
+      nomeEmpresa: cfg.nomeEmpresa || cfg.nomeFantasia || '',
+      nomeFantasia: cfg.nomeFantasia || cfg.nomeEmpresa || '',
       razaoSocial: cfg.razaoSocial || '',
       possuiCnpj: !!cfg.possuiCnpj,
       cnpj: cfg.cnpj || '',
       inscricaoEstadual: cfg.inscricaoEstadual || '',
-      exibirCnpjDocumentos: true, // sem toggle próprio no celular ainda — sempre exibe quando há CNPJ
+      exibirCnpjDocumentos: cfg.exibirCnpjDocumentos !== false,
       logoBase64: cfg.logoBase64 || '',
       telefonePrincipal: cfg.telefone || '',
-      telefoneFixo: '', // sem campo próprio no celular ainda — só "Telefone" e "WhatsApp"
+      telefoneFixo: cfg.telefoneFixo || '',
       whatsapp: cfg.whatsapp || '',
       email: cfg.email || '',
-      site: '', // sem campo próprio no celular ainda
-      enderecoEmpresa: [cfg.endereco, cfg.cidade, cfg.estado, cfg.cep].filter(Boolean).join(', '),
-      textoRodapePdf: '', // sem campo próprio no celular ainda
+      site: cfg.site || '',
+      enderecoEmpresa: [
+        [cfg.endereco, cfg.numero].filter(Boolean).join(', '),
+        cfg.complemento,
+        cfg.bairro,
+        [cfg.cidade, cfg.estado].filter(Boolean).join(' - '),
+        cfg.cep
+      ].filter(Boolean).join(', '),
+      textoRodapePdf: cfg.textoRodapePdf || '',
 
       // Lidos DIRETO do `config` pelos templates (não passam pelo compositor).
       usarTermosPredefinidosOS: cfg.usarTermosPredefinidosOS,
@@ -261,7 +278,8 @@
       // tamanho de fábrica de cada template (ver resolverTamanhoFonteTermos
       // em os-template.js/venda-template.js/compra-template.js).
       tamanhoFonteTermosPdf: Number(cfg.tamanhoFonteTermosPdf) || 0,
-      tamanhoLogoPdf: 80
+      tamanhoLogoPdf: Math.max(40, Number(cfg.tamanhoLogoPdf) || 80),
+      logoPdfMonocromatica: cfg.logoPdfMonocromatica === true
     };
   }
 

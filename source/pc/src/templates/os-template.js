@@ -51,7 +51,7 @@ function gerarVia(os, config, tituloVia, t) {
   const imei = os.imei || a.imei || '';
 
   const logoHtml = empresa.temLogo
-    ? `<img src="${empresa.logoBase64}" alt="Logo" class="logo-img" />`
+    ? `<img src="${empresa.logoBase64}" alt="Logo" class="logo-img${config.logoPdfMonocromatica ? ' logo-pdf-monocromatica' : ''}" />`
     : `<div class="logo-monograma">${escapeHtml(empresa.iniciais)}</div>`;
 
   const cnpjHtml = empresa.cnpj
@@ -222,6 +222,7 @@ function gerarHtmlOS(os, config) {
   }
   .empresa-logo{flex-shrink:0;background:#fff;border-radius:4px;}
   .logo-img{max-height:var(--logo-h,80px);max-width:calc(var(--logo-h,80px) * 2.2);object-fit:contain;}
+  .logo-pdf-monocromatica{filter:grayscale(1) brightness(0) contrast(1.4);}
   .logo-monograma{
     width:var(--logo-h,80px);height:var(--logo-h,80px);display:flex;align-items:center;justify-content:center;
     border:2px solid ${t.bordas};border-radius:5px;

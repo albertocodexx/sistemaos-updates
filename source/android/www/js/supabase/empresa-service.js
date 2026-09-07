@@ -202,32 +202,13 @@
 
   async function sincronizarConfiguracoesEmpresa(contexto) {
     if (!contexto || contexto.administrador_global === true || !root.ConfigApp) return null;
-    var configuracaoLocal = typeof root.ConfigApp.carregarConfig === 'function'
-      ? root.ConfigApp.carregarConfig()
-      : null;
-
-    // Recupera primeiro qualquer salvamento que ficou pendente por falha de
-    // rede. Em seguida a reconciliacao v2 resgata, uma unica vez, a copia real
-    // preservada pelo Android durante a atualizacao do APK. Uma instalacao
-    // nova possui configuracao vazia e, portanto, continua baixando a nuvem.
-    if (haConfigPendente(contexto) && ehAdministrador(contexto)) {
-      await salvarConfiguracoesEmpresa(contexto, configuracaoLocal, { reenvio: true });
-    }
+    // A identidade da empresa tem uma unica fonte de verdade: o Sistema OS
+    // no PC. O Android nunca reenviara uma copia local antiga, nem mesmo para
+    // administradores. Isso evita que reinstalacao, cache ou uso simultaneo
+    // restaurem telefone, endereco, termos ou logo desatualizados.
+    limparConfigPendente(contexto);
     var cliente = root.SupabaseClientApp.obterCliente();
     var identidade = await carregarIdentidade(contexto);
-    if (!haConfigReconciliada(contexto) && ehAdministrador(contexto) &&
-        configuracaoLocalSignificativa(configuracaoLocal)) {
-      await salvarConfiguracoesEmpresa(contexto, configuracaoLocal, { migracao: true });
-      identidade = await carregarIdentidade(contexto);
-    } else if (haConfigReconciliada(contexto) && ehAdministrador(contexto) &&
-        configuracaoLocalSignificativa(configuracaoLocal) &&
-        instante(configuracaoLocal.configAtualizadaEm) > instante(identidade && identidade.configMobileAtualizadaEm)) {
-      // Se o usuario editou offline, a versao local explicitamente mais nova
-      // sobe antes do download. Assim atualizar o APK nunca restaura nome,
-      // logo, assinatura ou termos antigos.
-      await salvarConfiguracoesEmpresa(contexto, configuracaoLocal, { reenvio: true });
-      identidade = await carregarIdentidade(contexto);
-    }
     if (!identidade) return null;
     var possuiConfigMobile = !!(identidade.configMobile &&
       typeof identidade.configMobile === 'object' &&
@@ -269,88 +250,15 @@
   }
 
   async function salvarConfiguracoesEmpresa(contexto, configuracao) {
-    if (!ehAdministrador(contexto)) {
-      throw new Error('Somente o administrador ou proprietário pode alterar as configurações da empresa.');
-    }
-    var cliente = root.SupabaseClientApp.obterCliente();
-    marcarConfigPendente(contexto);
-    var atual = await cliente.from('configuracoes_empresa')
-      .select('configuracoes')
-      .eq('empresa_id', contexto.empresa_id)
-      .maybeSingle();
-    if (atual.error) throw atual.error;
-    var configuracoes = Object.assign({}, atual.data && atual.data.configuracoes || {});
-    var identidade = Object.assign({}, configuracoes.identidadeEmpresa || {});
-    identidade.configMobile = configuracaoMobileSegura(configuracao);
-
-    // Salva primeiro os campos de texto/toggles. Assim, uma falha isolada no
-    // upload da assinatura não impede nome, contato, endereço e termos de
-    // chegarem ao Supabase.
-    var identidadePersistida = await persistirConfigMobile(cliente, configuracao, identidade);
-
-    var assinatura = String(configuracao && configuracao.assinaturaAssistenciaBase64 || '');
-    var caminhoAssinatura = String(contexto.empresa_id) + '/assinatura-assistencia.png';
-    var identidadeAlterada = false;
-    if (assinatura) {
-      var imagem = bytesDeDataUrl(assinatura);
-      if (imagem.mime.indexOf('image/') !== 0 || !imagem.bytes.length || imagem.bytes.length > 3 * 1024 * 1024) {
-        throw new Error('A assinatura deve ser uma imagem de até 3 MB.');
-      }
-      var envio = await cliente.storage.from('identidade-empresa').upload(caminhoAssinatura, imagem.bytes, {
-        contentType: imagem.mime, upsert: true, cacheControl: '0'
-      });
-      if (envio.error) throw envio.error;
-      identidade.assinaturaStoragePath = caminhoAssinatura;
-      identidade.assinaturaSha256 = await sha256Hex(imagem.bytes);
-      identidadeAlterada = true;
-    } else if (identidade.assinaturaStoragePath) {
-      var remocao = await cliente.storage.from('identidade-empresa').remove([identidade.assinaturaStoragePath]);
-      if (remocao.error && !/not found/i.test(remocao.error.message || '')) throw remocao.error;
-      delete identidade.assinaturaStoragePath;
-      delete identidade.assinaturaSha256;
-      identidadeAlterada = true;
-    }
-
-    if (identidadeAlterada) {
-      identidadePersistida = await persistirConfigMobile(cliente, configuracao, identidade);
-    }
-    limparConfigPendente(contexto);
-    var versaoServidor = identidadePersistida && identidadePersistida.configMobileAtualizadaEm;
-    if (versaoServidor && root.ConfigApp && typeof root.ConfigApp.salvarConfig === 'function') {
-      root.ConfigApp.salvarConfig({ configAtualizadaEm: versaoServidor });
-    }
-    marcarConfigSincronizada(contexto, versaoServidor);
-    marcarConfigReconciliada(contexto);
-    return { sucesso: true, configMobileAtualizadaEm: versaoServidor || '' };
+    void contexto;
+    void configuracao;
+    throw new Error('Os dados da empresa são alterados somente no Sistema OS do PC.');
   }
 
   async function atualizarLogoEmpresa(contexto, dataUrl) {
-    if (!ehAdministrador(contexto)) {
-      throw new Error('Somente o administrador ou proprietÃ¡rio pode alterar a logo da empresa.');
-    }
-    var cliente = root.SupabaseClientApp.obterCliente();
-    var caminho = String(contexto.empresa_id) + '/logo.png';
-    if (!dataUrl) {
-      var remocao = await cliente.storage.from('identidade-empresa').remove([caminho]);
-      if (remocao.error && !/not found/i.test(remocao.error.message || '')) throw remocao.error;
-      var registroVazio = await cliente.rpc('definir_logo_empresa', { p_storage_path: '', p_sha256: '' });
-      if (registroVazio.error) throw registroVazio.error;
-      root.ConfigApp.salvarConfig({ logoBase64: '' });
-      return { possuiLogo: false };
-    }
-    var imagem = bytesDeDataUrl(dataUrl);
-    if (imagem.mime.indexOf('image/') !== 0 || !imagem.bytes.length || imagem.bytes.length > 5 * 1024 * 1024) {
-      throw new Error('A logo deve ser uma imagem de atÃ© 5 MB.');
-    }
-    var hash = await sha256Hex(imagem.bytes);
-    var envio = await cliente.storage.from('identidade-empresa').upload(caminho, imagem.bytes, {
-      contentType: 'image/png', upsert: true, cacheControl: '0'
-    });
-    if (envio.error) throw envio.error;
-    var registro = await cliente.rpc('definir_logo_empresa', { p_storage_path: caminho, p_sha256: hash });
-    if (registro.error) throw registro.error;
-    root.ConfigApp.salvarConfig({ logoBase64: dataUrl });
-    return { possuiLogo: true, logoBase64: dataUrl, sha256: hash };
+    void contexto;
+    void dataUrl;
+    throw new Error('A logo da empresa é alterada somente no Sistema OS do PC.');
   }
 
   function validarContexto(contexto, usuarioId, agora) {

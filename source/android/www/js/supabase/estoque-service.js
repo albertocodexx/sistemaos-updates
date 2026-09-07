@@ -5,8 +5,10 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
   'use strict';
 
-  var VERSAO_CACHE = 1;
-  var PREFIXO_CACHE = 'sistema-os-estoque-cache-v1:';
+  // v2 invalida a fotografia antiga que podia reaparecer depois da venda
+  // enquanto o primeiro pull ainda estava em andamento.
+  var VERSAO_CACHE = 2;
+  var PREFIXO_CACHE = 'sistema-os-estoque-cache-v2:';
   var TIPOS_ITEM_ESTOQUE = ['Peça / Componente', 'Consumível', 'Acessório'];
   var STATUS_APARELHO = ['Aguardando chegada', 'Em análise', 'Aguardando peça', 'Em reparo', 'Pronto para venda', 'Reservado', 'Vendido', 'Cancelado'];
 

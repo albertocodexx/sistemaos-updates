@@ -26,6 +26,8 @@
   var erroGeralConfig = document.getElementById('erro-geral-config');
   var feedbackConfig = document.getElementById('feedback-config');
   var btnSalvarConfig = document.getElementById('btn-salvar-config');
+  var resumoEmpresa = document.getElementById('cfg-empresa-resumo');
+  var logoEmpresaSomenteLeitura = document.getElementById('cfg-empresa-logo-readonly');
   var podeAlterarConfiguracoesEmpresa = false;
 
   // Identificação
@@ -463,8 +465,52 @@
   // sem salvar, o tema volta ao valor salvo na próxima vez que o app abrir.
   if (checkTemaEscuro) {
     checkTemaEscuro.addEventListener('change', function () {
-      window.TemaApp.aplicar(checkTemaEscuro.checked ? 'escuro' : 'claro');
+      var modo = checkTemaEscuro.checked ? 'escuro' : 'claro';
+      window.TemaApp.aplicar(modo);
+      // Aparencia e uma preferencia deste aparelho, nao um dado cadastral
+      // da empresa. Persiste imediatamente sem liberar o formulario oculto.
+      window.ConfigApp.salvarConfig({ temaModo: modo });
     });
+  }
+
+  function preencherResumoEmpresa(cfg) {
+    if (!resumoEmpresa) return;
+    resumoEmpresa.textContent = '';
+    var linhas = [
+      ['Empresa', cfg.nomeFantasia || cfg.nomeEmpresa],
+      ['Razão social', cfg.razaoSocial],
+      ['CNPJ', cfg.possuiCnpj ? cfg.cnpj : 'Não informado'],
+      ['Inscrição estadual', cfg.inscricaoEstadual],
+      ['Telefone', cfg.telefone],
+      ['Telefone fixo', cfg.telefoneFixo],
+      ['WhatsApp', cfg.whatsapp],
+      ['E-mail', cfg.email],
+      ['Site', cfg.site],
+      ['Endereço', [
+        [cfg.endereco, cfg.numero].filter(Boolean).join(', '),
+        cfg.complemento,
+        cfg.bairro,
+        [cfg.cidade, cfg.estado].filter(Boolean).join(' - '),
+        cfg.cep
+      ].filter(Boolean).join(' · ')]
+    ];
+    linhas.forEach(function (linha) {
+      var item = document.createElement('div');
+      item.className = 'config-empresa-resumo-item';
+      var rotulo = document.createElement('span');
+      rotulo.textContent = linha[0];
+      var valor = document.createElement('strong');
+      valor.textContent = String(linha[1] || 'Não informado');
+      item.appendChild(rotulo);
+      item.appendChild(valor);
+      resumoEmpresa.appendChild(item);
+    });
+    if (logoEmpresaSomenteLeitura) {
+      var logo = String(cfg.logoBase64 || '');
+      logoEmpresaSomenteLeitura.hidden = !logo;
+      if (logo) logoEmpresaSomenteLeitura.src = logo;
+      else logoEmpresaSomenteLeitura.removeAttribute('src');
+    }
   }
 
   // ── Backup completo (exportar / restaurar / apagar tudo) ────────────
@@ -633,9 +679,10 @@
     var contextoEmpresa = window.SistemaOSPermissoes && window.SistemaOSPermissoes.obterContexto
       ? window.SistemaOSPermissoes.obterContexto()
       : null;
-    var podeAlterarLogo = !!(window.SistemaOSEmpresaService &&
-      window.SistemaOSEmpresaService.ehAdministrador(contextoEmpresa));
-    podeAlterarConfiguracoesEmpresa = podeAlterarLogo;
+    // No Android, inclusive para administradores, a identidade e somente
+    // leitura. Todas as alteracoes sao feitas no PC e baixadas da nuvem.
+    var podeAlterarLogo = false;
+    podeAlterarConfiguracoesEmpresa = false;
 
     campoNomeFantasia.value = cfg.nomeFantasia || '';
     campoRazaoSocial.value = cfg.razaoSocial || '';
@@ -695,6 +742,7 @@
     campoCidade.value = cfg.cidade || '';
     campoEstado.value = cfg.estado || '';
     campoCep.value = cfg.cep || '';
+    preencherResumoEmpresa(cfg);
 
     TERMOS_POR_DOCUMENTO.forEach(function (t) {
       t.checkbox.checked = cfg[t.chaveUsar] !== false;
@@ -844,7 +892,18 @@
   // aberta pela navegação principal (btn-ir-config, em app.js). app.js não
   // sabe nada sobre os campos internos desta tela — só dispara este evento
   // customizado em mostrarTela('config'), e quem escuta é este módulo.
-  document.addEventListener('sistema-os:tela-config-aberta', preencherFormulario);
+  document.addEventListener('sistema-os:tela-config-aberta', function () {
+    var contexto = window.SistemaOSPermissoes && window.SistemaOSPermissoes.obterContexto
+      ? window.SistemaOSPermissoes.obterContexto()
+      : null;
+    if (window.SistemaOSEmpresaService && contexto) {
+      window.SistemaOSEmpresaService.sincronizarConfiguracoesEmpresa(contexto)
+        .catch(function () {})
+        .finally(preencherFormulario);
+      return;
+    }
+    preencherFormulario();
+  });
 
   if (btnAbrirChamadoConfig) {
     btnAbrirChamadoConfig.addEventListener('click', async function () {

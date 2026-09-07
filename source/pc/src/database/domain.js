@@ -446,6 +446,9 @@ const DEFAULT_CONFIG = {
   percentualLucroPadrao: 30,
   // Tamanho da logo nos PDFs (altura máx. em px). Padrão: 80px
   tamanhoLogoPdf: 80,
+  // Converte somente a renderizacao do logo no PDF para preto. Util para
+  // logos brancas destinadas a telas escuras, mantendo o PNG original.
+  logoPdfMonocromatica: false,
   // Tamanho da fonte dos termos nos PDFs (pt). 0/ausente = usa o tamanho
   // de fábrica de cada template (resolvido em fonte-termos-pdf.js).
   tamanhoFonteTermosPdf: 0,

@@ -1,4 +1,6 @@
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const { InventoryService } = require('../../src/supabase/inventory-service');
 
 const estado = {
@@ -57,6 +59,11 @@ const db = {
 };
 
 (async () => {
+  const runtime = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'supabase', 'desktop-runtime.js'), 'utf8');
+  assert.ok(runtime.indexOf('estoque = await this.inventoryService.sincronizar()') < runtime.indexOf("sincronizar('garantia')"),
+    'estoque deve sincronizar antes de uma garantia possivelmente conflitante');
+  assert.match(runtime, /Garantias:.*mensagemErro/s,
+    'conflito de garantia deve virar aviso sem interromper o estoque');
   const servico = new InventoryService({ getClient: () => cliente, stateStore, db });
   assert.strictEqual(await servico.enviar(), 1, 'primeiro push deve publicar o aparelho');
   assert.strictEqual(await servico.enviar(), 1,

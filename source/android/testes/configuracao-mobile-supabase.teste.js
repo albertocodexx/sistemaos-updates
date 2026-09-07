@@ -1,15 +1,16 @@
 const assert = require('assert');
-const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 
 (async () => {
   const chamadas = [];
   const salvamentosLocais = [];
-  globalThis.crypto = crypto.webcrypto;
-  globalThis.atob = (texto) => Buffer.from(texto, 'base64').toString('binary');
+  const empresa = '11111111-1111-4111-8111-111111111111';
+  globalThis.localStorage = {
+    getItem() { return null; },
+    setItem() {},
+    removeItem() {}
+  };
   globalThis.ConfigApp = {
-    salvarConfig(patch) { salvamentosLocais.push(patch); }
+    salvarConfig(patch) { salvamentosLocais.push(Object.assign({}, patch)); return patch; }
   };
   globalThis.SupabaseClientApp = {
     obterCliente() {
@@ -20,74 +21,47 @@ const path = require('path');
             eq() { return query; },
             async maybeSingle() {
               chamadas.push({ tipo: 'select', tabela });
-              return { error: null, data: { configuracoes: { identidadeEmpresa: {} } } };
+              return { error: null, data: { configuracoes: { identidadeEmpresa: {
+                configMobileAtualizadaEm: '2026-09-07T12:00:00.000Z',
+                configMobile: {
+                  nomeEmpresa: 'TechReparos', nomeFantasia: 'TechReparos',
+                  telefone: '(27) 99999-0000', telefoneFixo: '(27) 3333-0000',
+                  email: 'contato@empresa.test', site: 'https://empresa.test',
+                  endereco: 'Rua Teste', numero: '10', complemento: 'Sala 2',
+                  bairro: 'Centro', cidade: 'Linhares', estado: 'ES', cep: '29900-000'
+                }
+              } } } };
             }
           };
           return query;
         },
-        storage: {
-          from(bucket) {
-            return {
-              async upload(caminho) {
-                chamadas.push({ tipo: 'upload', bucket, caminho });
-                return { error: null };
-              },
-              async remove(caminhos) {
-                chamadas.push({ tipo: 'remove', bucket, caminhos });
-                return { error: null };
-              }
-            };
-          }
-        },
-        async rpc(nome, dados) {
-          chamadas.push({ tipo: 'rpc', nome, dados });
-          return { error: null, data: dados };
-        }
+        async rpc(nome) { chamadas.push({ tipo: 'rpc', nome }); return { error: null }; },
+        storage: { from() { return { async upload() { chamadas.push({ tipo: 'upload' }); return { error: null }; } }; } }
       };
     }
   };
 
   delete require.cache[require.resolve('../www/js/supabase/empresa-service.js')];
   const servico = require('../www/js/supabase/empresa-service.js');
-  const empresa = '11111111-1111-4111-8111-111111111111';
-  const sincronizado = await servico.sincronizarConfiguracoesEmpresa({
-    empresa_id: empresa,
-    cargo: 'Administrador'
-  });
-  assert.equal(sincronizado, null);
-  assert.equal(
-    salvamentosLocais.length,
-    0,
-    'metadados legados vazios não podem apagar a configuração local'
-  );
+  const sincronizado = await servico.sincronizarConfiguracoesEmpresa({ empresa_id: empresa, cargo: 'Administrador' });
+  assert.equal(sincronizado.nomeEmpresa, 'TechReparos');
+  assert.equal(sincronizado.site, 'https://empresa.test');
+  assert.equal(sincronizado.numero, '10');
+  assert.equal(salvamentosLocais.length, 1, 'Android deve apenas aplicar a configuracao recebida do PC');
+  assert.equal(salvamentosLocais[0].telefoneFixo, '(27) 3333-0000');
+  assert.equal(salvamentosLocais[0].bairro, 'Centro');
 
-  const assinatura = 'data:image/png;base64,' + Buffer.from('assinatura').toString('base64');
-  await servico.salvarConfiguracoesEmpresa(
-    { empresa_id: empresa, cargo: 'Administrador' },
-    {
-      nomeFantasia: 'Assistência Teste',
-      assinaturaAssistenciaBase64: assinatura,
-      supabasePublishableKey: 'nao-deve-subir'
-    }
+  await assert.rejects(
+    () => servico.salvarConfiguracoesEmpresa({ empresa_id: empresa, cargo: 'Administrador' }, { nomeFantasia: 'Indevido' }),
+    /somente.*PC/i
   );
-
-  const chamadasRpc = chamadas.filter((item) => item.tipo === 'rpc' && item.nome === 'salvar_configuracao_mobile');
-  const chamadaRpc = chamadasRpc[chamadasRpc.length - 1];
-  assert(chamadaRpc, 'o APK deve salvar as configurações pela RPC protegida');
-  assert.equal(chamadasRpc.length, 2, 'a configuração deve ser confirmada antes e depois do upload da assinatura');
-  assert.equal(chamadaRpc.dados.p_config_mobile.nomeFantasia, 'Assistência Teste');
-  assert.equal(chamadaRpc.dados.p_config_mobile.supabasePublishableKey, undefined);
-  assert.equal(chamadaRpc.dados.p_assinatura_storage_path, empresa + '/assinatura-assistencia.png');
-  assert(chamadas.some((item) => item.tipo === 'upload' && item.caminho === empresa + '/assinatura-assistencia.png'));
-  assert(
-    chamadas.findIndex((item) => item.tipo === 'rpc' && item.nome === 'salvar_configuracao_mobile') <
-      chamadas.findIndex((item) => item.tipo === 'upload'),
-    'campos comuns devem chegar à nuvem mesmo se o upload da assinatura falhar'
+  await assert.rejects(
+    () => servico.atualizarLogoEmpresa({ empresa_id: empresa, cargo: 'Administrador' }, 'data:image/png;base64,AA=='),
+    /somente.*PC/i
   );
-  const fonte = fs.readFileSync(path.join(__dirname, '..', 'www', 'js', 'supabase', 'empresa-service.js'), 'utf8');
-  assert.match(fonte, /config-mobile-reconciliada-v2/, 'upgrade deve reconciliar a configuracao local antes de baixar uma copia antiga');
-  assert.match(fonte, /configuracaoLocalSignificativa/, 'instalacao nova vazia nao pode sobrescrever a configuracao da nuvem');
-  console.log('OK: configurações e assinatura do APK são persistidas pela RPC segura.');
+  assert.equal(chamadas.some((item) => item.tipo === 'rpc' || item.tipo === 'upload'), false,
+    'Android nao pode publicar identidade nem logo');
+  console.log('OK: Android recebe todos os dados da empresa do PC e nao permite altera-los.');
 })().catch((erro) => {
   console.error(erro);
   process.exit(1);

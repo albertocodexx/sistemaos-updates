@@ -63,10 +63,10 @@ function assinaturaImagem(valor, alt) {
   return `<img class="assinatura-imagem" src="${src}" alt="${escapeHtml(alt)}">`;
 }
 
-function logoImagem(valor) {
+function logoImagem(valor, monocromatica) {
   const src = texto(valor);
   if (!/^data:image\/(?:png|jpe?g|webp);base64,[a-z0-9+/=\s]+$/i.test(src)) return '';
-  return `<img class="empresa-logo" src="${src}" alt="Logo da assistência técnica">`;
+  return `<img class="empresa-logo${monocromatica ? ' logo-pdf-monocromatica' : ''}" src="${src}" alt="Logo da assistência técnica">`;
 }
 
 function valorReparo(os) {
@@ -331,7 +331,7 @@ function gerarHtmlComprovanteOS(os, config, opcoes) {
   const corpoMaximo = formato === 'a4' ? '176mm' : largura;
   const empresa = modelo.empresa;
   const contato = empresa.linhasContato.map(escapeHtml).join(' · ');
-  const logoA4 = formato === 'a4' ? logoImagem(empresa.logoBase64) : '';
+  const logoA4 = formato === 'a4' ? logoImagem(empresa.logoBase64, config.logoPdfMonocromatica === true) : '';
   const aparelho = [modelo.aparelho.tipo, modelo.aparelho.marca, modelo.aparelho.modelo]
     .filter(Boolean).join(' ');
   const pecas = modelo.pecas.length
@@ -399,6 +399,7 @@ function gerarHtmlComprovanteOS(os, config, opcoes) {
   header{text-align:center;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:8px}
   .empresa-cabecalho{display:flex;align-items:center;justify-content:center;gap:10mm}
   .empresa-logo{display:block;width:25mm;height:25mm;object-fit:contain;flex:0 0 auto}
+  .logo-pdf-monocromatica{filter:grayscale(1) brightness(0) contrast(1.4)}
   .empresa-identidade{text-align:${formato === 'a4' && logoA4 ? 'left' : 'center'}}
   h1{font-size:${formato === 'a4' ? '24px' : '15px'};line-height:1.1;margin:0 0 3px;text-transform:uppercase}
   .empresa-dados{font-size:.86em;overflow-wrap:anywhere}

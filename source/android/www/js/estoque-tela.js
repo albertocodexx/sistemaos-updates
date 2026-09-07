@@ -82,9 +82,8 @@
       ]);
       aparelhos = resposta[0]; pecas = resposta[1]; render();
       $('estoque-mobile-status').textContent = fila.pendentes
-        ? 'Estoque atualizado. ' + fila.pendentes + ' alteracao(oes) aguardam conexao para enviar.'
-        : 'Atualizado pela nuvem. Funciona mesmo com o PC desligado.';
-      $('estoque-mobile-status').textContent = 'Atualizado agora · alterações aparecem automaticamente no PC.';
+        ? 'Atualizado agora. ' + fila.pendentes + ' alteração(ões) aguardam conexão.'
+        : 'Atualizado agora pela nuvem · ' + aparelhos.length + ' aparelho(s) e ' + pecas.length + ' item(ns). Funciona mesmo com o PC desligado.';
     } catch (erro) {
       if (cacheAparelhos.length || cachePecas.length) {
         $('estoque-mobile-status').textContent = 'Sem conexao: mostrando o ultimo estoque salvo neste celular.';

@@ -74,7 +74,7 @@ function gerarVia(item, config, tituloVia, t) {
   const empresa = montarDadosEmpresa(config);
 
   const logoHtml = empresa.temLogo
-    ? `<img src="${empresa.logoBase64}" alt="Logo" class="logo-img"/>`
+    ? `<img src="${empresa.logoBase64}" alt="Logo" class="logo-img${config.logoPdfMonocromatica ? ' logo-pdf-monocromatica' : ''}"/>`
     : `<div class="logo-mono">${e(empresa.iniciais)}</div>`;
 
   const cnpjHtml = empresa.cnpj
@@ -232,6 +232,7 @@ function gerarHtmlVenda(item, config) {
   }
   .logo-wrap{flex-shrink:0;background:#fff;border-radius:4px;}
   .logo-img{height:var(--logo-h,80px);width:auto;max-width:calc(var(--logo-h,80px) * 2.2);object-fit:contain;}
+  .logo-pdf-monocromatica{filter:grayscale(1) brightness(0) contrast(1.4);}
   .logo-mono{
     width:var(--logo-h,80px);height:var(--logo-h,80px);border-radius:5px;
     border:2px solid ${t.titulos};color:${t.titulos};

@@ -1679,6 +1679,17 @@ class DesktopSupabaseRuntime {
     this.syncEmAndamento = (async () => {
       try {
         if (!this.stateStore.obter().dispositivoId) await this.enviarHeartbeat();
+        const avisos = [];
+        // O estoque tem ciclo proprio e precisa sincronizar mesmo quando uma
+        // garantia, entrega ou outro documento estiver em conflito. Antes ele
+        // era executado depois desses modulos; um unico conflito impedia o
+        // S20 FE vendido e aparelhos novos de chegarem ao Android.
+        let estoque = { enviados: 0, recebidos: 0 };
+        try {
+          estoque = await this.inventoryService.sincronizar();
+        } catch (erroEstoque) {
+          avisos.push(`Estoque: ${mensagemErro(erroEstoque)}`);
+        }
         let enviados = await this._processarFila();
         // Tombstones usam checkpoint proprio. Assim, mesmo que o cursor de
         // atualizacoes normais avance, uma exclusao do celular sempre chega ao PC.
@@ -1689,13 +1700,21 @@ class DesktopSupabaseRuntime {
         const recebidos = (await this._baixarMudancas())
           + (await this._reconciliarCatalogoOSCompleto())
           + exclusoes;
-        const entregasPublicadas = await this.aftercareService?.sincronizar('entrega');
+        const entregasPublicadas = await (this.aftercareService?.sincronizar('entrega') || Promise.resolve({ enviados: 0, recebidos: 0 })).catch((erro) => {
+          avisos.push(`Entregas: ${mensagemErro(erro)}`);
+          return { enviados: 0, recebidos: 0 };
+        });
         const comerciais = await this._baixarDocumentosComerciais();
-        const garantiasSincronizadas = await this.aftercareService?.sincronizar('garantia');
-        const desbloqueiosSincronizados = await this.desbloqueioCloudService?.sincronizar();
+        const garantiasSincronizadas = await (this.aftercareService?.sincronizar('garantia') || Promise.resolve({ enviados: 0, recebidos: 0 })).catch((erro) => {
+          avisos.push(`Garantias: ${mensagemErro(erro)}`);
+          return { enviados: 0, recebidos: 0 };
+        });
+        const desbloqueiosSincronizados = await (this.desbloqueioCloudService?.sincronizar() || Promise.resolve({ enviados: 0, recebidos: 0 })).catch((erro) => {
+          avisos.push(`Desbloqueios: ${mensagemErro(erro)}`);
+          return { enviados: 0, recebidos: 0 };
+        });
         enviados += (entregasPublicadas?.enviados || 0) + (garantiasSincronizadas?.enviados || 0) + (desbloqueiosSincronizados?.enviados || 0);
         const assinaturas = await this._baixarRespostasAssinatura();
-        const estoque = await this.inventoryService.sincronizar();
         // A importação da assinatura regenera o PDF e enfileira a nova versão
         // durante este ciclo. Publica agora para o celular não abrir a anterior.
         if (assinaturas > 0) enviados += await this._processarFila();
@@ -1722,7 +1741,10 @@ class DesktopSupabaseRuntime {
         await this.fileService.limparTemporariosExpirados();
         await this.fileService.limparObjetosStoragePendentes();
         const agora = new Date().toISOString();
-        this.stateStore.alterar((s) => { s.ultimaSincronizacaoEm = agora; s.ultimoErro = ''; });
+        this.stateStore.alterar((s) => {
+          s.ultimaSincronizacaoEm = agora;
+          s.ultimoErro = avisos.join(' | ');
+        });
         this.ultimoStatus = { ativo: true, autenticado: true, conectado: true, modo: 'supabase' };
         this.syncFalhasConsecutivas = 0;
         this.syncSuspensoAte = 0;
@@ -1731,12 +1753,16 @@ class DesktopSupabaseRuntime {
         this.janela?.()?.webContents?.send?.('supabase:sincronizado', {
           enviados, recebidos: recebidosTotais,
           estoqueEnviados: estoque.enviados, estoqueRecebidos: estoque.recebidos,
-          arquivos: arquivos.respondidas + arquivosRemotos.aplicados, em: agora
+          arquivos: arquivos.respondidas + arquivosRemotos.aplicados,
+          avisos,
+          em: agora
         });
         return {
           sucesso: true, enviados, recebidos: recebidosTotais, comerciais, assinaturas,
           estoqueEnviados: estoque.enviados, estoqueRecebidos: estoque.recebidos,
-          arquivos: arquivos.respondidas + arquivosRemotos.aplicados, em: agora
+          arquivos: arquivos.respondidas + arquivosRemotos.aplicados,
+          avisos,
+          em: agora
         };
       } catch (erro) {
         const msg = mensagemErro(erro);

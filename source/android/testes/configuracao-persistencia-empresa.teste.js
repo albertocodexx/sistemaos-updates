@@ -367,10 +367,14 @@ async function executar() {
     console.log('\u2713 ' + nome);
   }
 
-  await teste('tela real carrega, salva e reabre nome, logo e assinatura', testarTelaReal);
   await teste('membro comum recebe a identidade, mas nao consegue altera-la', testarMembroNaoAlteraIdentidadeDaEmpresa);
   await teste('configMobile vazio preserva a configuracao legada local da empresa', testarConfigMobileVazioPreservaLegado);
-  await teste('atualizacao do APK preserva a configuracao local mais recente', testarAtualizacaoNaoRestauraConfigAntiga);
+  const html = fs.readFileSync(path.join(raiz, 'www/index.html'), 'utf8');
+  assert.match(html, /config-empresa-somente-leitura/);
+  assert.match(html, /config-empresa-edicao" hidden aria-hidden="true/);
+  assert.match(html, /id="btn-salvar-config"[^>]*hidden/);
+  total += 1;
+  console.log('\u2713 administrador tambem ve identidade somente para consulta no Android');
   console.log('\n' + total + ' testes de persistencia da configuracao passaram.');
 }
 

@@ -86,6 +86,7 @@ function configuracaoMobileDoDesktop(configuracao) {
     termosCustomGarantia: String(config.termosGarantia || '').trim(),
     textoRodapePdf: String(config.textoRodapePdf || '').trim(),
     tamanhoLogoPdf: Math.max(40, Number(config.tamanhoLogoPdf) || 80),
+    logoPdfMonocromatica: config.logoPdfMonocromatica === true,
     tamanhoFonteTermosPdf: Math.max(0, Number(config.tamanhoFonteTermosPdf) || 0),
     temaModo: tema === 'light' || tema === 'claro' ? 'claro' : 'escuro',
     exigirAssinaturaAssistencia: config.exigirAssinaturaAssistencia !== false,
@@ -129,6 +130,7 @@ function configuracaoDesktopDoMobile(configuracao) {
     termosGarantia: String(config.termosCustomGarantia || '').trim(),
     textoRodapePdf: String(config.textoRodapePdf || '').trim(),
     tamanhoLogoPdf: Math.max(40, Number(config.tamanhoLogoPdf) || 80),
+    logoPdfMonocromatica: config.logoPdfMonocromatica === true,
     tamanhoFonteTermosPdf: Math.max(0, Number(config.tamanhoFonteTermosPdf) || 0),
     temaModo: String(config.temaModo || '').toLowerCase() === 'claro' ? 'light' : 'dark',
     exigirAssinaturaAssistencia: config.exigirAssinaturaAssistencia !== false,
@@ -392,8 +394,14 @@ class CompanyCloudService {
 
   async sincronizarConfiguracaoCompartilhada() {
     const contexto = this.getContext?.();
-    if (!contexto?.empresa_id || contexto.administrador_global === true || this._ehAdministrador()) {
+    if (!contexto?.empresa_id || contexto.administrador_global === true) {
       return { sucesso: true, ignorado: true };
+    }
+    // O desktop administrador e a fonte oficial dos dados da assistencia.
+    // Publica em cada verificacao para reparar uma copia antiga do Android,
+    // inclusive depois de reinstalacao ou uso offline do aplicativo.
+    if (this._ehAdministrador()) {
+      return this.publicarConfiguracaoMobile(this.db.obterConfig());
     }
     const identidade = await this.obterIdentidade();
     const configMobile = identidade?.configMobile;
@@ -416,14 +424,24 @@ class CompanyCloudService {
   async sincronizarLogo() {
     const identidade = await this.obterIdentidade();
     const storagePath = String(identidade?.logoStoragePath || '');
+    const atual = this.db.obterConfig();
+    // Assim como os demais dados cadastrais, a logo do desktop administrador
+    // e a versao oficial. Se ela mudou localmente, publica antes de qualquer
+    // download para impedir que uma logo antiga da nuvem volte por cima.
+    if (this._ehAdministrador() && atual.logoBase64) {
+      const imagemLocal = bufferDeDataUrl(atual.logoBase64);
+      const hashLocal = sha256(imagemLocal.buffer);
+      if (!storagePath || hashLocal !== String(identidade?.logoSha256 || '')) {
+        return this.atualizarLogo(atual.logoBase64);
+      }
+    }
     if (!storagePath) {
-      const atual = this.db.obterConfig();
       if (atual.logoBase64) this.db.salvarConfig({ logoPath: '', logoBase64: '' });
       return { sucesso: true, possuiLogo: false };
     }
     const hashEsperado = String(identidade.logoSha256 || '');
     const estado = this.stateStore.obter();
-    if (hashEsperado && estado.logoEmpresa?.sha256 === hashEsperado && this.db.obterConfig().logoBase64) {
+    if (hashEsperado && estado.logoEmpresa?.sha256 === hashEsperado && atual.logoBase64) {
       return { sucesso: true, possuiLogo: true, cache: true };
     }
     const download = await this._cliente().storage.from(BUCKET_IDENTIDADE).download(storagePath);
