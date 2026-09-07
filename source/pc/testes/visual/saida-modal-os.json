@@ -1,0 +1,17 @@
+{
+  "loginExiste": false,
+  "loginDisplay": null,
+  "modalClasse": "modal-fundo",
+  "modalDisplay": "flex",
+  "modalRetangulo": {
+    "x": 0,
+    "y": 0,
+    "width": 1248,
+    "height": 590,
+    "top": 0,
+    "right": 1248,
+    "bottom": 590,
+    "left": 0
+  },
+  "titulo": "OS-0019"
+}

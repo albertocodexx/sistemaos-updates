@@ -1,0 +1,182 @@
+#aba-precos {
+  --precos-azul: #3b82f6;
+}
+
+.precos-cabecalho,
+.precos-ferramentas {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.precos-cabecalho {
+  margin-bottom: 18px;
+}
+
+.precos-cabecalho h2 {
+  margin: 4px 0 3px;
+  font-size: 22px;
+}
+
+.precos-cabecalho p,
+.precos-status {
+  color: var(--texto-sec);
+  margin: 0;
+}
+
+.precos-eyebrow {
+  color: var(--precos-azul);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .09em;
+}
+
+.precos-ferramentas {
+  background: var(--bg-card);
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.precos-busca-campo {
+  flex: 1;
+  min-width: 260px;
+  position: relative;
+}
+
+.precos-busca-campo > .icone-svg {
+  color: var(--texto-sec);
+  left: 12px;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.precos-ferramentas input {
+  background: var(--bg-input, var(--bg-card));
+  border: 1.5px solid var(--borda);
+  border-radius: 8px;
+  box-sizing: border-box;
+  color: var(--texto);
+  font: inherit;
+  padding: 9px 12px 9px 38px;
+  width: 100%;
+}
+
+.precos-ferramentas input::placeholder {
+  color: var(--texto-sec);
+  opacity: .82;
+}
+
+.precos-ferramentas input:focus {
+  border-color: var(--precos-azul);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--precos-azul) 18%, transparent);
+  outline: none;
+}
+
+.precos-status {
+  min-height: 20px;
+  padding: 11px 2px;
+  font-size: 13px;
+}
+
+.precos-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
+  gap: 12px;
+}
+
+.preco-card {
+  background: #080b10;
+  border: 1px solid var(--borda);
+  border-radius: 13px;
+  padding: 16px;
+  transition: border-color .18s ease, transform .18s ease;
+}
+
+.preco-card:hover {
+  border-color: #334b70;
+  transform: translateY(-1px);
+}
+
+.preco-card-topo {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.preco-card h3,
+.preco-card p {
+  margin: 0;
+}
+
+.preco-card h3 {
+  font-size: 16px;
+  color: var(--texto);
+}
+
+.preco-card-peca {
+  color: var(--texto-sec);
+  font-size: 13px;
+  margin-top: 5px !important;
+}
+
+.preco-card-fornecedor {
+  color: #94a3b8;
+  font-size: 12px;
+  margin-top: 10px !important;
+}
+
+.preco-card-fornecedor strong {
+  color: #cbd5e1;
+}
+
+.preco-card-valor {
+  color: #55e6a5;
+  font-size: 18px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.preco-card-observacao {
+  border-top: 1px solid var(--borda);
+  color: var(--texto-sec);
+  font-size: 12px;
+  margin-top: 12px !important;
+  padding-top: 10px;
+}
+
+.preco-card-acoes {
+  display: flex;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.preco-card-acoes .botao {
+  flex: 1;
+  justify-content: center;
+}
+
+.precos-vazio {
+  grid-column: 1 / -1;
+  border: 1px dashed var(--borda);
+  border-radius: 13px;
+  color: var(--texto-sec);
+  padding: 44px 20px;
+  text-align: center;
+}
+
+.precos-modal .modal-cabecalho h2 {
+  margin: 3px 0 0;
+}
+
+@media (max-width: 720px) {
+  .precos-grade { grid-template-columns: 1fr; }
+  .precos-busca-campo { min-width: 100%; }
+  .precos-ferramentas .botao { flex: 1; justify-content: center; }
+}

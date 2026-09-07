@@ -1,0 +1,2770 @@
+/* =============================================================
+   SISTEMA DE TOKENS — app celular (assistência técnica)
+   Direção: dark mode "fintech" como tema nativo padrão.
+   Assinatura visual: cantos bem arredondados + elevação sutil,
+   aplicados de forma consistente a todo componente (card, input,
+   botão, aba) — não é um tema de cor trocado, é um sistema.
+   Tema claro é o alternativo, via html[data-tema="claro"].
+   ============================================================= */
+
+* { box-sizing: border-box; }
+
+html {
+  /* ---- Paleta — modo escuro (padrão/nativo) ---- */
+  --cor-fundo: #000000;
+  --cor-fundo-elevado: #07090d;   /* topo, tela de assinatura header */
+  --cor-card: #151922;
+  --cor-card-alto: #1b202b;      /* input dentro de card, elevação extra */
+  --cor-borda: #262c3a;
+  --cor-borda-forte: #333b4d;
+
+  --cor-texto: #eef1f6;
+  --cor-texto-fraco: #a7afc0;
+  --cor-texto-mais-fraco: #6b7386;
+  /* Variante AA do texto-mais-fraco: mesma família de cinza-azulado, porém
+     clareada o suficiente pra manter 4.5:1 em texto pequeno (rótulos
+     "(opcional)", tipo e data do histórico) sem alterar o tom decorativo
+     original usado em placeholders/ícones. */
+  --cor-texto-mais-fraco-aa: #8891a5;
+
+  --acento-primario: #3ddc97;      /* verde-menta — ação principal / aprovado */
+  --acento-primario-fundo: #0f2a20;
+  --acento-primario-texto: #06120d; /* texto sobre botão verde-menta */
+  --acento-secundario: #5b8def;    /* azul — ações neutras/links */
+  --acento-secundario-fundo: #10203f;
+  --acento-erro: #f0555a;
+  --acento-erro-fundo: #2a1416;
+  --acento-aviso: #fbbf24;
+  --acento-aviso-fundo: #2a2410;
+
+  --raio-card: 16px;
+  --raio-input: 12px;
+  --raio-botao: 12px;
+  --raio-pill: 999px;
+  --raio-pequeno: 8px;
+
+  --sombra-card: 0 1px 2px rgba(0,0,0,.24), 0 8px 24px -12px rgba(0,0,0,.55);
+  --sombra-elevada: 0 2px 4px rgba(0,0,0,.3), 0 16px 32px -16px rgba(0,0,0,.6);
+
+  /* Inter como fonte primária (carregada via <link> no <head>); fallback
+     para a stack de sistema original caso a fonte web não carregue
+     (offline, bloqueio de rede em WebView, etc). */
+  --fonte: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+
+  /* Duração/curva padrão de micro-interação de toque, usada em qualquer
+     elemento tocável (botão, card de histórico, seção de config) — um
+     único ponto de ajuste pra manter a resposta ao toque consistente. */
+  --duracao-toque: 130ms;
+  --curva-toque: ease-out;
+
+  /* Aliases usados pelos componentes novos de suporte/chat. Mantêm esses
+     componentes na mesma paleta do restante do aplicativo. */
+  --fundo: var(--cor-fundo);
+  --fundo-card: var(--cor-card);
+  --fundo-input: var(--cor-card-alto);
+  --bg-card: var(--cor-card);
+  --borda: var(--cor-borda);
+  --texto: var(--cor-texto);
+  --texto-sec: var(--cor-texto-fraco);
+  --texto-secundario: var(--cor-texto-fraco);
+  --primario: var(--acento-primario);
+}
+
+html:not([data-tema="claro"]) { color-scheme: dark; }
+html[data-tema="claro"] { color-scheme: light; }
+
+/* Rede de segurança para todos os formulários, inclusive campos criados por
+   JavaScript fora de .form-os. Impede o WebView Android de aplicar o fundo
+   branco nativo em selects, datas, prompts internos e campos com autofill. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="color"]):not([type="image"]),
+select,
+textarea {
+  background-color: var(--cor-card-alto);
+  border-color: var(--cor-borda);
+  color: var(--cor-texto);
+}
+select option,
+select optgroup {
+  background-color: var(--cor-card-alto);
+  color: var(--cor-texto);
+}
+input::file-selector-button {
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio-pequeno);
+  background: var(--cor-card);
+  color: var(--cor-texto);
+}
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--cor-texto);
+  box-shadow: 0 0 0 1000px var(--cor-card-alto) inset;
+  caret-color: var(--cor-texto);
+}
+
+/* Etapa 6: arquivos da consulta sao carregados apenas sob demanda. */
+.arquivos-consulta-bloco {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cor-borda);
+}
+
+.arquivos-consulta-lista {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.arquivos-consulta-lista[hidden] { display: none; }
+
+.arquivo-consulta-item {
+  padding: 12px;
+  border: 1px solid var(--cor-borda);
+  border-radius: 12px;
+  background: var(--cor-card);
+}
+
+.arquivo-consulta-info {
+  display: grid;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+
+.arquivo-consulta-info span,
+.arquivo-consulta-aviso {
+  color: var(--cor-texto-fraco);
+  font-size: .86rem;
+}
+
+.arquivo-consulta-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.arquivo-consulta-miniatura {
+  display: block;
+  width: min(100%, 320px);
+  height: auto;
+  margin-top: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--cor-borda);
+}
+
+/* ---- Paleta — modo claro (alternativo) ---- */
+html[data-tema="claro"] {
+  --cor-fundo: #f2f2f0;
+  --cor-fundo-elevado: #ffffff;
+  --cor-card: #ffffff;
+  --cor-card-alto: #f7f8fa;
+  --cor-borda: #e2e4ea;
+  --cor-borda-forte: #cbd0da;
+
+  --cor-texto: #161a22;
+  --cor-texto-fraco: #565f70;
+  --cor-texto-mais-fraco: #8a91a1;
+  --cor-texto-mais-fraco-aa: #636b7a;
+
+  --acento-primario: #0a7c4d;
+  --acento-primario-fundo: #e6f7ef;
+  --acento-primario-texto: #ffffff;
+  --acento-secundario: #3667d6;
+  --acento-secundario-fundo: #e8f0fe;
+  --acento-erro: #d1373c;
+  --acento-erro-fundo: #fdeceb;
+  --acento-aviso: #b45309;
+  --acento-aviso-fundo: #fef6e0;
+
+  --sombra-card: 0 1px 2px rgba(20,20,20,.04), 0 6px 16px -10px rgba(20,20,20,.15);
+  --sombra-elevada: 0 2px 6px rgba(20,20,20,.06), 0 12px 28px -14px rgba(20,20,20,.2);
+}
+
+html, body {
+  /* Rede de segurança contra overflow horizontal: qualquer elemento que
+     estoure a largura da tela (ex: nav com muitos botões, tabela larga
+     dentro de um card) empurrava a página inteira e, em muitos WebViews
+     Android, isso disparava um auto-zoom que encolhia TODO o conteúdo
+     (inclusive telas position:fixed como a de assinatura) — daí o efeito
+     de "letra torta"/"traço pequeno no canto" reportado no celular real.
+     overflow-x: hidden aqui garante que nada empurra a largura da página,
+     mesmo que algum elemento interno ainda precise de correção pontual. */
+  overflow-x: hidden;
+  width: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--fonte);
+  background: var(--cor-fundo);
+  color: var(--cor-texto);
+  -webkit-font-smoothing: antialiased;
+  transition: background .15s ease, color .15s ease;
+}
+
+.os-assinar-depois {
+  display: grid !important;
+  grid-template-columns: auto 1fr;
+  align-items: start !important;
+  gap: 12px !important;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio-input);
+  background: var(--acento-secundario-fundo);
+  cursor: pointer;
+}
+.os-assinar-depois input { margin-top: 3px; width: 19px; height: 19px; }
+.os-assinar-depois span { display: grid; gap: 4px; }
+.os-assinar-depois strong { color: var(--cor-texto); }
+.os-assinar-depois small { color: var(--cor-texto-fraco); line-height: 1.45; font-weight: 400; }
+.selo-assinatura-pendente {
+  display: inline-flex;
+  padding: 3px 7px;
+  border-radius: var(--raio-pill);
+  color: var(--acento-aviso);
+  background: var(--acento-aviso-fundo);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+/* ── Cabeçalho ─────────────────────────────────────────────────── */
+
+.topo {
+  padding: 20px 16px 16px;
+  background: var(--cor-fundo-elevado);
+  color: var(--cor-texto);
+  border-bottom: 1px solid var(--cor-borda);
+}
+.topo-identidade {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* .topo-textos já tem flex:1 (ver abaixo) e absorve o espaço sobrando,
+   o que empurra o botão-ícone de Configurações (irmão seguinte no
+   flexbox) sozinho para a borda direita do cabeçalho — sem precisar de
+   margin-left:auto nem de um wrapper extra. */
+.topo-logo {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--raio-pequeno);
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--cor-borda);
+}
+.topo-textos {
+  min-width: 0;
+  flex: 1;
+}
+.topo h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.subtitulo {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--cor-texto-fraco);
+}
+.subtitulo code {
+  color: var(--acento-secundario);
+  background: var(--acento-secundario-fundo);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+/* nav-topo-5: agora com as 5 abas de uso frequente (Nova OS / Compra /
+   Venda / Entregas / Histórico) — Configurações saiu daqui e virou o ícone
+   isolado .btn-icone-topo no cabeçalho (ver acima), por ser uma tela de uso
+   ocasional que não precisa competir por espaço com as demais. O nome da
+   classe ficou "nav-topo-5" por herança (não vale a pena caçar/substituir
+   sem necessidade no HTML/JS todo por causa de um nome — já sobreviveu à
+   adição da aba Entregas sem precisar mudar), mas o mecanismo nela continua
+   útil como rede de segurança: a barra rola na horizontal (scroll-x) e cada
+   botão mantém uma largura mínima confortável com texto em uma linha só,
+   evitando estourar a largura em telas muito estreitas ou com fonte do
+   sistema aumentada. */
+.nav-topo {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.nav-topo-5 {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px; /* respiro pra não cortar a borda dos botões ao rolar */
+  scrollbar-width: none;
+}
+.nav-topo-5::-webkit-scrollbar { display: none; }
+.nav-topo-5 .btn-nav {
+  flex: 0 0 auto;
+  min-width: 84px;
+  white-space: nowrap;
+}
+.btn-nav {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: var(--raio-pill);
+  border: 1px solid var(--cor-borda);
+  background: transparent;
+  color: var(--cor-texto-fraco);
+  transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.icone-nav {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  color: currentColor;
+}
+.btn-nav-ativo {
+  background: var(--acento-primario);
+  color: var(--acento-primario-texto);
+  border-color: var(--acento-primario);
+  font-weight: 700;
+}
+
+/* Configurações: ícone isolado no cabeçalho (fora da nav-topo-5), em vez
+   de mais uma aba de texto disputando espaço na fila que já rola na
+   horizontal. É uma tela de uso ocasional (ajuste dos dados da
+   assistência), então fica sempre visível e não some numa aba que
+   precisa de scroll pra alcançar. Círculo pequeno com só o SVG — sem
+   <span> de texto, ao contrário de .btn-nav. */
+.btn-icone-topo {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--cor-borda);
+  background: transparent;
+  color: var(--cor-texto-fraco);
+  transition: background var(--duracao-toque) var(--curva-toque),
+    color var(--duracao-toque) var(--curva-toque),
+    border-color var(--duracao-toque) var(--curva-toque);
+}
+.btn-icone-topo .icone-nav {
+  /* Um pouco maior que o ícone das abas de texto (15px) porque aqui o
+     ícone é o botão inteiro, sem rótulo ao lado explicando o que é —
+     precisa se sustentar sozinho visualmente. */
+  width: 19px;
+  height: 19px;
+}
+.btn-icone-topo:active {
+  background: var(--cor-card-alto);
+}
+/* Mesmo sinal visual de "tela ativa" usado em .btn-nav-ativo (preenchido
+   com a cor de acento), reaproveitando a MESMA classe que app.js já
+   alterna via classList.toggle('btn-nav-ativo', ...) — nenhuma mudança
+   de JS foi necessária para o destaque continuar funcionando aqui. */
+.btn-icone-topo.btn-nav-ativo {
+  background: var(--acento-primario);
+  color: var(--acento-primario-texto);
+  border-color: var(--acento-primario);
+}
+
+main {
+  padding: 16px;
+}
+
+.painel-status {
+  padding: 18px;
+  background: var(--cor-card);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-card);
+  box-shadow: var(--sombra-card);
+  color: var(--cor-texto);
+}
+
+.erro { color: var(--acento-erro); font-weight: 700; margin: 0 0 8px; }
+.erro-detalhe {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--acento-erro-fundo);
+  border: 1px solid var(--acento-erro);
+  border-radius: var(--raio-pequeno);
+  padding: 10px;
+  font-size: 12px;
+  color: var(--cor-texto);
+}
+
+.aviso {
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--cor-card);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-input);
+  padding: 12px 14px;
+  margin: 0 0 8px;
+  color: var(--cor-texto);
+  box-shadow: var(--sombra-card);
+}
+.aviso code {
+  background: var(--cor-card-alto);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.aviso-tecnico {
+  color: var(--cor-texto-fraco);
+}
+
+.frame-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-input);
+  background: var(--cor-card-alto);
+}
+
+#frame-preview {
+  display: block;
+  width: 1122px;   /* 297mm a 96dpi aprox. — largura real da folha A4 paisagem do template */
+  height: 794px;   /* 210mm a 96dpi aprox. */
+  border: 0;
+  background: #fff; /* o documento em si (papel) permanece branco em qualquer tema */
+}
+
+/* ── Formulário (Parte 2) ─────────────────────────────────────── */
+
+.form-os {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+fieldset {
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-card);
+  background: var(--cor-card);
+  box-shadow: var(--sombra-card);
+  padding: 14px 16px 18px;
+  margin: 0 0 16px;
+}
+
+legend {
+  font-weight: 700;
+  font-size: 13px;
+  padding: 0 8px;
+  color: var(--cor-texto);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+.form-os label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 16px 0 6px;
+  color: var(--cor-texto-fraco);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.form-os label:first-of-type {
+  margin-top: 4px;
+}
+
+.obrigatorio { color: var(--acento-erro); }
+.opcional { color: var(--cor-texto-mais-fraco-aa); font-weight: normal; font-size: 11px; text-transform: none; letter-spacing: normal; }
+
+.form-os input,
+.form-os select,
+.form-os textarea,
+.linha-busca-consulta input {
+  width: 100%;
+  font-size: 16px;   /* >=16px evita zoom automático no iOS ao focar o campo */
+  padding: 12px 14px;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-input);
+  background: var(--cor-card-alto);
+  color: var(--cor-texto);
+  font-family: inherit;
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+/* Números alinhados como em extrato bancário: valores monetários, datas,
+   hora, telefone, CPF, IMEI — qualquer campo cujo conteúdo é
+   predominantemente numérico ganha tabular-nums pra dígitos de mesma
+   largura (evita "dança" visual em colunas de números). */
+.form-os input[type="number"],
+.form-os input[type="date"],
+.form-os input[type="time"],
+.form-os input[type="tel"],
+#cliente-cpf,
+#compra-vendedor-cpf,
+#venda-comprador-cpf,
+#aparelho-imei,
+#compra-aparelho-imei,
+#venda-imei,
+#cfg-cnpj,
+#cfg-cep {
+  font-variant-numeric: tabular-nums;
+}
+.form-os textarea {
+  resize: vertical;
+}
+.form-os input::placeholder,
+.form-os textarea::placeholder,
+.linha-busca-consulta input::placeholder {
+  color: var(--cor-texto-mais-fraco);
+}
+.form-os input:focus,
+.form-os select:focus,
+.form-os textarea:focus,
+.linha-busca-consulta input:focus {
+  outline: none;
+  border-color: var(--acento-secundario);
+  box-shadow: 0 0 0 3px var(--acento-secundario-fundo);
+}
+
+.erro-campo {
+  color: var(--acento-erro);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+.erro-campo:empty {
+  display: none;
+}
+
+/* "Big number" — estilo de valor monetário em destaque, para uso em
+   qualquer resumo/preview de compra-valor ou venda-valor (fora do
+   <input> comum). Números tabulares, peso forte, tamanho grande —
+   como o valor de uma transação num extrato bancário. */
+.valor-destaque {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: 32px;
+  letter-spacing: -0.02em;
+  color: var(--cor-texto);
+  line-height: 1.15;
+}
+.valor-destaque .valor-prefixo {
+  font-weight: 600;
+  font-size: 0.5em;
+  color: var(--cor-texto-fraco);
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.erro-geral {
+  color: var(--acento-erro);
+  font-size: 13px;
+  background: var(--acento-erro-fundo);
+  border: 1px solid var(--acento-erro);
+  border-radius: var(--raio-input);
+  padding: 12px 14px;
+  margin: 0 0 16px;
+}
+
+.btn-primario,
+.btn-secundario {
+  display: block;
+  width: 100%;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 15px;
+  border-radius: var(--raio-botao);
+  border: none;
+  margin: 0 0 16px;
+  transition: transform .08s ease, opacity .12s ease, background .12s ease;
+  cursor: pointer;
+}
+.btn-primario {
+  background: var(--acento-primario);
+  color: var(--acento-primario-texto);
+  box-shadow: var(--sombra-card);
+}
+.btn-primario:active {
+  transform: scale(.98);
+}
+.btn-primario:disabled {
+  background: var(--cor-borda-forte);
+  color: var(--cor-texto-mais-fraco);
+  box-shadow: none;
+}
+.btn-secundario {
+  background: var(--cor-card-alto);
+  color: var(--cor-texto);
+  border: 1px solid var(--cor-borda-forte);
+}
+.btn-secundario:active {
+  transform: scale(.98);
+}
+.btn-secundario:disabled,
+.btn-primario:disabled {
+  opacity: .5;
+}
+.btn-perigo {
+  display: block;
+  width: 100%;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 15px;
+  border-radius: var(--raio-botao);
+  margin: 0 0 16px;
+  transition: transform .08s ease, opacity .12s ease, background .12s ease;
+  cursor: pointer;
+  background: var(--acento-erro-fundo);
+  color: var(--acento-erro);
+  border: 1px solid var(--acento-erro);
+}
+.btn-perigo:active {
+  transform: scale(.98);
+}
+.btn-perigo:disabled {
+  opacity: .5;
+}
+
+/* Label + botão de ação lado a lado (usado em "Termos personalizados":
+   o label do textarea e o botão "Restaurar padrão" dividem a mesma
+   linha, sem empurrar o botão pra baixo do texto). */
+.linha-label-com-acao {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.linha-label-com-acao label {
+  margin: 0;
+}
+
+/* Botão discreto, estilo link — para ações secundárias que ficam ao
+   lado de um label (não usa o espaço/peso visual de .btn-secundario,
+   que é pensado para ocupar a largura toda como ação principal). */
+.btn-link-pequeno {
+  background: none;
+  border: none;
+  padding: 2px 0;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--acento-primario);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-link-pequeno:active {
+  opacity: .7;
+}
+
+/* Editor compacto dos termos de uma OS/Compra/Venda específica. Fica
+   recolhido para não alongar os formulários, mas o resumo deixa a ação
+   descoberta e acessível por teclado/leitor de tela. */
+.termos-documento {
+  margin: 0 0 16px;
+  border: 1px solid var(--cor-borda);
+  border-radius: 14px;
+  background: var(--cor-fundo-elevado);
+  overflow: hidden;
+}
+.termos-documento summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 54px;
+  padding: 0 15px;
+  color: var(--cor-texto);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+.termos-documento summary::-webkit-details-marker { display: none; }
+.termos-documento summary::after {
+  content: '›';
+  color: var(--acento-primario);
+  font-size: 24px;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform .16s ease;
+}
+.termos-documento[open] summary::after { transform: rotate(-90deg); }
+.termos-documento summary small {
+  margin-left: auto;
+  color: var(--acento-primario);
+  font-size: 11px;
+  font-weight: 700;
+}
+.termos-documento-conteudo {
+  padding: 0 15px 15px;
+  border-top: 1px solid var(--cor-borda);
+}
+.termos-documento-conteudo > p {
+  margin: 12px 0;
+  color: var(--cor-texto-fraco);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.termos-documento-conteudo textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+.termos-documento-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+.termos-documento-rodape > small {
+  color: var(--cor-texto-fraco);
+  font-size: 11px;
+}
+.termos-documento-rodape > small.termos-alterados {
+  color: var(--acento-aviso);
+  font-weight: 700;
+}
+
+/* ── Assinatura + ações finais (Parte 3) ──────────────────────── */
+
+.aviso-assinado {
+  color: var(--acento-primario);
+  font-weight: 700;
+  font-size: 13px;
+  margin: -8px 0 16px;
+}
+
+.feedback-acao {
+  font-size: 13px;
+  background: var(--acento-primario-fundo);
+  border: 1px solid var(--acento-primario);
+  color: var(--acento-primario);
+  border-radius: var(--raio-input);
+  padding: 12px 14px;
+  margin: 0 0 16px;
+}
+.feedback-acao.erro {
+  background: var(--acento-erro-fundo);
+  border-color: var(--acento-erro);
+  color: var(--acento-erro);
+}
+
+/* ── Toast (notificação flutuante) ───────────────────────────────────
+   Container fixo no topo da tela, acima de tudo (nav, modais de
+   assinatura). Empilha várias notificações em coluna se dispararem em
+   sequência rápida — cada uma dispensa a si mesma, independente das
+   outras. */
+.toast-container {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  pointer-events: none; /* clique só funciona no toast em si, não na faixa toda */
+}
+
+.toast {
+  pointer-events: auto;
+  max-width: 420px;
+  width: 100%;
+  background: var(--acento-primario-fundo);
+  border: 1px solid var(--acento-primario);
+  color: var(--acento-primario);
+  border-radius: var(--raio-input);
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-14px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.toast-erro {
+  background: var(--acento-erro-fundo);
+  border-color: var(--acento-erro);
+  color: var(--acento-erro);
+}
+.toast-entrando {
+  opacity: 1;
+  transform: translateY(0);
+}
+.toast-saindo {
+  opacity: 0;
+  transform: translateY(-14px);
+}
+
+/* A área de assinatura permanece branca feito papel em qualquer tema —
+   é onde a pessoa assina, e o traço (geralmente escuro) precisa de
+   contraste garantido contra o fundo, exatamente como assinar no papel. */
+.tela-assinatura {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  /* Isolamento extra: garante que esta camada sempre ocupe exatamente o
+     viewport real do dispositivo, independentemente de qualquer overflow
+     horizontal que porventura ainda exista no restante da página (ver
+     nota em html, body no topo do arquivo). */
+  width: 100vw;
+  height: 100vh;
+}
+.tela-assinatura[hidden] {
+  display: none;
+}
+.assinatura-topo {
+  padding: 16px;
+  background: #111;
+  color: #fff;
+  text-align: center;
+  font-size: 14px;
+}
+.assinatura-topo p { margin: 0; }
+.canvas-assinatura {
+  flex: 1;
+  width: 100%;
+  display: block;
+  touch-action: none; /* impede scroll/zoom da página enquanto assina */
+  background: #fff;
+}
+.assinatura-acoes {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  background: #f2f2f0;
+  border-top: 1px solid #ddd;
+}
+.assinatura-acoes .btn-secundario,
+.assinatura-acoes .btn-primario {
+  margin: 0;
+}
+
+/* ── Histórico local (Parte 4) ────────────────────────────────── */
+
+.banner-historico-local {
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--acento-aviso-fundo);
+  border: 1px solid var(--acento-aviso);
+  color: var(--acento-aviso);
+  border-radius: var(--raio-input);
+  padding: 12px 14px;
+  margin: 0 0 16px;
+}
+
+.painel-historico {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.painel-documentos {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* <label class="btn-primario"> envolvendo o <input type="file" hidden> —
+   mesmo visual de botão, sem reinventar estilo novo; label é inline por
+   padrão, então herda display:block de .btn-primario mas ainda precisa
+   de text-align:center pra ficar igual a um <button> de verdade. */
+.btn-importar-doc {
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.acoes-decisao-documento {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.acoes-decisao-documento > button {
+  min-height: 48px;
+}
+
+@media (max-width: 540px) {
+  .acoes-decisao-documento {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lista-historico {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.historico-carregando,
+.historico-vazio,
+.historico-erro {
+  font-size: 13px;
+  color: var(--cor-texto-fraco);
+  background: var(--cor-card);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-card);
+  padding: 18px 14px;
+  text-align: center;
+  box-shadow: var(--sombra-card);
+}
+.historico-erro {
+  color: var(--acento-erro);
+  background: var(--acento-erro-fundo);
+  border-color: var(--acento-erro);
+}
+.historico-sucesso {
+  font-size: 13px;
+  color: var(--acento-primario);
+  background: var(--acento-primario-fundo);
+  border: 1px solid var(--acento-primario);
+  border-radius: var(--raio-card);
+  padding: 18px 14px;
+  text-align: center;
+  box-shadow: var(--sombra-card);
+}
+
+.item-historico {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--cor-card);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-card);
+  padding: 12px 14px;
+  box-shadow: var(--sombra-card);
+  transition: transform var(--duracao-toque) var(--curva-toque), opacity var(--duracao-toque) var(--curva-toque);
+}
+.item-historico:active {
+  transform: scale(.985);
+  opacity: .92;
+}
+
+.item-historico-thumb {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 40px;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-pequeno);
+  background: var(--cor-card-alto);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cor-texto-mais-fraco);
+  font-size: 11px;
+  overflow: hidden;
+}
+.item-historico-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.item-historico-info {
+  flex: 1;
+  min-width: 0;
+}
+.item-historico-tipo {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--cor-texto-mais-fraco-aa);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.selo-sincronizado,
+.selo-pendente,
+.selo-tentando-novamente {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: none;
+  letter-spacing: normal;
+  padding: 2px 8px;
+  border-radius: var(--raio-pill);
+  white-space: nowrap;
+}
+.selo-sincronizado {
+  background: var(--acento-primario-fundo);
+  color: var(--acento-primario);
+}
+.selo-pendente {
+  background: var(--acento-aviso-fundo);
+  color: var(--acento-aviso);
+}
+/* Mesmas cores de "Pendente" (é um estado pendente) mas com borda para
+   diferenciar visualmente: "já tentou e vai tentar de novo sozinho"
+   (não exige ação do técnico ainda) vs "nunca tentou" (Pendente puro). */
+.selo-tentando-novamente {
+  background: var(--acento-aviso-fundo);
+  color: var(--acento-aviso);
+  border: 1px solid var(--acento-aviso);
+}
+.item-historico-cliente {
+  margin: 2px 0 0;
+  font-weight: 700;
+  font-size: 15.5px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--cor-texto);
+}
+.item-historico-aparelho {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--cor-texto-fraco);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item-historico-garantia {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--acento-primario);
+}
+.item-historico-data {
+  margin: 3px 0 0;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--cor-texto-mais-fraco-aa);
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-abrir-historico {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  padding: 9px 16px;
+  font-size: 13px;
+}
+
+.btn-editar-historico {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  padding: 9px 16px;
+  font-size: 13px;
+  background: transparent;
+  color: var(--cor-principal);
+  border: 1px solid var(--cor-principal);
+  border-radius: var(--raio-pequeno);
+}
+.btn-editar-historico:active {
+  opacity: .8;
+}
+
+.item-historico-acoes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 0 auto;
+  align-items: stretch;
+}
+
+/* =========================================================
+   NAVEGAÇÃO POR ABAS (Nova OS / Compra / Venda / Histórico / Configurações)
+   ========================================================= */
+.abas-topo {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.abas-topo::-webkit-scrollbar { display: none; }
+.btn-aba {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 9px 14px;
+  border-radius: var(--raio-pill);
+  border: 1px solid var(--cor-borda);
+  background: transparent;
+  color: var(--cor-texto-fraco);
+  white-space: nowrap;
+  transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.btn-aba-ativa {
+  background: var(--acento-primario);
+  color: var(--acento-primario-texto);
+  border-color: var(--acento-primario);
+  font-weight: 700;
+}
+
+/* Toggle de modo escuro (usado no topo e/ou na tela de Configurações) */
+.toggle-tema {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--cor-texto);
+}
+.toggle-tema input[type="checkbox"] {
+  width: 42px;
+  height: 24px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--cor-borda-forte);
+  border-radius: var(--raio-pill);
+  position: relative;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.15s ease;
+}
+.toggle-tema input[type="checkbox"]::before {
+  /* "Bolinha" do switch: branca por convenção universal de toggle, em
+     ambos os temas — não segue a paleta de fundo/texto do tema atual. */
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  transition: transform 0.15s ease;
+}
+.toggle-tema input[type="checkbox"]:checked {
+  background: var(--acento-primario);
+}
+.toggle-tema input[type="checkbox"]:checked::before {
+  transform: translateX(18px);
+}
+
+/* =========================================================
+   TELA DE CONFIGURAÇÕES (dados da empresa/assistência)
+   ========================================================= */
+.secao-config {
+  background: var(--cor-card);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-card);
+  box-shadow: var(--sombra-card);
+  padding: 16px;
+  margin-bottom: 14px;
+  transition: transform var(--duracao-toque) var(--curva-toque), opacity var(--duracao-toque) var(--curva-toque);
+}
+
+.config-versao-aplicativo {
+  width: fit-content;
+  margin: 0 0 0.75rem auto;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--borda, #293246);
+  border-radius: 999px;
+  color: var(--texto-secundario, #aab3c5);
+  background: var(--fundo-card, #151a24);
+  font-size: 0.78rem;
+}
+.secao-config:active {
+  transform: scale(.995);
+  opacity: .97;
+}
+.secao-config legend {
+  margin: 0 0 4px;
+}
+.secao-config h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: var(--cor-texto);
+}
+.secao-config .checkbox-linha {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  margin: 10px 0;
+  cursor: pointer;
+  line-height: 1.4;
+  /* área de toque confortável em WebView/mobile mesmo com texto curto */
+  min-height: 24px;
+  color: var(--cor-texto);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+.secao-config .checkbox-linha input[type="checkbox"] {
+  width: 19px;
+  height: 19px;
+  min-width: 19px;
+  margin: 0;
+  accent-color: var(--acento-primario);
+  cursor: pointer;
+}
+
+/* Fundo FIXO branco (não a variável de tema) — não "bem em qualquer fundo"
+   como o comentário antigo dizia: uma logo em PNG com fundo transparente,
+   no modo escuro, mostrava a transparência sobre --cor-card-alto (quase
+   preto), dando a impressão de "logo com fundo preto". Documentos/PDFs são
+   sempre fundo branco, então o preview mostrar sobre branco é also mais
+   fiel ao resultado final — mesmo raciocínio já aplicado à assinatura
+   logo abaixo. */
+.logo-preview-box {
+  width: 100%;
+  max-width: 220px;
+  height: 90px;
+  border: 1px dashed var(--cor-borda-forte);
+  border-radius: var(--raio-input);
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: #6b7280;
+  font-size: 12px;
+  margin: 8px 0;
+}
+
+/* A caixinha de PREVIEW DA ASSINATURA também usa fundo fixo branco (ver
+   .logo-preview-box acima) e, além disso, INVERTE no tema claro — no modo
+   escuro fica branco (igual ao logo); no modo claro fica escuro. A
+   assinatura é sempre um traço escuro desenhado num canvas branco: se o
+   fundo do preview virasse escuro (ex.: seguisse --cor-card-alto) o traço
+   ficaria quase invisível — daí a inversão abaixo, que o logo não precisa
+   porque não é um traço escuro fixo. */
+.assinatura-preview-box {
+  width: 100%;
+  max-width: 220px;
+  height: 90px;
+  border: 1px dashed var(--cor-borda-forte);
+  border-radius: var(--raio-input);
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: #6b7280; /* cinza neutro — legível tanto sobre fundo branco quanto escuro */
+  font-size: 12px;
+  margin: 8px 0;
+}
+html[data-tema="claro"] .assinatura-preview-box {
+  background: #1c1c22;
+  color: #9aa0ac;
+}
+
+.logo-preview-box img,
+.assinatura-preview-box img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.linha-botoes-config {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.linha-botoes-config .btn-secundario,
+.linha-botoes-config .btn-primario {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  padding: 9px 14px;
+  font-size: 13px;
+}
+
+/* =========================================================
+   HISTÓRICO — badges por tipo de documento + botão excluir
+   ========================================================= */
+.badge-tipo-doc {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  border-radius: var(--raio-pill);
+  margin-right: 6px;
+  color: #ffffff;
+  vertical-align: middle;
+}
+.badge-tipo-doc::before {
+  content: "";
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+/* Ícones outline minimalistas, embutidos como data-URI (sem libs externas):
+   OS = prancheta, Venda = seta pra cima (saída), Compra = seta pra baixo (entrada). */
+.badge-tipo-doc-os::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='4' width='14' height='17' rx='2'/%3E%3Cpath d='M9 3.5h6v2H9z'/%3E%3Cpath d='M8.5 12h7M8.5 15.5h5'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='4' width='14' height='17' rx='2'/%3E%3Cpath d='M9 3.5h6v2H9z'/%3E%3Cpath d='M8.5 12h7M8.5 15.5h5'/%3E%3C/svg%3E");
+}
+.badge-tipo-doc-venda::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 19V5M6 11l6-6 6 6'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 19V5M6 11l6-6 6 6'/%3E%3C/svg%3E");
+}
+.badge-tipo-doc-compra::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14M6 13l6 6 6-6'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14M6 13l6 6 6-6'/%3E%3C/svg%3E");
+}
+.badge-tipo-doc-os { background: var(--acento-secundario); }
+.badge-tipo-doc-venda { background: var(--acento-primario); color: var(--acento-primario-texto); }
+.badge-tipo-doc-compra { background: var(--acento-aviso); color: #241a03; }
+
+.filtro-historico {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.filtro-historico::-webkit-scrollbar { display: none; }
+.filtro-historico button {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: var(--raio-pill);
+  border: 1px solid var(--cor-borda);
+  background: var(--cor-card);
+  color: var(--cor-texto-fraco);
+  transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.filtro-historico button.filtro-ativo {
+  background: var(--acento-primario);
+  color: var(--acento-primario-texto);
+  border-color: var(--acento-primario);
+  font-weight: 700;
+}
+
+.btn-excluir-historico {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 12px;
+  background: var(--acento-erro-fundo);
+  color: var(--acento-erro);
+  border: 1px solid var(--acento-erro);
+  border-radius: var(--raio-pequeno);
+}
+.btn-excluir-historico:active {
+  opacity: .8;
+}
+
+/* ── Padrão de desbloqueio / PIN visual (campo Senha do Aparelho) ──────
+   Mesma ideia do sistema do PC: um botão ao lado do campo de texto abre
+   uma tela cheia com uma grade 3x3 de pontos; a pessoa arrasta o dedo
+   conectando os pontos, e o resultado vira um texto tipo "Padrão:
+   1-2-5-8-9" escrito dentro do MESMO <input> de senha — não existe
+   estrutura de dado nova, então a exportação pro PC (lote v2) já carrega
+   isso de graça, sem precisar mexer no formato do lote. */
+
+.campo-senha-pin {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.campo-senha-pin input {
+  flex: 1;
+  min-width: 0;
+}
+.btn-pin {
+  flex: 0 0 auto;
+  width: 44px;
+  border-radius: var(--raio-input);
+  border: 1px solid var(--cor-borda);
+  background: var(--cor-card-alto);
+  color: var(--cor-texto-fraco);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--duracao-toque) var(--curva-toque),
+              border-color var(--duracao-toque) var(--curva-toque),
+              color var(--duracao-toque) var(--curva-toque);
+}
+.btn-pin:active {
+  background: var(--acento-secundario-fundo);
+  border-color: var(--acento-secundario);
+  color: var(--acento-secundario);
+}
+
+/* Tela cheia do padrão — segue o mesmo molde estrutural de
+   .tela-assinatura (fixed/inset:0/z-index alto), mas usa a paleta escura
+   normal do app (não a área branca "papel" da assinatura), já que aqui
+   não existe analogia com assinar no papel. */
+.tela-pin {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--cor-fundo);
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+}
+.tela-pin[hidden] {
+  display: none;
+}
+.pin-topo {
+  padding: 16px;
+  background: var(--cor-fundo-elevado);
+  color: var(--cor-texto);
+  text-align: center;
+  font-size: 14px;
+}
+.pin-topo p {
+  margin: 0;
+}
+.pin-topo p + p {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--cor-texto-fraco);
+}
+.pin-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  touch-action: none;
+}
+.pin-grade-wrapper {
+  position: relative;
+  width: min(78vw, 320px);
+}
+.pin-grade-wrapper svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+}
+.pin-linha-fixa {
+  fill: none;
+  stroke: var(--cor-borda-forte);
+  stroke-width: 2;
+}
+.pin-linha-ativa {
+  fill: none;
+  stroke: var(--acento-primario);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pin-ponto-nucleo {
+  fill: var(--cor-texto-mais-fraco-aa);
+  transition: fill 80ms ease-out;
+}
+.pin-ponto-nucleo.ativo {
+  fill: var(--acento-primario);
+}
+.pin-ponto-anel {
+  fill: none;
+  stroke: var(--cor-borda-forte);
+  stroke-width: 1.5;
+}
+.pin-ponto-anel.ativo {
+  stroke: var(--acento-primario);
+}
+.pin-resumo {
+  padding: 8px 16px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--cor-texto-fraco);
+  min-height: 20px;
+}
+.pin-acoes {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  background: var(--cor-fundo-elevado);
+  border-top: 1px solid var(--cor-borda);
+}
+.pin-acoes .btn-secundario,
+.pin-acoes .btn-primario {
+  margin: 0;
+}
+
+/* ── Grupo de checkboxes inline (ex.: Situação do aparelho, Compra) ────
+   Mesmo padrão visual/toque de .secao-config .checkbox-linha, mas em
+   layout de wrap (várias opções lado a lado) em vez de uma por linha,
+   já que aqui são até 9 opções e a maioria são palavras curtas. */
+.grupo-checkbox {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 4px 0 14px;
+}
+.check-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1.3;
+  min-height: 24px;
+  color: var(--cor-texto);
+  font-weight: 500;
+}
+.check-inline input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  margin: 0;
+  accent-color: var(--acento-primario);
+  cursor: pointer;
+}
+
+.checklist-recebimento-mobile {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 8px 0 18px;
+  padding: 10px;
+  border: 1px solid #273244;
+  border-radius: 16px;
+  background: #0b1018;
+}
+
+.checklist-recebimento-mobile .check-inline {
+  min-height: 46px;
+  margin: 0;
+  padding: 10px 11px;
+  border: 1px solid #202b3a;
+  border-radius: 12px;
+  background: #111722;
+  line-height: 1.25;
+}
+
+.checklist-recebimento-mobile .check-inline:has(input:checked) {
+  border-color: #2fcf93;
+  background: rgba(47, 207, 147, .1);
+  color: #e9fff7;
+}
+
+@media (max-width: 420px) {
+  .checklist-recebimento-mobile { grid-template-columns: 1fr; }
+}
+
+/* ── Fotos anexadas (Nova OS "como chegou" / Entregas "como saiu") ──── */
+.fotos-anexo-cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.fotos-anexo-cabecalho .btn-secundario {
+  width: auto;
+  flex: 1;
+  margin: 0;
+}
+.fotos-anexo-contador {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cor-texto);
+  opacity: 0.7;
+  white-space: nowrap;
+}
+.fotos-anexo-grade {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.foto-anexo-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--raio-botao);
+  overflow: hidden;
+  border: 1px solid var(--cor-borda);
+  background: var(--cor-fundo-elevado);
+}
+.foto-anexo-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.foto-anexo-remover {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* =========================================================
+   ABA "CONSULTA" (números atribuídos + busca de OS/garantia)
+   Reaproveita .painel-documentos, .secao-config, .lista-historico e
+   .item-historico já definidos acima — só o campo+botão lado a lado e
+   a caixa de resultado são estilo novo.
+   ========================================================= */
+.linha-busca-consulta {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.linha-busca-consulta input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.linha-busca-consulta .btn-primario {
+  flex: 0 0 auto;
+  width: auto;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.resultado-consulta {
+  margin-top: 12px;
+  background: var(--cor-card);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-input);
+  padding: 12px 14px;
+  font-size: 13px;
+}
+.resultado-consulta p {
+  margin: 0 0 6px;
+}
+.resultado-consulta p:last-child {
+  margin-bottom: 0;
+}
+.resultado-consulta .historico-erro,
+.resultado-consulta .historico-sucesso,
+.resultado-consulta .historico-carregando {
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  box-shadow: none;
+}
+.resultado-consulta .btn-abrir-pdf-consulta {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.consulta-documentos-grade {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.consulta-documento-card {
+  min-width: 0;
+}
+.consulta-documento-card > h3 {
+  margin: 0 0 7px;
+  color: var(--cor-texto-fraco);
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.consulta-documento-card .resultado-consulta {
+  margin-top: 0;
+}
+.acoes-documento-consulta,
+.anexo-comprovante-consulta {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.anexo-comprovante-consulta {
+  padding-top: 12px;
+  border-top: 1px solid var(--cor-borda);
+}
+.anexo-comprovante-consulta small {
+  color: var(--cor-texto-fraco);
+  line-height: 1.4;
+}
+.anexo-comprovante-consulta input[type="file"] {
+  display: none;
+}
+
+/* Ações (Editar/Excluir) no resultado da busca de OS na aba Consulta —
+   mesma linguagem visual de .btn-editar-historico/.btn-excluir-historico,
+   lado a lado em vez de empilhadas (o card de resultado já é mais largo
+   que um item de lista). */
+.painel-prazos .prazo-status-linha {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(132px, .46fr);
+  gap: 8px;
+  align-items: stretch;
+  margin-top: 10px;
+}
+.painel-prazos .prazo-status-linha select {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+}
+.painel-prazos .prazo-status-linha button {
+  width: 100%;
+  min-width: 132px;
+  min-height: 48px;
+  padding: 11px 16px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+@media (max-width: 430px) {
+  .painel-prazos .prazo-status-linha {
+    grid-template-columns: 1fr;
+  }
+  .painel-prazos .prazo-status-linha button {
+    min-width: 0;
+  }
+}
+.painel-prazos .prazo-atrasado {
+  color: var(--acento-erro);
+  font-weight: 700;
+}
+.painel-prazos .item-historico {
+  border-left: 3px solid var(--acento);
+}
+.painel-prazos .reparo-dados {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-pequeno);
+  background: color-mix(in srgb, var(--fundo-card) 84%, var(--acento) 4%);
+}
+.painel-prazos .reparo-dados p {
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.painel-prazos .reparo-prazo-selo {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.painel-prazos .reparo-prazo-atrasado { color: var(--acento-erro); border-color: color-mix(in srgb, var(--acento-erro) 55%, transparent); }
+.painel-prazos .reparo-prazo-perto,
+.painel-prazos .reparo-prazo-atencao { color: var(--acento-aviso); border-color: color-mix(in srgb, var(--acento-aviso) 55%, transparent); }
+.painel-prazos .reparo-prazo-normal,
+.painel-prazos .reparo-prazo-concluido { color: var(--acento); border-color: color-mix(in srgb, var(--acento) 55%, transparent); }
+
+.resultado-consulta-acoes {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.resultado-consulta-acoes .btn-editar-consulta,
+.resultado-consulta-acoes .btn-excluir-consulta {
+  flex: 1 1 0;
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 13px;
+  border-radius: var(--raio-pequeno);
+}
+.resultado-consulta-acoes .btn-editar-consulta {
+  background: transparent;
+  color: var(--cor-principal);
+  border: 1px solid var(--cor-principal);
+}
+.resultado-consulta-acoes .btn-excluir-consulta {
+  background: var(--acento-erro-fundo);
+  color: var(--acento-erro);
+  border: 1px solid var(--acento-erro);
+}
+.resultado-consulta-acoes button:active {
+  opacity: .8;
+}
+.resultado-consulta-acoes button:disabled {
+  opacity: .6;
+}
+
+/* Formulário inline de edição — some/aparece dentro do próprio card de
+   resultado, sem navegar para outra tela. */
+.form-edicao-consulta {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cor-borda);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.form-edicao-consulta label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cor-texto-fraco);
+  display: block;
+  margin-bottom: 4px;
+}
+.form-edicao-consulta select,
+.form-edicao-consulta textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--cor-fundo);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-input);
+  color: var(--cor-texto);
+  padding: 9px 10px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.form-edicao-consulta textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+.form-edicao-consulta-acoes {
+  display: flex;
+  gap: 8px;
+}
+.form-edicao-consulta-acoes button {
+  flex: 1 1 0;
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  border-radius: var(--raio-pequeno);
+}
+.form-edicao-consulta-acoes .btn-cancelar-edicao-consulta {
+  background: transparent;
+  color: var(--cor-texto-fraco);
+  border: 1px solid var(--cor-borda);
+}
+
+/* =========================================================
+   ABA "ESTATÍSTICAS" (status das OS + financeiro)
+   Cards em grade 2x2 com cor de acento por grupo (mesma paleta
+   semântica usada no resto do app: erro/aviso/primário/secundário),
+   cantos bem arredondados e leve resposta ao toque — nada de branco
+   puro nem esquina reta, seguindo o mesmo sistema de tokens do topo
+   do arquivo. Reaproveita .lista-historico/.item-historico/.historico-vazio
+   já definidos acima para a lista de OS do grupo selecionado.
+   ========================================================= */
+.painel-estatisticas {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.estatisticas-atualizado-em {
+  margin: -4px 0 14px;
+  font-size: 12px;
+  color: var(--cor-texto-mais-fraco-aa);
+  text-align: center;
+}
+
+.cards-estatisticas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.card-estatistica {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 16px 16px 14px;
+  border-radius: var(--raio-card);
+  border: 1px solid var(--cor-borda);
+  background: var(--cor-card);
+  box-shadow: var(--sombra-card);
+  overflow: hidden;
+  text-align: left;
+  transition: transform var(--duracao-toque) var(--curva-toque),
+    box-shadow var(--duracao-toque) var(--curva-toque),
+    border-color var(--duracao-toque) var(--curva-toque);
+}
+/* Barra de acento colada na borda esquerda — mesma ideia de "chip de
+   status" usada em badges do app, aqui como uma faixa fina em vez de
+   pílula, pra não competir com o número grande. */
+.card-estatistica::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--card-estatistica-cor, var(--cor-borda-forte));
+}
+button.card-estatistica {
+  cursor: pointer;
+  width: 100%;
+}
+button.card-estatistica:active {
+  transform: scale(0.97);
+  box-shadow: var(--sombra-elevada);
+}
+.card-estatistica.card-estatistica-selecionada {
+  border-color: var(--card-estatistica-cor, var(--cor-borda-forte));
+}
+
+.card-estatistica-numero {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--cor-texto);
+}
+.card-estatistica-rotulo {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cor-texto-fraco);
+}
+
+.card-estatistica-atrasada { --card-estatistica-cor: var(--acento-erro); }
+.card-estatistica-atrasada .card-estatistica-numero { color: var(--acento-erro); }
+
+.card-estatistica-prazo { --card-estatistica-cor: var(--acento-aviso); }
+.card-estatistica-prazo .card-estatistica-numero { color: var(--acento-aviso); }
+
+.card-estatistica-pronta { --card-estatistica-cor: var(--acento-primario); }
+.card-estatistica-pronta .card-estatistica-numero { color: var(--acento-primario); }
+
+.card-estatistica-entregue { --card-estatistica-cor: var(--acento-secundario); }
+.card-estatistica-entregue .card-estatistica-numero { color: var(--acento-secundario); }
+
+/* Financeiro: só 2 cards, então cada um ocupa a linha inteira em vez de
+   dividir a grade 2x2 usada no status — número tem mais espaço pra
+   respirar (valor em R$ costuma ser mais longo que uma contagem). */
+.cards-estatisticas-financeiro {
+  grid-template-columns: 1fr;
+}
+.cards-estatisticas-financeiro .card-estatistica {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  --card-estatistica-cor: var(--acento-primario);
+}
+.cards-estatisticas-financeiro .card-estatistica-numero {
+  color: var(--acento-primario);
+  font-size: 22px;
+}
+.cards-estatisticas-financeiro .card-estatistica-rotulo {
+  order: -1;
+}
+
+/* Gráfico de receita por mês: barras simples com preenchimento animável
+   por altura (definida inline via JS), apoiadas numa linha de base —
+   mesmo cantos arredondados e cor de acento primário do resto do app. */
+.grafico-receita-meses {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 140px;
+  padding: 12px 4px 0;
+  border-bottom: 1px solid var(--cor-borda);
+}
+.barra-receita-mes {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 6px;
+  min-width: 0;
+}
+.barra-receita-mes-preenchimento {
+  width: 100%;
+  max-width: 28px;
+  border-radius: var(--raio-pequeno) var(--raio-pequeno) 2px 2px;
+  background: linear-gradient(180deg, var(--acento-primario), var(--acento-primario-fundo));
+  transition: height .25s ease-out;
+}
+.barra-receita-mes-rotulo {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--cor-texto-mais-fraco-aa);
+  white-space: nowrap;
+}
+
+/* ── Supabase Auth / gate de entrada ─────────────────────────────── */
+.tela-login {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: max(24px, env(safe-area-inset-top)) 18px max(24px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at 52% 4%, color-mix(in srgb, var(--acento-primario) 20%, transparent), transparent 36%),
+    radial-gradient(circle at 8% 86%, color-mix(in srgb, var(--acento-secundario) 11%, transparent), transparent 31%),
+    var(--cor-fundo);
+  isolation: isolate;
+}
+.tela-login[hidden] { display: none; }
+.login-ambiente {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.login-grade {
+  position: absolute;
+  inset: 0;
+  opacity: .28;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--cor-borda) 45%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--cor-borda) 45%, transparent) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,.72), transparent 76%);
+}
+.login-orbita {
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--acento-primario) 24%, transparent);
+  border-radius: 50%;
+  animation: login-flutuar 8s ease-in-out infinite alternate;
+}
+.login-orbita-um { width: 340px; height: 340px; top: -180px; right: -120px; }
+.login-orbita-dois { width: 220px; height: 220px; bottom: -120px; left: -80px; animation-delay: -3s; }
+@keyframes login-flutuar { to { transform: translate3d(-10px, 16px, 0) scale(1.04); opacity: .55; } }
+.card-login {
+  width: min(100%, 410px);
+  padding: 30px 24px 22px;
+  border: 1px solid color-mix(in srgb, var(--acento-primario) 21%, var(--cor-borda));
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--cor-card) 94%, transparent);
+  box-shadow: 0 32px 90px rgba(0,0,0,.52), inset 0 1px rgba(255,255,255,.035);
+  backdrop-filter: blur(22px);
+  animation: login-entrada .48s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes login-entrada { from { opacity: 0; transform: translateY(14px) scale(.985); } }
+.marca-login {
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 13px;
+  border-radius: 19px;
+  color: var(--acento-primario);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--acento-primario) 18%, var(--cor-card-alto)), var(--cor-card-alto));
+  border: 1px solid color-mix(in srgb, var(--acento-primario) 70%, var(--cor-borda));
+  box-shadow: 0 14px 40px color-mix(in srgb, var(--acento-primario) 18%, transparent), inset 0 1px rgba(255,255,255,.07);
+}
+.marca-login svg { width: 34px; height: 34px; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--acento-primario) 50%, transparent)); }
+.login-sobrelinha {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--acento-primario);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .13em;
+  text-align: center;
+}
+.card-login h1 {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(27px, 8vw, 33px);
+  letter-spacing: -.035em;
+}
+.login-subtitulo {
+  max-width: 300px;
+  margin: 8px auto 0;
+  color: var(--cor-texto-fraco);
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+.auth-status {
+  min-height: 20px;
+  margin: 10px 0 15px;
+  color: var(--cor-texto-fraco);
+  text-align: center;
+  line-height: 1.45;
+}
+.auth-status-erro { color: var(--acento-erro); }
+.auth-status-sucesso { color: var(--acento-primario); }
+.auth-atualizacao {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: center;
+  gap: 9px;
+  margin: -7px 0 16px;
+  padding: 11px;
+  border: 1px solid var(--acento-primario);
+  border-radius: var(--raio-input);
+  color: var(--cor-texto);
+  background: var(--acento-primario-fundo);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.auth-atualizacao[hidden] { display: none; }
+.auth-atualizacao-icone {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  color: var(--acento-primario);
+  background: color-mix(in srgb, var(--acento-primario) 13%, transparent);
+}
+.auth-atualizacao-icone svg { width: 19px; height: 19px; }
+.auth-atualizacao[data-fase="verificando"] .auth-atualizacao-icone svg { animation: auth-girar 1.1s linear infinite; }
+.auth-atualizacao .btn-secundario { grid-column: 1 / -1; width: 100%; }
+.auth-atualizacao-global {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 12050;
+  width: min(620px, calc(100vw - 24px));
+  margin: 0;
+  transform: translateX(-50%);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, .38);
+  background: color-mix(in srgb, var(--cor-card) 94%, var(--acento-primario) 6%);
+  backdrop-filter: blur(18px);
+}
+.auth-atualizacao-global .btn-secundario { grid-column: auto; width: auto; min-width: 142px; }
+.auth-atualizacao-global[hidden] { display: none; }
+@media (max-width: 640px) {
+  .auth-atualizacao-global { grid-template-columns: 34px 1fr; }
+  .auth-atualizacao-global .btn-secundario { grid-column: 1 / -1; width: 100%; }
+}
+.auth-carregando {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--cor-texto-fraco);
+}
+.auth-carregando[hidden] { display: none; }
+.auth-spinner {
+  width: 19px;
+  height: 19px;
+  border: 2px solid var(--cor-borda-forte);
+  border-top-color: var(--acento-primario);
+  border-radius: 50%;
+  animation: auth-girar .8s linear infinite;
+}
+@keyframes auth-girar { to { transform: rotate(360deg); } }
+.form-login {
+  display: grid;
+  gap: 9px;
+}
+.form-login[hidden] { display: none; }
+.form-login label {
+  margin-top: 5px;
+  color: var(--cor-texto-fraco);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.form-login input {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 14px;
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio-input);
+  color: var(--cor-texto);
+  background: color-mix(in srgb, var(--cor-card-alto) 95%, transparent);
+  font: inherit;
+}
+.form-login input:focus {
+  outline: none;
+  border-color: var(--acento-secundario);
+  box-shadow: 0 0 0 3px var(--acento-secundario-fundo);
+}
+.auth-campo-senha { position: relative; display: grid; }
+.auth-campo-senha input { width: 100%; padding-right: 52px; }
+.auth-mostrar-senha {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  color: var(--cor-texto-fraco);
+  background: transparent;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+.auth-mostrar-senha:hover,
+.auth-mostrar-senha:focus-visible,
+.auth-mostrar-senha[aria-pressed="true"] { color: var(--acento-primario); background: var(--acento-primario-fundo); }
+.auth-mostrar-senha svg { width: 21px; height: 21px; }
+.form-login .btn-primario { width: 100%; margin-top: 9px; }
+.form-login > .btn-primario { min-height: 52px; border-radius: 14px; box-shadow: 0 12px 28px color-mix(in srgb, var(--acento-primario) 19%, transparent); }
+#btn-abrir-chamado-login {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 2px;
+  border-style: dashed;
+}
+.login-seguranca {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  margin-top: 18px;
+  color: var(--cor-texto-mais-fraco-aa);
+  font-size: 10.5px;
+  text-align: center;
+}
+.login-seguranca span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--acento-primario);
+  box-shadow: 0 0 10px var(--acento-primario);
+}
+.btn-link-auth {
+  padding: 10px;
+  border: 0;
+  color: var(--acento-secundario);
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+}
+.acoes-auth {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.acoes-auth button[hidden] { display: none; }
+.auth-identidade {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 46%;
+}
+.auth-identidade[hidden] { display: none; }
+#auth-usuario-resumo {
+  overflow: hidden;
+  color: var(--cor-texto-fraco);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.btn-sair-sessao {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio-pequeno);
+  color: var(--cor-texto);
+  background: var(--cor-card-alto);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+.auth-banner-offline {
+  position: sticky;
+  top: 0;
+  z-index: 9000;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--acento-aviso);
+  color: var(--acento-aviso);
+  background: var(--acento-aviso-fundo);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+.auth-banner-offline[hidden] { display: none; }
+.auth-banner-licenca {
+  position: sticky;
+  top: 0;
+  z-index: 8999;
+  padding: 9px 14px;
+  background: #fff7d6;
+  color: #6b4a00;
+  border-bottom: 1px solid #f1c761;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+.auth-banner-licenca[hidden] { display: none; }
+.tema-escuro .auth-banner-licenca {
+  background: #342907;
+  color: #f6d778;
+  border-color: #765b12;
+}
+
+/* Central isolada para a conta de suporte. Não exibe nem reaproveita dados
+   do aplicativo de uma empresa cliente. */
+.painel-suporte-global {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 28px 18px 44px;
+}
+.suporte-cabecalho {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+  padding: 22px;
+  border: 1px solid var(--borda);
+  border-radius: 18px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primario) 15%, var(--bg-card)), var(--bg-card));
+}
+.suporte-cabecalho h2 { margin: 2px 0 6px; font-size: 1.35rem; }
+.suporte-cabecalho p { margin: 0; color: var(--texto-sec); }
+.suporte-cabecalho-acoes { display: grid; gap: 8px; min-width: 150px; }
+.suporte-cabecalho-acoes .btn-secundario { width: 100%; margin: 0; }
+.suporte-sobrelinha { color: var(--primario) !important; font-size: .72rem; font-weight: 800; letter-spacing: .12em; }
+.suporte-busca { display: block; margin: 20px 0 7px; font-weight: 700; font-size: .86rem; }
+#suporte-busca-empresa { width: 100%; box-sizing: border-box; }
+.suporte-status { min-height: 20px; color: var(--texto-sec); font-size: .84rem; }
+.suporte-lista-empresas { display: grid; gap: 10px; }
+.suporte-empresa-card { padding: 16px; border: 1px solid var(--borda); border-radius: 14px; background: var(--bg-card); }
+.suporte-empresa-card strong { display: block; margin-bottom: 5px; }
+.suporte-empresa-card p, .suporte-empresa-card small { margin: 0; color: var(--texto-sec); }
+.suporte-empresa-card small { display: block; margin-top: 5px; }
+.suporte-vazio { color: var(--texto-sec); text-align: center; padding: 24px; }
+.suporte-chamados { margin-top: 26px; }
+.suporte-chamados h3 { margin: 0 0 10px; font-size: 1rem; }
+.suporte-chamado-card { padding: 15px; border: 1px solid var(--borda); border-radius: 14px; background: var(--bg-card); }
+.suporte-chamado-card strong, .suporte-chamado-card p, .suporte-chamado-card small { display:block; margin:0; }
+.suporte-chamado-card p { margin-top:8px; white-space:pre-wrap; }
+.suporte-chamado-card small { margin-top:6px; color:var(--texto-sec); }
+.suporte-chamado-acoes { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.suporte-abrir-conversa { width:100%;margin-top:10px; }
+.suporte-secao-titulo { display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:10px; }
+.suporte-secao-titulo h3,.suporte-secao-titulo p { margin:0; }
+.suporte-secao-titulo p { margin-top:4px;color:var(--texto-sec);font-size:.78rem; }
+.suporte-secao-titulo select { width:auto;min-width:125px;margin:0; }
+.suporte-erro-card { padding:15px;border:1px solid var(--borda);border-radius:14px;background:var(--bg-card); }
+.suporte-erro-card[data-prioridade="critica"] { border-color:#ef4444; }
+.suporte-erro-card[data-prioridade="alta"] { border-color:#f59e0b; }
+.suporte-erro-card strong,.suporte-erro-card small,.suporte-erro-card p { display:block;margin:0; }
+.suporte-erro-card small { margin-top:5px;color:var(--texto-sec); }
+.suporte-erro-card p { margin-top:9px;white-space:pre-wrap;overflow-wrap:anywhere; }
+.suporte-erro-acoes { display:flex;flex-wrap:wrap;gap:8px;margin-top:12px; }
+.central-chamados-app { position:fixed;inset:0;z-index:11000;background:radial-gradient(circle at 50% -10%,color-mix(in srgb,var(--primario) 18%,transparent),transparent 38%),var(--fundo);color:var(--texto);display:grid;grid-template-rows:auto minmax(0,1fr);padding:max(8px,env(safe-area-inset-top)) 0 env(safe-area-inset-bottom); }
+.central-chamados-app[hidden] { display:none; }
+.central-chamados-app > header { display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px 14px 14px;border-bottom:1px solid var(--borda);background:color-mix(in srgb,var(--bg-card) 88%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.14);backdrop-filter:blur(18px); }
+.central-chamados-app > header div { display:grid;gap:2px;flex:1;min-width:0; }
+.central-chamados-app > header strong { font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.central-chamados-app > header small { color:var(--texto-sec);font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.central-chamados-app > header > button { width:auto!important;min-width:72px!important;margin:0!important;padding:9px 12px!important;flex:0 0 auto; }
+.conteudo-central-chamados-app { min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto; }
+.conteudo-central-chamados-app[hidden] { display:none; }
+.form-novo-chamado-app { width:min(620px,calc(100% - 24px));max-height:calc(100dvh - 92px);margin:14px auto;padding:18px;overflow:auto;border:1px solid color-mix(in srgb,var(--primario) 38%,var(--borda));border-radius:20px;background:color-mix(in srgb,var(--bg-card) 96%,transparent);box-shadow:0 18px 54px rgba(0,0,0,.32); }
+.form-novo-chamado-app[hidden] { display:none; }
+.form-novo-chamado-app > div:not(.novo-chamado-app-titulo):not(.novo-chamado-app-acoes) { display:grid;gap:6px;margin-top:13px; }
+.form-novo-chamado-app label { color:var(--texto-sec);font-size:.76rem;font-weight:750; }
+.form-novo-chamado-app input,.form-novo-chamado-app select,.form-novo-chamado-app textarea { width:100%;box-sizing:border-box; }
+.form-novo-chamado-app textarea { resize:vertical;min-height:116px; }
+.novo-chamado-app-titulo { display:grid;gap:4px;padding-bottom:10px;border-bottom:1px solid var(--borda); }
+.novo-chamado-app-titulo strong { font-size:1.08rem; }
+.novo-chamado-app-titulo span { color:var(--texto-sec);font-size:.78rem; }
+.suporte-form-secao-app { display:grid!important;gap:3px!important;margin-top:20px!important;padding-top:14px;border-top:1px solid var(--borda); }
+.suporte-form-secao-app strong { color:var(--texto);font-size:.9rem; }
+.suporte-form-secao-app span { color:var(--texto-sec);font-size:.72rem; }
+.novo-chamado-app-acoes { display:grid;grid-template-columns:1fr 1.5fr;gap:9px;margin-top:16px; }
+.lista-central-chamados-app { display:flex;gap:9px;overflow-x:auto;padding:12px 14px;border-bottom:1px solid var(--borda); }
+.item-chamado-app { min-width:220px;display:grid;gap:3px;text-align:left;border:1px solid var(--borda);border-radius:13px;background:var(--bg-card);color:var(--texto);padding:12px;box-shadow:0 6px 18px rgba(0,0,0,.10); }
+.item-chamado-app span,.item-chamado-app small { color:var(--texto-sec); }
+.conversa-central-chamados-app { min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto; }
+.cabecalho-chamado-app { padding:11px 16px;font-weight:750;border-bottom:1px solid var(--borda); }
+.mensagens-chamado-app { min-height:0;overflow:auto;padding:15px;display:flex;flex-direction:column;gap:9px; }
+.mensagem-chamado-app { max-width:86%;padding:10px 12px;border-radius:14px;border:1px solid var(--borda);background:var(--bg-card); }
+.mensagem-chamado-app.cliente { align-self:flex-start; }
+.mensagem-chamado-app.suporte { align-self:flex-end;border-color:var(--primario);background:color-mix(in srgb,var(--bg-card) 86%,var(--primario) 14%); }
+.mensagem-chamado-app strong,.mensagem-chamado-app small { display:block; }
+.mensagem-chamado-app strong { font-size:.72rem;color:var(--primario); }
+.mensagem-chamado-app p { margin:5px 0;white-space:pre-wrap;overflow-wrap:anywhere; }
+.mensagem-chamado-app small { text-align:right;color:var(--texto-sec);font-size:.65rem; }
+.form-mensagem-chamado-app { padding:11px 14px;border-top:1px solid var(--borda);background:var(--bg-card);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end; }
+.form-mensagem-chamado-app textarea { min-height:68px;resize:none; }
+.form-mensagem-chamado-app .btn-primario { min-height:48px; }
+.central-chamados-app > .suporte-status { margin:0;padding:6px 16px 10px;background:var(--bg-card); }
+@media (max-width: 520px) {
+  .suporte-cabecalho { align-items: stretch; flex-direction: column; }
+  .suporte-cabecalho .btn-secundario { width: 100%; }
+  .central-chamados-app > header { gap:7px;padding-inline:10px; }
+  .central-chamados-app > header > button { min-width:66px!important;padding-inline:9px!important;font-size:.78rem; }
+  .central-chamados-app > header small { display:none; }
+  .form-novo-chamado-app { width:calc(100% - 18px);max-height:calc(100dvh - 78px);margin:9px auto;padding:15px;border-radius:17px; }
+  .novo-chamado-app-acoes { grid-template-columns:1fr; }
+  .novo-chamado-app-acoes .btn-primario { order:-1; }
+  .form-novo-chamado-app textarea { min-height:104px; }
+  .suporte-secao-titulo { align-items:stretch;flex-direction:column; }
+  .suporte-secao-titulo select { width:100%; }
+}
+
+/* Seletor próprio de câmera/galeria. Evita o prompt nativo em inglês e
+   preserva o mesmo visual no Android e no navegador. */
+.seletor-fonte-foto { position:fixed;inset:0;z-index:12500;display:grid;align-items:end; }
+.seletor-fonte-foto[hidden] { display:none; }
+.seletor-fonte-foto-fundo { position:absolute;inset:0;background:rgba(0,0,0,.78);opacity:0;transition:opacity .18s ease;backdrop-filter:blur(10px); }
+.seletor-fonte-foto-painel { position:relative;width:min(560px,calc(100% - 20px));margin:0 auto;padding:10px 18px max(20px,env(safe-area-inset-bottom));border:1px solid #344156;border-bottom:0;border-radius:26px 26px 0 0;background:linear-gradient(160deg,#151d29,#0e141e);box-shadow:0 -28px 80px rgba(0,0,0,.58);transform:translateY(105%);transition:transform .22s cubic-bezier(.2,.8,.2,1); }
+.seletor-fonte-foto-visivel .seletor-fonte-foto-fundo { opacity:1; }
+.seletor-fonte-foto-visivel .seletor-fonte-foto-painel { transform:translateY(0); }
+.seletor-fonte-foto-alca { display:block;width:38px;height:4px;margin:0 auto 12px;border-radius:99px;background:var(--cor-borda-forte); }
+.seletor-fonte-foto-cabecalho { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 2px 13px; }
+.seletor-fonte-foto-cabecalho > div { display:grid;gap:3px; }
+.seletor-fonte-foto-cabecalho strong { font-size:1.08rem; }
+.seletor-fonte-foto-cabecalho small { color:var(--cor-texto-fraco);font-size:.76rem; }
+.seletor-fonte-foto-fechar { display:grid;place-items:center;width:38px;height:38px;padding:0;border:1px solid var(--cor-borda);border-radius:12px;color:var(--cor-texto-fraco);background:var(--cor-card-alto);font-size:1.45rem; }
+.seletor-fonte-foto-opcoes { display:grid;gap:10px; }
+.seletor-fonte-foto-opcao { display:grid;grid-template-columns:52px minmax(0,1fr);align-items:center;gap:14px;width:100%;min-height:78px;padding:13px;border:1px solid var(--cor-borda);border-radius:17px;color:var(--cor-texto);background:var(--cor-card-alto);text-align:left; }
+.seletor-fonte-foto-opcao:active { border-color:var(--acento-primario);background:var(--acento-primario-fundo);transform:scale(.99); }
+.seletor-fonte-foto-opcao > span:last-child { display:grid;gap:4px; }
+.seletor-fonte-foto-opcao small { color:var(--cor-texto-fraco);font-size:.75rem; }
+.seletor-fonte-foto-icone { display:grid;place-items:center;width:50px;height:50px;border:1px solid color-mix(in srgb,var(--acento-primario) 48%,var(--cor-borda));border-radius:15px;color:var(--acento-primario);background:var(--acento-primario-fundo); }
+.seletor-fonte-foto-icone svg { width:25px;height:25px; }
+
+.modal-senha-exclusao { position:fixed;inset:0;z-index:13000;display:grid;place-items:center;padding:max(20px,env(safe-area-inset-top)) 18px max(20px,env(safe-area-inset-bottom));background:rgba(0,0,0,.78);backdrop-filter:blur(10px);animation:modal-fundo-entrada .18s ease-out both; }
+.modal-senha-exclusao-card { width:min(100%,450px);box-sizing:border-box;padding:25px;border:1px solid #344156;border-radius:26px;background:linear-gradient(160deg,#151d29,#0e141e);box-shadow:0 34px 100px rgba(0,0,0,.62);color:#f7fafc;animation:modal-caixa-entrada .24s cubic-bezier(.2,.8,.2,1) both; }
+.modal-senha-exclusao-icone { width:50px;height:50px;display:grid;place-items:center;border-radius:16px;background:rgba(61,218,159,.12);color:var(--acento-primario); }
+.modal-senha-exclusao-card h3 { margin:16px 0 6px;font-size:1.2rem; }
+.modal-senha-exclusao-card p { color:#9ea9b9; }
+.campo-senha-exclusao-wrap { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:8px; }
+.campo-senha-exclusao-wrap input { min-width:0;min-height:52px;color:#fff!important;background:#0a0f16!important;border-color:#344156!important;border-radius:14px!important;font-size:16px!important; }
+.campo-senha-exclusao-wrap button { width:auto!important;min-width:50px;padding:0 14px;border:1px solid #344156;border-radius:14px;background:#1a2433;color:#dce5f2; }
+.erro-senha-exclusao { margin:9px 0 0;color:#ff8087!important; }
+.modal-senha-exclusao-acoes { display:flex;justify-content:flex-end;gap:10px;margin-top:20px; }
+.modal-senha-exclusao-acoes button { width:auto!important;min-width:112px;min-height:50px; }
+@media(max-width:480px){
+  .modal-senha-exclusao{align-items:end;padding:12px 10px 0}
+  .modal-senha-exclusao-card{width:100%;padding:22px 18px max(18px,env(safe-area-inset-bottom));border-radius:26px 26px 0 0}
+  .modal-senha-exclusao-acoes{display:grid;grid-template-columns:1fr;margin-top:18px}
+  .modal-senha-exclusao-acoes button{width:100%!important}
+  .modal-senha-exclusao-acoes .btn-primario,.modal-senha-exclusao-acoes .btn-perigo{order:-1}
+}
+
+@media (max-width: 430px) {
+  .topo-identidade { flex-wrap: wrap; }
+  .auth-identidade { order: 3; max-width: 100%; width: 100%; justify-content: flex-end; }
+  #auth-usuario-resumo { max-width: calc(100% - 56px); }
+}
+.contas-rapidas {
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--borda, #273142);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--fundo-card, #141923) 92%, transparent);
+}
+
+.contas-rapidas > strong { display: block; margin-bottom: 9px; }
+.lista-contas-rapidas { display: grid; gap: 8px; margin-top: 9px; }
+.conta-rapida-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 8px;
+  align-items: stretch;
+}
+.conta-rapida-entrar,
+.conta-rapida-remover {
+  border: 1px solid var(--borda, #273142);
+  border-radius: 11px;
+  background: var(--fundo-input, #1c2330);
+  color: var(--texto, #f5f7fb);
+}
+.conta-rapida-entrar {
+  min-width: 0;
+  padding: 10px 12px;
+  text-align: left;
+}
+.conta-rapida-entrar strong,
+.conta-rapida-entrar span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conta-rapida-entrar span { margin-top: 3px; color: var(--texto-secundario, #9ca6b8); font-size: .82rem; }
+.conta-rapida-remover { font-size: 1.55rem; color: #ff7f87; }
+.conta-rapida-entrar:active { border-color: var(--primaria, #41dda1); }
+.feedback-erro { color: #ff7f87 !important; }
+/* Estoque integrado PC + Android */
+.painel-estoque-mobile{max-width:980px;margin:0 auto;padding:18px 14px 110px}
+.estoque-mobile-cabecalho{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px}
+.estoque-mobile-cabecalho h2,.modal-estoque-mobile h2{margin:3px 0 4px;color:var(--cor-texto,#f5f7fb)}
+.estoque-mobile-cabecalho p{margin:0;color:var(--cor-texto-suave,#9ca5b6)}
+.estoque-mobile-eyebrow{font-size:.7rem;letter-spacing:.13em;font-weight:800;color:#3ddca0}
+.estoque-mobile-abas{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:6px;border:1px solid #273143;border-radius:15px;background:#0d121a;margin-bottom:12px}
+.estoque-mobile-abas button{border:0;border-radius:10px;background:transparent;color:#aeb7c7;padding:12px;font-weight:800}
+.estoque-mobile-abas button.ativo{background:#263248;color:#fff;box-shadow:0 6px 18px #0005}
+.estoque-mobile-status{font-size:.8rem;color:#8d98aa;margin:10px 2px}
+.estoque-mobile-ferramentas{display:grid;grid-template-columns:1fr auto;gap:9px}
+.estoque-mobile-busca{width:100%;min-height:46px;margin-bottom:12px}
+.estoque-mobile-lista{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}
+.estoque-mobile-card{border:1px solid #273143;border-radius:16px;padding:15px;background:linear-gradient(145deg,#151b26,#10151e);box-shadow:0 10px 25px #0003}
+.estoque-mobile-card-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.estoque-mobile-card h3{margin:4px 0 8px;font-size:1.03rem;color:#f6f8fb}
+.estoque-mobile-card small,.estoque-mobile-compat{color:#8995a8}
+.estoque-mobile-compat{margin:4px 0 12px;font-size:.86rem}
+.estoque-mobile-badge{padding:6px 9px;border-radius:999px;background:#172d28;color:#57dfa9;font-size:.75rem;font-weight:800;white-space:nowrap}
+.estoque-mobile-badge.critico{background:#351d23;color:#ff8d9c}
+.estoque-mobile-detalhes{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:.8rem;color:#9ba6b8;margin:8px 0 13px}
+.estoque-mobile-detalhes strong{color:#e8edf5}
+.estoque-mobile-acoes{display:flex;align-items:center;gap:9px}
+.estoque-mobile-acoes .estoque-movimentar{min-width:45px;font-size:1.25rem;padding:7px 12px}
+.estoque-mobile-acoes .estoque-excluir{margin-left:auto}
+.estoque-mobile-card>.estoque-excluir{width:100%;margin-top:7px}
+.estoque-mobile-card-acoes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.estoque-mobile-card-acoes .btn-perigo{grid-column:1/-1}
+.estoque-mobile-card-acoes button{min-height:44px;padding:9px 10px}
+.estoque-mobile-vazio{grid-column:1/-1;text-align:center;color:#8d98aa;padding:35px 15px;border:1px dashed #2a3548;border-radius:15px}
+.modal-estoque-mobile{position:fixed;inset:0;z-index:12000;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:max(18px,env(safe-area-inset-top)) 18px max(18px,env(safe-area-inset-bottom));backdrop-filter:blur(10px);animation:modal-fundo-entrada .18s ease-out both}
+.modal-estoque-mobile[hidden]{display:none}
+.modal-estoque-mobile-caixa{width:min(680px,100%);max-height:min(850px,calc(100dvh - 36px));overflow:auto;box-sizing:border-box;background:linear-gradient(160deg,#151d29 0%,#0e141e 100%);border:1px solid #334158;border-radius:26px;padding:22px;box-shadow:0 34px 100px rgba(0,0,0,.62),inset 0 1px rgba(255,255,255,.035);animation:modal-caixa-entrada .24s cubic-bezier(.2,.8,.2,1) both;overscroll-behavior:contain}
+.modal-estoque-mobile-caixa header{position:sticky;top:-22px;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:14px;margin:-22px -22px 20px;padding:21px 22px 17px;border-bottom:1px solid #29364a;background:rgba(18,25,37,.94);backdrop-filter:blur(18px)}
+.modal-estoque-mobile-caixa header>div{min-width:0}
+.modal-estoque-mobile-caixa header h2{font-size:1.32rem;line-height:1.2}
+.modal-estoque-mobile-caixa header .btn-secundario,.modal-mobile-fechar{flex:0 0 auto;width:auto!important;min-width:44px!important;min-height:44px;margin:0!important;padding:0 13px!important;border:1px solid #354258;border-radius:13px;background:#1a2433;color:#dfe6ef;font-weight:800}
+.modal-mobile-fechar{display:grid;place-items:center;width:44px!important;padding:0!important;font-size:1.65rem;line-height:1}
+.modal-estoque-mobile-caixa label{display:grid;gap:8px;color:#c5cdda;font-size:.85rem;font-weight:800;margin-bottom:16px}
+.modal-estoque-mobile-caixa input,.modal-estoque-mobile-caixa select,.modal-estoque-mobile-caixa textarea{width:100%;min-height:52px;box-sizing:border-box;margin:0;padding:12px 14px;border:1px solid #344156;border-radius:14px;background:#0b111a;color:#f4f7fb;font-size:16px;line-height:1.35;outline:none;transition:border-color .16s ease,box-shadow .16s ease,background .16s ease}
+.modal-estoque-mobile-caixa textarea{min-height:92px;resize:vertical}
+.modal-estoque-mobile-caixa input:focus,.modal-estoque-mobile-caixa select:focus,.modal-estoque-mobile-caixa textarea:focus{border-color:#45dda4;background:#0d151e;box-shadow:0 0 0 3px rgba(69,221,164,.12)}
+.modal-estoque-mobile-grade{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.modal-mobile-corpo{display:grid;gap:0}
+.modal-mobile-acoes{position:sticky;bottom:-22px;z-index:2;display:grid;grid-template-columns:minmax(120px,.8fr) minmax(0,1.3fr);gap:10px;margin:8px -22px -22px;padding:16px 22px max(17px,env(safe-area-inset-bottom));border-top:1px solid #29364a;background:rgba(18,25,37,.96);backdrop-filter:blur(18px)}
+.modal-mobile-acoes button{min-height:52px;margin:0}
+.estoque-mobile-id-edicao{margin:-8px 0 16px;color:#74e8b8;font-size:.82rem;font-weight:800}
+.estoque-mobile-modal-acoes{display:grid;grid-template-columns:1fr 1.25fr;gap:10px;position:sticky;bottom:-22px;z-index:2;margin:10px -22px -22px;padding:16px 22px max(17px,env(safe-area-inset-bottom));border-top:1px solid #29364a;background:rgba(18,25,37,.96);backdrop-filter:blur(18px)}
+.estoque-mobile-modal-acoes button{min-height:50px}
+.estoque-mobile-ajuda-venda{color:#8793a5;font-size:.78rem;line-height:1.45;margin:12px 2px 0}
+.aparelho-mobile-pecas{margin:4px 0 18px;padding:14px;border:1px solid #344156;border-radius:16px;background:#0b111a}
+.aparelho-mobile-pecas-topo{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.aparelho-mobile-pecas-topo>div{display:grid;gap:3px}
+.aparelho-mobile-pecas-topo strong{color:#f4f7fb;font-size:.94rem}
+.aparelho-mobile-pecas-topo small,.aparelho-mobile-pecas label small{color:#8793a5;font-size:.75rem;font-weight:500}
+.aparelho-mobile-pecas-topo button{width:auto;min-height:42px;padding:9px 12px}
+.aparelho-mobile-pecas-lista{display:grid;gap:10px;margin-bottom:12px}
+.aparelho-mobile-peca-linha{display:grid;grid-template-columns:minmax(0,1fr) 120px auto;align-items:end;gap:8px}
+.aparelho-mobile-peca-linha label{margin:0}
+.aparelho-mobile-peca-linha button{min-width:44px;min-height:52px;padding:0 10px}
+@keyframes modal-fundo-entrada{from{opacity:0}to{opacity:1}}
+@keyframes modal-caixa-entrada{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
+@media(max-width:560px){
+  .estoque-mobile-cabecalho{align-items:stretch;flex-direction:column}
+  .estoque-mobile-ferramentas,.modal-estoque-mobile-grade{grid-template-columns:1fr}
+  .estoque-mobile-lista{grid-template-columns:1fr}
+  .estoque-mobile-card-acoes{grid-template-columns:1fr}
+  .modal-estoque-mobile{align-items:flex-end;padding:12px 10px 0}
+  .modal-estoque-mobile-caixa{width:100%;max-height:calc(100dvh - max(12px,env(safe-area-inset-top)));border-radius:26px 26px 0 0;padding:20px 18px max(18px,env(safe-area-inset-bottom))}
+  .modal-estoque-mobile-caixa header{top:-20px;margin:-20px -18px 18px;padding:19px 18px 15px}
+  .modal-mobile-acoes,.estoque-mobile-modal-acoes{bottom:calc(0px - max(18px,env(safe-area-inset-bottom)));grid-template-columns:1fr;margin:8px -18px calc(0px - max(18px,env(safe-area-inset-bottom)));padding:14px 18px max(16px,env(safe-area-inset-bottom))}
+  .aparelho-mobile-pecas-topo{align-items:stretch;flex-direction:column}
+  .aparelho-mobile-pecas-topo button{width:100%}
+  .aparelho-mobile-peca-linha{grid-template-columns:minmax(0,1fr) 105px}
+  .aparelho-mobile-peca-linha button{grid-column:1/-1;width:100%}
+  .modal-mobile-acoes .btn-primario,.estoque-mobile-modal-acoes .btn-primario{order:-1}
+}
+
+/* Emissão do comprovante da OS: prévia compartilhada A4 / 58 / 80 mm. */
+.modal-comprovante-os{position:fixed;inset:0;z-index:15000;background:#000d;display:flex;align-items:stretch;justify-content:center;padding:16px}
+.modal-comprovante-os[hidden]{display:none}
+.modal-comprovante-os-caixa{width:min(880px,100%);height:calc(100dvh - 32px);display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr) auto;background:#101722;border:1px solid #2a374b;border-radius:22px;overflow:hidden;box-shadow:0 25px 90px #000b}
+.modal-comprovante-os-caixa>header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #273347}
+.modal-comprovante-os-caixa>header span{display:block;color:#45dda4;font-size:.7rem;font-weight:900;letter-spacing:.14em}
+.modal-comprovante-os-caixa>header h2{margin:3px 0 0;color:#f5f7fb}
+.modal-comprovante-os-caixa>header button{border:1px solid #344157;border-radius:10px;background:#1b2534;color:#eef2f8;padding:9px 13px}
+.comprovante-ajuda{margin:0;padding:12px 20px;color:#9ba6b8;font-size:.84rem}
+.comprovante-recebedor{display:grid;gap:5px;padding:0 20px 12px;color:#dce3ed;font-size:.78rem;font-weight:800}
+.comprovante-recebedor[hidden]{display:none}
+.comprovante-recebedor input{width:100%;box-sizing:border-box;min-height:46px;border:1px solid #344157;border-radius:11px;background:#182130;color:#f5f7fb;padding:10px 12px;font-size:1rem}
+.comprovante-recebedor small{color:#8995a8;font-weight:500}
+.comprovante-formatos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 20px 12px}
+.comprovante-formatos button{border:1px solid #344157;border-radius:11px;background:#182130;color:#b9c2d1;padding:11px;font-weight:900}
+.comprovante-formatos button.ativo{border-color:#3ddca0;background:#15362d;color:#65edba}
+.comprovante-frame{min-height:0;background:#202630;padding:12px;overflow:auto}
+.comprovante-frame iframe{display:block;width:100%;height:100%;min-height:420px;border:0;border-radius:10px;background:#fff}
+.modal-comprovante-os-caixa>footer{display:grid;grid-template-columns:.8fr 1.4fr;gap:10px;padding:14px 20px;border-top:1px solid #273347;background:#121b29}
+.modal-comprovante-os-caixa>footer button{min-height:50px}
+@media(max-width:560px){.modal-comprovante-os{padding:0}.modal-comprovante-os-caixa{height:100dvh;border-radius:0}.comprovante-ajuda{font-size:.76rem}.comprovante-frame{padding:7px}.modal-comprovante-os-caixa>footer{grid-template-columns:1fr 1.45fr;padding:10px}}
+
+/* Autocomplete próprio: o datalist nativo travava digitação e rolagem em alguns Androids. */
+.campo-com-sugestoes { position: relative; }
+.catalogo-sugestoes {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% - 9px);
+  right: 0;
+  left: 0;
+  max-height: 216px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 5px;
+  border: 1px solid var(--borda, #30343a);
+  border-radius: 10px;
+  background: var(--fundo-card, #111);
+  box-shadow: 0 14px 34px rgba(0,0,0,.38);
+}
+.catalogo-sugestoes[hidden] { display: none; }
+.catalogo-sugestoes button {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--texto, #f5f5f5);
+  font: inherit;
+  text-align: left;
+}
+.catalogo-sugestoes button + button { border-top: 1px solid var(--borda, #30343a); }
+.catalogo-sugestoes button:active,
+.catalogo-sugestoes button.ativo { background: var(--fundo-input, #202124); color: var(--texto, #fff); }
+
+.cobranca-os-consulta { display: grid; gap: 12px; margin-top: 14px; padding: 15px; border: 1px solid var(--borda, #30343a); border-radius: 13px; background: var(--fundo-card, #111); }
+.cobranca-os-consulta > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cobranca-os-consulta > header span { color: var(--texto-secundario, #aaa); font-size: .78rem; }
+.cobranca-os-resumo { display: grid; grid-template-columns: repeat(3, 1fr); border-block: 1px solid var(--borda, #30343a); }
+.cobranca-os-resumo > div { display: grid; gap: 3px; padding: 11px 6px; }
+.cobranca-os-resumo span { color: var(--texto-secundario, #aaa); font-size: .7rem; }
+.cobranca-os-resumo strong { font-size: .9rem; font-variant-numeric: tabular-nums; }
+.cobranca-os-lembretes { display: grid; gap: 7px; }
+.cobranca-os-lembrete { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; border: 1px solid var(--borda, #30343a); border-radius: 9px; }
+.cobranca-os-lembrete > div { display: grid; gap: 2px; }
+.cobranca-os-lembrete span { color: var(--texto-secundario, #aaa); font-size: .72rem; }
+.cobranca-os-lembrete.atrasado strong { color: var(--perigo, #ff7078); }
+.cobranca-os-lembrete.recebido strong { color: var(--sucesso, #60d394); }
+.cobranca-os-lembrete.paga strong { color: var(--sucesso, #60d394); }
+.cobranca-os-lembrete.desativada { opacity: .65; }
+.cobranca-os-lembrete button { min-height: 38px; width: auto; margin: 0; padding: 7px 11px; }
+.cobranca-os-confirmar { display: grid; grid-template-columns: minmax(0, .8fr) minmax(160px, 1.2fr); gap: 8px; }
+.cobranca-os-confirmar input { min-height: 46px; margin: 0; }
+.cobranca-os-confirmar button { margin: 0; color: var(--texto-botao, #000); background: var(--primaria, #fff); }
+
+/* Leitura de etiqueta QR — a câmera nativa fica atrás do WebView. Durante
+   a leitura, somente estes controles e a mira permanecem visíveis. */
+.painel-leitor-qr{display:grid;gap:14px}
+.painel-leitor-qr[hidden]{display:none}
+.qr-introducao-card,.qr-dicas-card{border:1px solid #2a374b;border-radius:22px;background:linear-gradient(150deg,#151d29,#0e141e);padding:24px;box-shadow:0 18px 42px #0003}
+.qr-introducao-card{text-align:center}
+.qr-introducao-card h2{margin:10px 0 8px;color:#f5f8fc;font-size:1.45rem}
+.qr-introducao-card p,.qr-dicas-card p{color:#9ca8b9;line-height:1.55}
+.qr-introducao-icone{display:grid;place-items:center;width:82px;height:82px;margin:0 auto;border:1px solid #248cff;border-radius:24px;background:linear-gradient(145deg,#16345c,#10223b);color:#6eb9ff;box-shadow:0 16px 42px rgba(18,126,240,.2)}
+.qr-introducao-icone svg{width:48px;height:48px}
+.btn-qr-principal{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:54px;margin-top:12px;padding:13px 20px}
+.btn-qr-principal svg{width:23px;height:23px}
+.qr-leitor-status{margin:15px 0 0!important;padding:11px 13px;border:1px solid #2d5b4d;border-radius:12px;background:#112b25;color:#66e7b6!important;font-size:.85rem}
+.qr-leitor-status.erro{border-color:#713841;background:#351d23;color:#ff9baa!important}
+.qr-dicas-card h3{margin:0 0 6px;color:#e9eef6;font-size:1rem}
+.qr-dicas-card p{margin:7px 0;font-size:.86rem}
+
+.leitor-qr-camera{position:fixed;inset:0;z-index:30000;display:grid;grid-template-rows:auto 1fr auto;align-items:center;justify-items:center;padding:max(18px,env(safe-area-inset-top)) 18px max(24px,env(safe-area-inset-bottom));box-sizing:border-box;background:linear-gradient(180deg,rgba(4,9,16,.88) 0,rgba(4,9,16,.45) 24%,transparent 42%,transparent 64%,rgba(4,9,16,.76) 79%,rgba(4,9,16,.96) 100%);color:#fff}
+.leitor-qr-camera[hidden]{display:none!important}
+.leitor-qr-topo{width:min(620px,100%);display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px}
+.leitor-qr-topo strong{text-align:center;font-size:1rem;text-shadow:0 2px 8px #000}
+.leitor-qr-controle{min-height:46px;border:1px solid rgba(255,255,255,.32);border-radius:14px;background:rgba(8,16,27,.8);backdrop-filter:blur(12px);color:#fff;padding:9px 14px;font-weight:800}
+.leitor-qr-controle:disabled{opacity:.55}
+.leitor-qr-mira{position:relative;width:min(70vw,330px);aspect-ratio:1;border:1px solid rgba(255,255,255,.2);border-radius:26px;background:rgba(255,255,255,.025);box-shadow:0 0 0 200vmax rgba(0,0,0,.12)}
+.leitor-qr-mira span{position:absolute;width:54px;height:54px;border-color:#4da5ff;border-style:solid;filter:drop-shadow(0 1px 4px #0878e7)}
+.leitor-qr-mira span:nth-child(1){left:-2px;top:-2px;border-width:5px 0 0 5px;border-radius:23px 0 0}
+.leitor-qr-mira span:nth-child(2){right:-2px;top:-2px;border-width:5px 5px 0 0;border-radius:0 23px 0 0}
+.leitor-qr-mira span:nth-child(3){left:-2px;bottom:-2px;border-width:0 0 5px 5px;border-radius:0 0 0 23px}
+.leitor-qr-mira span:nth-child(4){right:-2px;bottom:-2px;border-width:0 5px 5px 0;border-radius:0 0 23px}
+.leitor-qr-instrucao{text-align:center;text-shadow:0 2px 8px #000}
+.leitor-qr-instrucao strong,.leitor-qr-instrucao span{display:block}
+.leitor-qr-instrucao span{margin-top:5px;color:#ccd5e1;font-size:.85rem}
+.leitor-qr-instrucao p{min-height:22px;margin:12px 0 0;color:#68e4b4;font-size:.82rem;font-weight:800}
+.leitor-qr-instrucao p.erro{color:#ff9baa}
+body.qr-camera-ativa{background:transparent!important}
+.garantia-editor{width:min(94vw,760px);max-height:92dvh;padding:20px;border:1px solid var(--borda,#777);border-radius:16px;background:var(--bg-card,#fff);color:var(--texto,#111);overflow:auto}
+.garantia-editor::backdrop{background:rgba(0,0,0,.7)}
+.garantia-editor header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.garantia-editor h2{font-size:1.15rem;margin:0}
+.garantia-editor header h2{flex:1;font-size:1.05rem;line-height:1.3}
+.garantia-editor header button{width:auto;flex:none;min-height:44px;margin:0;padding:8px 12px;font-size:.9rem}
+.garantia-editor form{display:grid;gap:14px}
+.garantia-editor label{display:grid;gap:6px}
+.garantia-editor input,.garantia-editor textarea{width:100%;box-sizing:border-box;padding:12px;border-radius:8px;border:1px solid var(--borda,#777);background:var(--fundo-input,#fff);color:var(--texto,#111);font:inherit}
+.garantia-editor iframe{width:100%;height:64dvh;border:0;background:white}
+.garantia-grade{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.garantia-editor [data-feedback]{min-height:1.4em;margin:0}
+.garantia-retorno{display:grid;gap:12px;margin-top:20px;padding-top:18px;border-top:1px solid var(--borda,#777)}
+.garantia-retorno h3,.garantia-retorno p{margin:0}
+.garantia-retorno label{display:grid;gap:6px}
+.garantia-retorno input,.garantia-retorno textarea,.garantia-retorno select{width:100%;box-sizing:border-box;min-height:46px;padding:12px;border:1px solid var(--borda,#777);border-radius:8px;background:var(--fundo-input,#fff);color:var(--texto,#111);font:inherit}
+.garantia-retorno button{min-height:46px;color:var(--texto-botao,#fff)}
+.garantia-retorno details{padding:10px;border:1px solid var(--borda,#777);border-radius:8px}
+.garantia-retorno details ol{display:grid;gap:10px;padding-left:22px}
+body.qr-camera-ativa>*:not(#leitor-qr-camera){visibility:hidden!important}
+body.qr-camera-ativa #leitor-qr-camera,body.qr-camera-ativa #leitor-qr-camera *{visibility:visible!important}
+@media(max-width:520px){.qr-introducao-card,.qr-dicas-card{padding:20px 16px}.leitor-qr-topo{grid-template-columns:auto auto;justify-content:space-between}.leitor-qr-topo strong{grid-column:1/-1;grid-row:2}.leitor-qr-mira{width:min(76vw,310px)}}
+
+/* Cobranças — agenda financeira por OS. A linha lateral transforma cada
+   card em um vencimento legível sem depender só da cor do estado. */
+.painel-cobrancas-mobile{width:min(100%,980px);margin:0 auto;padding:18px 14px 110px}
+.cobrancas-mobile-cabecalho{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:6px 2px 18px;border-bottom:1px solid var(--cor-borda)}
+.cobrancas-mobile-cabecalho h2{margin:4px 0 5px;color:var(--cor-texto);font-size:clamp(1.45rem,6vw,2rem);letter-spacing:-.035em}
+.cobrancas-mobile-cabecalho p{max-width:560px;margin:0;color:var(--cor-texto-fraco);line-height:1.45}
+.cobrancas-mobile-sobrelinha{color:var(--cor-texto-mais-fraco-aa);font-size:.72rem;font-weight:800;letter-spacing:.13em}
+.cobrancas-mobile-resumo{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;overflow:hidden;margin:16px 0;border:1px solid var(--cor-borda);border-radius:var(--raio-card);background:var(--cor-borda)}
+.cobrancas-mobile-resumo>div{min-width:0;padding:14px;background:var(--cor-card)}
+.cobrancas-mobile-resumo span{display:block;margin-bottom:5px;color:var(--cor-texto-fraco);font-size:.73rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.cobrancas-mobile-resumo strong{display:block;overflow:hidden;color:var(--cor-texto);font-size:1.15rem;text-overflow:ellipsis;white-space:nowrap}
+.cobrancas-mobile-ferramentas{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;margin:14px 0 10px}
+.cobrancas-mobile-ferramentas input{width:100%;min-width:0}
+.cobrancas-mobile-filtros{display:flex;gap:7px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}
+.cobrancas-mobile-filtros::-webkit-scrollbar{display:none}
+.cobrancas-mobile-filtros button{flex:0 0 auto;min-height:38px;padding:8px 13px;border:1px solid var(--cor-borda);border-radius:var(--raio-pill);background:var(--cor-card);color:var(--cor-texto-fraco);font:inherit;font-size:.84rem;font-weight:700}
+.cobrancas-mobile-filtros button.ativo{border-color:var(--cor-texto);background:var(--cor-texto);color:var(--cor-fundo)}
+.cobrancas-mobile-status{margin:8px 0 12px;color:var(--cor-texto-fraco);font-size:.86rem;line-height:1.45}
+.cobrancas-mobile-lista{display:grid;gap:10px}
+.cobranca-mobile-card{position:relative;overflow:hidden;padding:15px 14px 13px 18px;border:1px solid var(--cor-borda);border-radius:var(--raio-card);background:var(--cor-card);box-shadow:var(--sombra-card)}
+.cobranca-mobile-card::before{content:'';position:absolute;inset:0 auto 0 0;width:4px;background:var(--cor-texto-mais-fraco)}
+.cobranca-mobile-card[data-status="pendente"]::before{background:var(--acento-aviso)}
+.cobranca-mobile-card[data-status="atrasada"]::before{background:var(--acento-erro)}
+.cobranca-mobile-card[data-status="paga"]::before{background:var(--acento-primario)}
+.cobranca-mobile-card[data-status="desativada"]::before{background:var(--cor-texto-mais-fraco)}
+.cobranca-mobile-card-topo,.cobranca-mobile-card-rodape{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.cobranca-mobile-card-topo h3{margin:0 0 4px;color:var(--cor-texto);font-size:1rem}
+.cobranca-mobile-card-topo p,.cobranca-mobile-card-detalhe,.cobranca-mobile-card-observacao{margin:0;color:var(--cor-texto-fraco);font-size:.84rem;line-height:1.45}
+.cobranca-mobile-valor{flex:0 0 auto;color:var(--cor-texto);font-size:1.05rem;font-weight:850;letter-spacing:-.02em}
+.cobranca-mobile-card-detalhe{display:flex;flex-wrap:wrap;gap:7px 13px;margin:12px 0 9px}
+.cobranca-mobile-card-observacao{padding:9px 10px;border-radius:var(--raio-pequeno);background:var(--cor-card-alto)}
+.cobranca-mobile-card-rodape{align-items:center;margin-top:12px}
+.cobranca-mobile-situacao{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border:1px solid var(--cor-borda-forte);border-radius:var(--raio-pill);color:var(--cor-texto-fraco);font-size:.76rem;font-weight:800}
+.cobranca-mobile-card[data-status="pendente"] .cobranca-mobile-situacao{color:var(--acento-aviso)}
+.cobranca-mobile-card[data-status="atrasada"] .cobranca-mobile-situacao{color:var(--acento-erro)}
+.cobranca-mobile-card[data-status="paga"] .cobranca-mobile-situacao{color:var(--acento-primario)}
+.cobranca-mobile-acoes{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+.cobranca-mobile-acoes button{min-height:34px;padding:7px 10px;font-size:.8rem}
+.cobrancas-mobile-testar{width:100%;margin-top:14px}
+.cobranca-mobile-modal>label,.cobranca-mobile-modal .modal-estoque-mobile-grade>label{display:grid;gap:7px;color:var(--cor-texto);font-size:.9rem;font-weight:700}
+.cobranca-mobile-vazio{padding:28px 20px;border:1px dashed var(--cor-borda-forte);border-radius:var(--raio-card);color:var(--cor-texto-fraco);text-align:center}
+@media(max-width:640px){
+  .cobrancas-mobile-cabecalho{display:grid}
+  .cobrancas-mobile-cabecalho .btn-primario{width:100%}
+  .cobrancas-mobile-resumo{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cobrancas-mobile-resumo>div:last-child{grid-column:1/-1}
+  .cobrancas-mobile-ferramentas{grid-template-columns:1fr}
+  .cobrancas-mobile-ferramentas .btn-secundario{width:100%}
+  .cobranca-mobile-card-rodape{display:grid}
+  .cobranca-mobile-acoes{justify-content:stretch}
+  .cobranca-mobile-acoes button{flex:1 1 42%}
+}
+/* ── Autorizações de desbloqueio ───────────────────────────── */
+.painel-desbloqueios-mobile{max-width:980px;margin:0 auto;padding:18px 14px 32px}.desbloqueios-cabecalho{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}.desbloqueios-cabecalho h2{margin:3px 0 4px;font-size:26px}.desbloqueios-cabecalho p{margin:0;color:var(--texto-sec)}.desbloqueios-sobrelinha{font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--texto-sec)}.desbloqueio-form,.desbloqueios-registros{background:var(--fundo-card);border:1px solid var(--borda);border-radius:16px;padding:16px;margin-bottom:16px}.desbloqueio-form fieldset{margin:0 0 16px;padding:0;border:0}.desbloqueio-form legend{width:100%;padding:0 0 10px;border-bottom:1px solid var(--borda);font-size:16px;font-weight:800}.desbloqueio-grade{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px;margin-top:13px}.desbloqueio-form label{display:grid;gap:6px;font-weight:700}.desbloqueio-form input,.desbloqueio-form select,.desbloqueio-form textarea,.desbloqueios-ferramentas input{width:100%;color:var(--texto);background:var(--fundo-input);border:1px solid var(--borda);border-radius:10px;padding:12px;font:inherit}.desbloqueio-form input:focus,.desbloqueio-form select:focus,.desbloqueio-form textarea:focus,.desbloqueios-ferramentas input:focus{outline:2px solid var(--texto);outline-offset:2px}.desbloqueio-titularidade{display:flex!important;grid-template-columns:auto 1fr;align-items:flex-start;gap:9px!important;font-weight:600!important}.desbloqueio-titularidade input{width:18px!important;height:18px;margin:1px 0 0}.desbloqueio-identificacao{margin-bottom:14px;padding:11px 13px;border-radius:10px;background:var(--fundo);border:1px solid var(--borda);font-weight:800}.desbloqueio-acoes,.desbloqueio-card-acoes{display:flex;gap:9px;flex-wrap:wrap}.desbloqueio-feedback{min-height:20px;margin:6px 0 12px;color:var(--texto-sec)}.desbloqueio-feedback.erro{color:#ef4444}.desbloqueios-ferramentas{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.desbloqueios-ferramentas h3{margin:0}.desbloqueios-ferramentas input{max-width:390px}.desbloqueio-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}.desbloqueio-card{padding:14px;border:1px solid var(--borda);border-radius:12px;background:var(--fundo)}.desbloqueio-card-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.desbloqueio-card-topo>div{display:grid}.desbloqueio-card-topo span{font-size:12px;color:var(--texto-sec)}.desbloqueio-card h3{font-size:17px;margin:14px 0 3px}.desbloqueio-card p{margin:0 0 10px;color:var(--texto-sec)}.desbloqueio-status{border:1px solid var(--borda);border-radius:99px;padding:5px 8px!important;font-size:11px!important;font-weight:800;white-space:nowrap}.desbloqueio-status-assinado{background:#d9fbe8;color:#166534!important;border-color:#86efac}.desbloqueio-status-aguardando{background:#fff6cc;color:#854d0e!important;border-color:#facc15}.desbloqueio-status-nao_assinado{background:#fee2e2;color:#991b1b!important;border-color:#fca5a5}.desbloqueio-preview-modal{position:fixed;inset:0;z-index:10030;background:rgba(0,0,0,.78);display:grid;place-items:center;padding:12px}.desbloqueio-preview-card{width:min(980px,100%);height:min(94vh,940px);background:var(--fundo-card);border:1px solid var(--borda);border-radius:16px;overflow:hidden;display:grid;grid-template-rows:auto 1fr auto}.desbloqueio-preview-card header,.desbloqueio-preview-card footer{display:flex;align-items:center;justify-content:space-between;gap:9px;padding:11px 13px}.desbloqueio-preview-card header>div{display:grid}.desbloqueio-preview-card header span{font-size:12px;color:var(--texto-sec)}.desbloqueio-preview-card header button{border:0;background:transparent;color:var(--texto);font-size:30px}.desbloqueio-preview-card iframe{width:100%;height:100%;border:0;background:#fff}.desbloqueio-preview-card footer{justify-content:flex-end;flex-wrap:wrap}.consulta-busca-cliente{margin-bottom:12px}.consulta-clientes-resultado{display:grid;gap:10px;margin-bottom:18px}.consulta-cliente-card{border:1px solid var(--borda);border-radius:12px;padding:14px;background:var(--fundo)}.consulta-cliente-card h3{margin:0 0 4px}.consulta-cliente-meta{color:var(--texto-sec);font-size:13px}.consulta-cliente-documentos{display:grid;gap:6px;margin-top:12px}.consulta-cliente-documento{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid var(--borda);border-radius:9px}.consulta-cliente-documento span{color:var(--texto-sec)}
+@media(max-width:680px){.desbloqueios-cabecalho,.desbloqueios-ferramentas{display:grid}.desbloqueio-grade{grid-template-columns:1fr}.desbloqueios-ferramentas input{max-width:none}.desbloqueio-acoes>*{flex:1 1 45%}.desbloqueio-preview-card footer>*{flex:1 1 40%}}

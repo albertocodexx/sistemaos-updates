@@ -1,0 +1,15 @@
+'use strict';
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const service = fs.readFileSync(path.join(__dirname, '../www/js/supabase/garantia-service.js'), 'utf8');
+const tela = fs.readFileSync(path.join(__dirname, '../www/js/garantia-tela.js'), 'utf8');
+assert.match(service, /registrarRetorno/);
+assert.match(service, /atualizarRetorno/);
+assert.match(service, /retornosGarantia/);
+assert.match(service, /Aguardando análise/);
+assert.match(tela, /Retorno em garantia/);
+assert.match(tela, /Salvar nova etapa/);
+assert.match(tela, /section\.atualizarLinha/);
+assert.match(tela, /painelRetorno\?\.atualizarLinha\(linha\)/);
+console.log('OK — retorno em garantia pode ser registrado e atualizado no celular.');

@@ -1,0 +1,43 @@
+CONTRATO DE LICENÇA DE USO DE SOFTWARE
+Sistema OS — Ordens de Serviço para Assistências Técnicas
+Versão 26.6.1
+
+© 2025 Development Binance. Todos os direitos reservados.
+
+LEIA ATENTAMENTE ESTE CONTRATO ANTES DE INSTALAR OU UTILIZAR O SOFTWARE.
+Ao instalar, copiar ou utilizar este software, você concorda com os termos abaixo.
+
+1. CONCESSÃO DE LICENÇA
+Development Binance concede a você uma licença não exclusiva, intransferível
+e limitada para instalar e usar este software exclusivamente para fins
+comerciais legítimos de gerenciamento de assistência técnica.
+
+2. RESTRIÇÕES
+Você não pode:
+  a) Copiar, modificar ou distribuir o software sem autorização expressa;
+  b) Fazer engenharia reversa, descompilar ou desmontar o software;
+  c) Remover avisos de copyright ou identificações do produto;
+  d) Sublicenciar, vender, alugar ou transferir o software a terceiros.
+
+3. PRIVACIDADE E DADOS
+Este software armazena dados localmente no seu computador. Nenhum dado
+pessoal ou comercial é enviado para servidores externos sem sua autorização.
+Development Binance não tem acesso aos seus dados.
+
+4. ATUALIZAÇÕES
+Development Binance pode fornecer atualizações a seu critério. O uso de
+atualizações está sujeito aos termos deste contrato.
+
+5. RESCISÃO
+Esta licença é rescindida automaticamente se você violar qualquer termo
+deste contrato.
+
+6. LIMITAÇÃO DE RESPONSABILIDADE
+EM NENHUMA HIPÓTESE Development Binance será responsável por danos
+indiretos, incidentais, especiais ou consequentes decorrentes do uso
+ou incapacidade de uso deste software.
+
+7. LEI APLICÁVEL
+Este contrato é regido pelas leis da República Federativa do Brasil.
+
+Contato: contato@developmentbinance.com.br | https://developmentbinance.com.br/suporte

@@ -1,0 +1,146 @@
+{
+  "name": "sistema-os-at",
+  "version": "30.5.123",
+  "packageManager": "pnpm@11.16.0",
+  "description": "Sistema de Ordens de Serviço para Assistências Técnicas",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test:smoke": "node testes/smoke/executar-todos.js",
+    "migrate:supabase": "node ferramentas/migracao-supabase/index.js",
+    "build:win": "node --require ./scripts/prepare-windows-build.cjs ./node_modules/electron-builder/out/cli/cli.js --win",
+    "release:win": "electron-builder --win --publish always",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.110.7",
+    "@whiskeysockets/baileys": "6.7.23",
+    "electron-updater": "6.8.9",
+    "pino": "^9.4.0",
+    "qrcode": "^1.5.4"
+  },
+  "author": {
+    "name": "Assistência Técnica & Gestão",
+    "email": "",
+    "url": ""
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "43.4.0",
+    "electron-builder": "^26.15.3"
+  },
+  "overrides": {
+    "builder-util-runtime": "9.7.0",
+    "js-yaml": "4.3.1"
+  },
+  "build": {
+    "appId": "com.sistemaos.assistencia",
+    "productName": "Sistema OS",
+    "copyright": "© 2026 Assistência Técnica & Gestão. Todos os direitos reservados.",
+    "files": [
+      "**/*",
+      "!node_modules/electron-builder",
+      "!dist*/**",
+      "!artefatos-antigos/**",
+      "!artefatos*/**",
+      "!artefatos-build-*/**",
+      "!testes/**",
+      "!docs/refatoracao/**",
+      "!ferramentas/migracao-supabase/**",
+      "!supabase/**",
+      "!tmp/**",
+      "!output/**",
+      "!relatorios-migracao/**",
+      "!.agents/**",
+      "!**/.temp/**",
+      "!teste-*.js",
+      "!**/*.keystore",
+      "!**/*.jks",
+      "!*.log",
+      "!qa-*.png",
+      "!.env*",
+      "!**/*.pfx",
+      "!**/*.p12",
+      "!**/*.pem",
+      "!**/*.key",
+      "!*.zip",
+      "!*.md"
+    ],
+    "directories": {
+      "buildResources": "build-resources",
+      "output": "dist"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "albertocodexx",
+        "repo": "sistemaos-updates",
+        "releaseType": "release"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build-resources/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "include": "build-resources/installer.nsh",
+      "installerIcon": "build-resources/icon.ico",
+      "uninstallerIcon": "build-resources/icon.ico",
+      "installerHeaderIcon": "build-resources/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Sistema OS",
+      "license": "build-resources/LICENSE.txt",
+      "installerLanguages": [
+        "pt_BR"
+      ],
+      "language": "1046",
+      "displayLanguageSelector": false,
+      "artifactName": "SistemaOS-${version}-Setup.${ext}",
+      "deleteAppDataOnUninstall": false
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build-resources/icon.png",
+      "category": "Office",
+      "description": "Sistema de Ordens de Serviço para Assistências Técnicas"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build-resources/icon.icns",
+      "category": "public.app-category.business"
+    },
+    "dmg": {
+      "title": "Sistema OS ${version}",
+      "icon": "build-resources/icon.icns"
+    },
+    "asar": true
+  }
+}

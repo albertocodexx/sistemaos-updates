@@ -1,0 +1,1794 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sistema OS — Celular</title>
+<link rel="stylesheet" href="css/app.css?v=1.0.1-etapa3" />
+<link rel="stylesheet" href="css/precos.css" />
+<link rel="stylesheet" href="css/monochrome-theme.css" />
+</head>
+<body>
+
+  <aside id="atualizacao-global-app" class="auth-atualizacao auth-atualizacao-global" role="status" aria-live="polite" hidden>
+    <span class="auth-atualizacao-icone" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6v6h-6"/><path d="M4 18v-6h6"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9M5.5 15A7 7 0 0 0 18 17.5l2-2.5"/></svg>
+    </span>
+    <span id="atualizacao-global-app-texto">Verificando atualização do aplicativo…</span>
+    <button type="button" id="btn-atualizacao-global-app" class="btn-secundario" hidden>Atualizar agora</button>
+  </aside>
+
+  <!-- O gate começa visível e mantém as telas internas ocultas até a
+       sessão ser validada. Quando Supabase está desativado, o modo legado
+       é liberado imediatamente e o Supabase centraliza dados e arquivos. -->
+  <section id="tela-login" class="tela-login" aria-live="polite">
+    <div class="card-login">
+      <div class="marca-login" aria-hidden="true">
+        <img src="assets/logo-os-white.png" alt="" />
+      </div>
+      <h1>Sistema OS</h1>
+      <p class="login-subtitulo">Acesse sua operação.</p>
+      <p id="auth-status" class="auth-status">Validando sessão…</p>
+      <div id="auth-atualizacao" class="auth-atualizacao" hidden>
+        <span class="auth-atualizacao-icone" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6v6h-6"/><path d="M4 18v-6h6"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9M5.5 15A7 7 0 0 0 18 17.5l2-2.5"/></svg>
+        </span>
+        <span id="auth-atualizacao-texto"></span>
+        <button type="button" id="btn-instalar-atualizacao-login" class="btn-secundario">Atualizar agora</button>
+      </div>
+
+      <div id="auth-carregando" class="auth-carregando">
+        <span class="auth-spinner" aria-hidden="true"></span>
+        <span>Aguarde um instante</span>
+      </div>
+
+      <form id="form-login" class="form-login" hidden novalidate>
+        <label for="auth-empresa">Código da empresa</label>
+        <input id="auth-empresa" type="text" inputmode="text" autocomplete="organization" autocapitalize="none" autocorrect="off" placeholder="minha-assistencia" required />
+        <label for="auth-email">Usuário</label>
+        <input id="auth-email" type="text" inputmode="text" autocomplete="username" autocapitalize="none" autocorrect="off" placeholder="Seu usuário" required />
+        <label for="auth-senha">Senha</label>
+        <div class="auth-campo-senha">
+          <input id="auth-senha" type="password" autocomplete="current-password" required />
+          <button type="button" id="btn-mostrar-senha-auth" class="auth-mostrar-senha" aria-label="Mostrar senha" aria-pressed="false" title="Mostrar senha">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <button id="btn-entrar-auth" type="submit" class="btn-primario">Entrar</button>
+        <button id="btn-abrir-chamado-login" type="button" class="btn-secundario">Abrir chamado de suporte</button>
+      </form>
+      <div id="contas-rapidas-login" class="contas-rapidas" hidden>
+        <strong>Contas salvas neste aparelho</strong>
+        <div id="lista-contas-rapidas-login" class="lista-contas-rapidas"></div>
+      </div>
+
+      <form id="form-nova-senha" class="form-login" hidden novalidate>
+        <label for="auth-nova-senha">Nova senha</label>
+        <input id="auth-nova-senha" type="password" autocomplete="new-password" minlength="8" required />
+        <label for="auth-confirmar-senha">Confirmar nova senha</label>
+        <input id="auth-confirmar-senha" type="password" autocomplete="new-password" minlength="8" required />
+        <button type="submit" class="btn-primario">Salvar nova senha</button>
+      </form>
+
+      <div class="acoes-auth">
+        <button id="btn-tentar-auth" type="button" class="btn-secundario" hidden>Tentar novamente</button>
+        <button id="btn-sair-auth" type="button" class="btn-secundario" hidden>Sair desta conta</button>
+      </div>
+      <div class="login-seguranca">Dados sincronizados com segurança</div>
+    </div>
+  </section>
+
+  <div id="auth-banner-offline" class="auth-banner-offline" hidden>
+    Modo offline: sessão validada anteriormente. Algumas funções da nuvem podem aguardar conexão.
+  </div>
+  <div id="licenca-banner" class="auth-banner-licenca" hidden></div>
+
+  <header id="app-topo" class="topo" hidden>
+    <div class="topo-identidade">
+      <img id="topo-logo" class="topo-logo" src="assets/logo-os-white.png" alt="Sistema OS" data-marca="sistema" />
+      <div class="topo-textos">
+        <h1 id="topo-titulo">Sistema OS — App do Celular</h1>
+      </div>
+      <!-- Configurações saiu da fila de abas (nav-topo-5) e virou um ícone
+           isolado aqui no cabeçalho: é uma tela usada bem menos que as
+           outras 4 (só ajuste ocasional dos dados da assistência), então
+           não precisa dividir espaço/scroll com Nova OS, Compra, Venda e
+           Histórico — fica sempre visível, sem depender de rolar a barra.
+           Continua sendo o mesmíssimo #btn-ir-config de sempre: mesmo id,
+           mesmo listener em app.js (mostrarTela('config')), mesma classe
+           btn-nav-ativo pra indicar quando a tela está aberta — só o
+           estilo visual muda (ver .btn-icone-topo em app.css), então nada
+           no JS precisou ser alterado. -->
+      <button type="button" id="btn-ir-config" class="btn-icone-topo" aria-label="Configurações" title="Configurações">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.8"/><path d="M19.4 13.5a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V19.5a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H4.5a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H10a1.65 1.65 0 0 0 1-1.51V4.5a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V10a1.65 1.65 0 0 0 1.51 1h.09a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+      </button>
+      <div id="auth-identidade" class="auth-identidade" hidden>
+        <span id="auth-usuario-resumo"></span>
+        <button type="button" id="btn-sair-sessao" class="btn-sair-sessao">Sair</button>
+      </div>
+    </div>
+    <nav class="nav-topo nav-topo-5">
+      <button type="button" id="btn-ir-novo" class="btn-nav btn-nav-ativo">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        <span>Nova OS</span>
+      </button>
+      <button type="button" id="btn-ir-compra" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18l-1.5 11.5a2 2 0 0 1-2 1.5H6.5a2 2 0 0 1-2-1.5L3 7Z"/><path d="M8 7V5.5A3.5 3.5 0 0 1 11.5 2h1A3.5 3.5 0 0 1 16 5.5V7"/></svg>
+        <span>Compra</span>
+      </button>
+      <button type="button" id="btn-ir-venda" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+        <span>Venda</span>
+      </button>
+      <button type="button" id="btn-ir-entrega" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12V8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12l4-2 4 2 4-2 4 2v-4"/><path d="M12 12v6"/><path d="M9 15h6"/></svg>
+        <span>Entregas</span>
+      </button>
+      <button type="button" id="btn-ir-desbloqueios" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.5-2M12 14v3"/></svg>
+        <span>Desbloqueios</span>
+      </button>
+      <button type="button" id="btn-ir-historico" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+        <span>Histórico</span>
+      </button>
+      <button type="button" id="btn-ir-documentos" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>
+        <span>Documentos</span>
+      </button>
+      <button type="button" id="btn-ir-consulta" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <span>Consulta</span>
+      </button>
+      <button type="button" id="btn-ir-cobrancas" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3M17 3v4M7 3v4"/></svg>
+        <span>Cobranças</span>
+      </button>
+      <button type="button" id="btn-ir-qr" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM19 14h2v4M14 19h4v2M20 20h1v1"/></svg>
+        <span>Ler QR</span>
+      </button>
+      <button type="button" id="btn-ir-estatisticas" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+        <span>Estatísticas</span>
+      </button>
+      <button type="button" id="btn-ir-prazos" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5-5L7.3 3.7l3 3-3.6 3.6-3-3-2.4 2.4a4 4 0 0 0 5 5l8.6 8.6a2.1 2.1 0 0 0 3-3l-8.6-8.6"/></svg>
+        <span>Reparos</span>
+      </button>
+      <button type="button" id="btn-ir-estoque" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 7 8-4 8 4-8 4-8-4Z"/><path d="m4 7 8 4 8-4v10l-8 4-8-4V7Z"/><path d="M12 11v10"/></svg>
+        <span>Estoque</span>
+      </button>
+      <button type="button" id="btn-ir-precos" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41 11 3.83V3H4v7h.83l9.58 9.59a2 2 0 0 0 2.82 0l3.36-3.36a2 2 0 0 0 0-2.82Z"/><circle cx="8.5" cy="7.5" r="1.2"/></svg>
+        <span>Preços</span>
+      </button>
+    </nav>
+  </header>
+
+  <main id="app-conteudo" hidden>
+
+    <!-- ===================================================================
+         TELA: Nova OS (mantida como já funcionava — nenhum ID mudou)
+         =================================================================== -->
+    <form id="form-os" class="form-os" novalidate>
+
+      <fieldset>
+        <legend>Cliente</legend>
+
+        <label for="cliente-nome">Nome <span class="obrigatorio">*</span></label>
+        <input type="text" id="cliente-nome" name="cliente-nome" autocomplete="name" />
+        <p class="erro-campo" data-erro-de="nome"></p>
+
+        <label for="cliente-telefone">Telefone <span class="obrigatorio">*</span></label>
+        <input type="tel" id="cliente-telefone" name="cliente-telefone" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" />
+        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:13px;font-weight:400;color:var(--texto-sec);cursor:pointer;">
+          <input type="checkbox" id="cliente-sem-numero" style="width:15px;height:15px;cursor:pointer;" />
+          Cliente não tem número
+        </label>
+        <p class="erro-campo" data-erro-de="telefone"></p>
+
+        <label for="cliente-cpf">CPF <span class="opcional">(opcional)</span></label>
+        <input type="text" id="cliente-cpf" name="cliente-cpf" inputmode="numeric" placeholder="000.000.000-00" />
+        <p class="erro-campo" data-erro-de="cpf"></p>
+
+        <label for="cliente-email">E-mail <span class="opcional">(opcional)</span></label>
+        <input type="email" id="cliente-email" name="cliente-email" inputmode="email" autocomplete="email" />
+      </fieldset>
+
+      <fieldset>
+        <legend>Aparelho</legend>
+
+        <label for="aparelho-tipo-equipamento">Tipo de equipamento</label>
+        <select id="aparelho-tipo-equipamento" name="aparelho-tipo-equipamento">
+          <option value="Smartphone" selected>Smartphone</option>
+          <option value="Tablet">Tablet</option>
+          <option value="Notebook">Notebook</option>
+          <option value="Computador Desktop">Computador Desktop</option>
+          <option value="All In One">All In One</option>
+          <option value="Monitor">Monitor</option>
+          <option value="Impressora">Impressora</option>
+          <option value="Videogame">Videogame</option>
+          <option value="Outro">Outro</option>
+        </select>
+
+        <label for="aparelho-marca">Marca <span class="obrigatorio">*</span></label>
+        <input type="text" id="aparelho-marca" name="aparelho-marca" />
+        <p class="erro-campo" data-erro-de="marca"></p>
+
+        <label for="aparelho-modelo">Modelo <span class="obrigatorio">*</span></label>
+        <input type="text" id="aparelho-modelo" name="aparelho-modelo" />
+        <p class="erro-campo" data-erro-de="modelo"></p>
+
+        <label for="aparelho-cor">Cor <span class="opcional">(opcional)</span></label>
+        <input type="text" id="aparelho-cor" name="aparelho-cor" />
+
+        <label for="aparelho-imei">IMEI <span class="opcional">(opcional)</span></label>
+        <input type="text" id="aparelho-imei" name="aparelho-imei" inputmode="numeric" placeholder="15 dígitos" />
+        <p class="erro-campo" data-erro-de="imei"></p>
+
+        <label for="aparelho-defeito">Defeito relatado <span class="obrigatorio">*</span></label>
+        <textarea id="aparelho-defeito" name="aparelho-defeito" rows="3"></textarea>
+        <p class="erro-campo" data-erro-de="defeitoRelatado"></p>
+
+        <label for="aparelho-acessorios">Acessórios <span class="opcional">(opcional)</span></label>
+        <input type="text" id="aparelho-acessorios" name="aparelho-acessorios" placeholder="Ex.: carregador, capa, fone" />
+
+        <label>Itens recebidos <span class="opcional">(marque o que veio com o aparelho)</span></label>
+        <div class="grupo-checkbox checklist-recebimento-mobile">
+          <label class="check-inline"><input type="checkbox" class="os-acessorio-check" value="Carregador" /> Carregador</label>
+          <label class="check-inline"><input type="checkbox" class="os-acessorio-check" value="Cabo USB" /> Cabo USB</label>
+          <label class="check-inline"><input type="checkbox" class="os-acessorio-check" value="Capa" /> Capa</label>
+          <label class="check-inline"><input type="checkbox" class="os-acessorio-check" value="Película" /> Película</label>
+          <label class="check-inline"><input type="checkbox" class="os-acessorio-check" value="Fone de ouvido" /> Fone de ouvido</label>
+          <label class="check-inline"><input type="checkbox" class="os-acessorio-check" value="Caixa do aparelho" /> Caixa</label>
+          <label class="check-inline"><input type="checkbox" class="os-acessorio-check" value="Chip / SIM" /> Chip / SIM</label>
+          <label class="check-inline"><input type="checkbox" class="os-acessorio-check" value="Cartão de memória" /> Cartão de memória</label>
+          <label class="check-inline"><input type="checkbox" class="os-acessorio-check" value="Chave / bandeja do SIM" /> Chave / bandeja SIM</label>
+          <label class="check-inline"><input type="checkbox" class="os-acessorio-check" value="Outro" /> Outro</label>
+        </div>
+
+        <label>Checklist de entrada <span class="opcional">(marque somente o que foi testado e está funcionando)</span></label>
+        <div class="grupo-checkbox checklist-recebimento-mobile">
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Liga normalmente" /> Liga normalmente</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Tela / imagem funcionando" /> Tela / imagem</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Touch funcionando" /> Touch</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Câmera frontal funcionando" /> Câmera frontal</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Câmera traseira funcionando" /> Câmera traseira</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Flash funcionando" /> Flash</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Alto-falante funcionando" /> Alto-falante</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Áudio auricular funcionando" /> Áudio auricular</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Microfone funcionando" /> Microfone</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Face ID / biometria funcionando" /> Face ID / biometria</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Wi-Fi funcionando" /> Wi-Fi</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Bluetooth funcionando" /> Bluetooth</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Sinal / chip funcionando" /> Sinal / chip</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Leitura do cartão de memória funcionando" /> Cartão de memória</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Carregamento funcionando" /> Carregamento</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Bateria funcionando" /> Bateria</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Vibração funcionando" /> Vibração</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Botões físicos funcionando" /> Botões físicos</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Sensor de proximidade funcionando" /> Sensor de proximidade</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="GPS funcionando" /> GPS</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="NFC funcionando" /> NFC</label>
+          <label class="check-inline"><input type="checkbox" class="os-teste-entrada" value="Não foi possível testar" /> Não foi possível testar</label>
+        </div>
+
+        <label for="aparelho-senha">Senha do aparelho <span class="opcional">(opcional)</span></label>
+        <div class="campo-senha-pin">
+          <input type="text" id="aparelho-senha" name="aparelho-senha" />
+          <button type="button" class="btn-pin" data-alvo-pin="aparelho-senha" aria-label="Desenhar padrão de desbloqueio">⠿</button>
+        </div>
+
+        <label for="aparelho-observacoes">Observações do aparelho <span class="opcional">(opcional)</span></label>
+        <textarea id="aparelho-observacoes" name="aparelho-observacoes" rows="2"></textarea>
+
+        <label>Fotos de como chegou <span class="opcional">(opcional, até 10)</span></label>
+        <div class="fotos-anexo-cabecalho">
+          <button type="button" id="btn-add-foto-os" class="btn-secundario">📷 Adicionar foto</button>
+          <span class="fotos-anexo-contador" id="contador-foto-os">0/10</span>
+        </div>
+        <input type="file" id="input-foto-os" accept="image/*" multiple hidden />
+        <div class="fotos-anexo-grade" id="grade-foto-os"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Ordem de serviço</legend>
+
+        <label for="os-observacoes">Observações gerais <span class="opcional">(opcional)</span></label>
+        <textarea id="os-observacoes" name="os-observacoes" rows="2"></textarea>
+
+        <label for="os-prioridade">Prioridade</label>
+        <select id="os-prioridade" name="os-prioridade">
+          <option value="Baixa">Baixa</option>
+          <option value="Normal" selected>Normal</option>
+          <option value="Alta">Alta</option>
+          <option value="Urgente">Urgente</option>
+        </select>
+
+        <label for="os-data-prevista">Data prevista <span class="opcional">(opcional)</span></label>
+        <input type="date" id="os-data-prevista" name="os-data-prevista" />
+
+        <label for="os-hora-prevista">Hora prevista <span class="opcional">(opcional)</span></label>
+        <input type="time" id="os-hora-prevista" name="os-hora-prevista" />
+
+        <label class="checkbox-linha os-assinar-depois" for="os-sem-prazo">
+          <input type="checkbox" id="os-sem-prazo" name="os-sem-prazo" />
+          <span>
+            <strong>Sem prazo</strong>
+            <small>A OS ficará sem data de entrega e essa informação será sincronizada com o computador.</small>
+          </span>
+        </label>
+
+        <label for="os-garantia-dias">Garantia (dias) <span class="opcional">(opcional)</span></label>
+        <input type="number" id="os-garantia-dias" name="os-garantia-dias" min="0" step="1" inputmode="numeric" placeholder="Ex.: 90" />
+        <p class="erro-campo" data-erro-de="garantiaDias"></p>
+        <p class="aviso aviso-tecnico">Registrado internamente para controle no PC. Não aparece no PDF da OS.</p>
+
+        <details class="termos-documento">
+          <summary>
+            <span>Termos e condições</span>
+            <small>Editar para esta OS</small>
+          </summary>
+          <div class="termos-documento-conteudo">
+            <p>O texto padrão já está preenchido. A alteração vale somente para esta OS e não muda a configuração da empresa.</p>
+            <label for="os-termos">Texto que sairá no PDF</label>
+            <textarea id="os-termos" name="os-termos" rows="6"></textarea>
+            <div class="termos-documento-rodape">
+              <small data-termos-status="os">Usando o padrão atual</small>
+              <button type="button" class="btn-link-pequeno" data-restaurar-termos-documento="os">Restaurar padrão</button>
+            </div>
+          </div>
+        </details>
+
+        <label class="checkbox-linha os-assinar-depois" for="os-assinar-depois">
+          <input type="checkbox" id="os-assinar-depois" name="os-assinar-depois" />
+          <span>
+            <strong>Assinar depois</strong>
+            <small>Envia a OS ao computador agora, sem assinatura. Ao assinar depois, o mesmo registro será atualizado no PC.</small>
+          </span>
+        </label>
+        <label class="checkbox-linha os-assinar-depois" for="os-nao-assinado">
+          <input type="checkbox" id="os-nao-assinado" name="os-nao-assinado" />
+          <span>
+            <strong>Não assinado</strong>
+            <small>Registra que a OS foi emitida intencionalmente sem a assinatura do cliente. Não ficará pendente para assinar depois.</small>
+          </span>
+        </label>
+      </fieldset>
+
+      <p class="erro-geral" id="erro-geral" hidden></p>
+
+      <button type="submit" id="btn-gerar-previa" class="btn-primario">Gerar prévia</button>
+    </form>
+
+    <!-- ===================================================================
+         TELA: Nova Compra (compra de aparelho usado do cliente)
+         Campos essenciais — simplificado frente ao PC, fiel ao contrato de
+         dados de compra-template.js (vendedor / aparelho / avaliacao / dadosCompra).
+         =================================================================== -->
+    <form id="form-compra" class="form-os" novalidate hidden>
+
+      <fieldset>
+        <legend>Vendedor (quem está vendendo o aparelho)</legend>
+
+        <label for="compra-vendedor-nome">Nome <span class="obrigatorio">*</span></label>
+        <input type="text" id="compra-vendedor-nome" name="compra-vendedor-nome" autocomplete="name" />
+        <p class="erro-campo" data-erro-de="vendedorNome"></p>
+
+        <label for="compra-vendedor-telefone">Telefone <span class="obrigatorio">*</span></label>
+        <input type="tel" id="compra-vendedor-telefone" name="compra-vendedor-telefone" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" />
+        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:13px;font-weight:400;color:var(--texto-sec);cursor:pointer;">
+          <input type="checkbox" id="compra-vendedor-sem-numero" style="width:15px;height:15px;cursor:pointer;" />
+          Vendedor não tem número
+        </label>
+        <p class="erro-campo" data-erro-de="vendedorTelefone"></p>
+
+        <label for="compra-vendedor-cpf">CPF <span class="opcional">(opcional)</span></label>
+        <input type="text" id="compra-vendedor-cpf" name="compra-vendedor-cpf" inputmode="numeric" placeholder="000.000.000-00" />
+        <p class="erro-campo" data-erro-de="vendedorCpf"></p>
+
+        <label for="compra-vendedor-rg">RG <span class="opcional">(opcional)</span></label>
+        <input type="text" id="compra-vendedor-rg" name="compra-vendedor-rg" />
+
+        <label for="compra-vendedor-endereco">Endereço <span class="opcional">(opcional)</span></label>
+        <input type="text" id="compra-vendedor-endereco" name="compra-vendedor-endereco" placeholder="Rua, número, bairro" />
+      </fieldset>
+
+      <fieldset>
+        <legend>Aparelho comprado</legend>
+
+        <label for="compra-aparelho-tipo">Tipo de equipamento</label>
+        <select id="compra-aparelho-tipo" name="compra-aparelho-tipo">
+          <option value="Smartphone" selected>Smartphone</option>
+          <option value="Tablet">Tablet</option>
+          <option value="Notebook">Notebook</option>
+          <option value="Computador Desktop">Computador Desktop</option>
+          <option value="All In One">All In One</option>
+          <option value="Videogame">Videogame</option>
+          <option value="Outro">Outro</option>
+        </select>
+
+        <label for="compra-aparelho-marca">Marca <span class="obrigatorio">*</span></label>
+        <input type="text" id="compra-aparelho-marca" name="compra-aparelho-marca" />
+        <p class="erro-campo" data-erro-de="aparelhoMarca"></p>
+
+        <label for="compra-aparelho-modelo">Modelo <span class="obrigatorio">*</span></label>
+        <input type="text" id="compra-aparelho-modelo" name="compra-aparelho-modelo" />
+        <p class="erro-campo" data-erro-de="aparelhoModelo"></p>
+
+        <label for="compra-aparelho-cor">Cor <span class="opcional">(opcional)</span></label>
+        <input type="text" id="compra-aparelho-cor" name="compra-aparelho-cor" />
+
+        <label for="compra-aparelho-capacidade">Capacidade/Armazenamento <span class="opcional">(opcional)</span></label>
+        <input type="text" id="compra-aparelho-capacidade" name="compra-aparelho-capacidade" placeholder="Ex.: 128GB" />
+
+        <label for="compra-aparelho-imei">IMEI 1 <span class="opcional">(opcional)</span></label>
+        <input type="text" id="compra-aparelho-imei" name="compra-aparelho-imei" inputmode="numeric" />
+
+        <label for="compra-aparelho-imei2">IMEI 2 <span class="opcional">(opcional)</span></label>
+        <input type="text" id="compra-aparelho-imei2" name="compra-aparelho-imei2" inputmode="numeric" />
+
+        <label for="compra-aparelho-estado">Estado de conservação <span class="opcional">(opcional)</span></label>
+        <select id="compra-aparelho-estado" name="compra-aparelho-estado">
+          <option value="">Selecione</option>
+          <option value="Excelente">Excelente</option>
+          <option value="Bom">Bom</option>
+          <option value="Regular">Regular</option>
+          <option value="Ruim">Ruim</option>
+        </select>
+
+        <label for="compra-aparelho-acessorios">Acessórios inclusos <span class="opcional">(opcional)</span></label>
+        <input type="text" id="compra-aparelho-acessorios" name="compra-aparelho-acessorios" placeholder="Ex.: carregador, caixa" />
+
+        <label for="compra-aparelho-senha">Senha do aparelho <span class="opcional">(opcional)</span></label>
+        <div class="campo-senha-pin">
+          <input type="text" id="compra-aparelho-senha" name="compra-aparelho-senha" />
+          <button type="button" class="btn-pin" data-alvo-pin="compra-aparelho-senha" aria-label="Desenhar padrão de desbloqueio">⠿</button>
+        </div>
+
+        <label>Situação do aparelho <span class="opcional">(opcional)</span></label>
+        <div class="grupo-checkbox">
+          <label class="check-inline"><input type="checkbox" class="compra-situacao" value="Liga normalmente" /> Liga normalmente</label>
+          <label class="check-inline"><input type="checkbox" class="compra-situacao" value="Não liga" /> Não liga</label>
+          <label class="check-inline"><input type="checkbox" class="compra-situacao" value="Tela quebrada" /> Tela quebrada</label>
+          <label class="check-inline"><input type="checkbox" class="compra-situacao" value="Sem imagem" /> Sem imagem</label>
+          <label class="check-inline"><input type="checkbox" class="compra-situacao" value="Bloqueado" /> Bloqueado</label>
+          <label class="check-inline"><input type="checkbox" class="compra-situacao" value="Não foi possível testar" /> Não foi possível testar</label>
+          <label class="check-inline"><input type="checkbox" class="compra-situacao" value="Molhado" /> Molhado</label>
+          <label class="check-inline"><input type="checkbox" class="compra-situacao" value="Placa com defeito" /> Placa com defeito</label>
+          <label class="check-inline"><input type="checkbox" class="compra-situacao" value="Outro" /> Outro</label>
+        </div>
+
+        <label for="compra-conta-vinculada">Possui conta vinculada? <span class="opcional">(opcional)</span></label>
+        <select id="compra-conta-vinculada" name="compra-conta-vinculada">
+          <option value="Não" selected>Não</option>
+          <option value="Google">Google</option>
+          <option value="Samsung">Samsung</option>
+          <option value="Apple ID">Apple ID</option>
+          <option value="Xiaomi">Xiaomi</option>
+          <option value="Motorola">Motorola</option>
+          <option value="Huawei">Huawei</option>
+          <option value="Outra">Outra</option>
+        </select>
+
+        <label for="compra-conta-email">E-mail da conta <span class="opcional">(opcional)</span></label>
+        <input type="email" id="compra-conta-email" name="compra-conta-email" inputmode="email" autocapitalize="none" />
+
+        <label for="compra-conta-email-senha">Senha do e-mail/conta <span class="opcional">(opcional)</span></label>
+        <div class="campo-senha-pin">
+          <input type="text" id="compra-conta-email-senha" name="compra-conta-email-senha" placeholder="Senha do e-mail vinculado" />
+          <button type="button" class="btn-pin" data-alvo-pin="compra-conta-email-senha" aria-label="Desenhar padrão de desbloqueio">⠿</button>
+        </div>
+
+        <label for="compra-conta-removida">Conta removida? <span class="opcional">(opcional)</span></label>
+        <select id="compra-conta-removida" name="compra-conta-removida">
+          <option value="Não" selected>Não</option>
+          <option value="Sim">Sim</option>
+        </select>
+      </fieldset>
+
+      <fieldset>
+        <legend>Avaliação técnica</legend>
+
+        <label for="compra-avaliacao-descricao">Descrição geral <span class="opcional">(opcional)</span></label>
+        <textarea id="compra-avaliacao-descricao" name="compra-avaliacao-descricao" rows="2"></textarea>
+
+        <label for="compra-avaliacao-defeitos">Defeitos encontrados <span class="opcional">(opcional)</span></label>
+        <textarea id="compra-avaliacao-defeitos" name="compra-avaliacao-defeitos" rows="2"></textarea>
+
+        <label for="compra-avaliacao-observacoes">Observações <span class="opcional">(opcional)</span></label>
+        <textarea id="compra-avaliacao-observacoes" name="compra-avaliacao-observacoes" rows="2"></textarea>
+      </fieldset>
+
+      <fieldset>
+        <legend>Fotos do aparelho</legend>
+
+        <label>Fotos do aparelho comprado <span class="opcional">(opcional, até 10)</span></label>
+        <div class="fotos-anexo-cabecalho">
+          <button type="button" id="btn-add-foto-compra" class="btn-secundario" aria-label="Adicionar foto da compra">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14.5 4h-5L7.8 6H5a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V9a3 3 0 0 0-3-3h-2.8z"/><circle cx="12" cy="13" r="3.5"/></svg>
+            Adicionar foto
+          </button>
+          <span class="fotos-anexo-contador" id="contador-foto-compra">0/10</span>
+        </div>
+        <input type="file" id="input-foto-compra" accept="image/*" multiple hidden />
+        <div id="grade-foto-compra" class="fotos-anexo-grade" aria-live="polite"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Pagamento</legend>
+
+        <label for="compra-valor">Valor pago <span class="obrigatorio">*</span></label>
+        <input type="number" id="compra-valor" name="compra-valor" inputmode="decimal" step="0.01" min="0" placeholder="0,00" />
+        <p class="erro-campo" data-erro-de="valor"></p>
+
+        <label for="compra-forma-pagamento">Forma de pagamento</label>
+        <select id="compra-forma-pagamento" name="compra-forma-pagamento">
+          <option value="Dinheiro">Dinheiro</option>
+          <option value="Pix">Pix</option>
+          <option value="Transferência">Transferência</option>
+          <option value="Cartão">Cartão</option>
+          <option value="Outra">Outra</option>
+        </select>
+
+        <label for="compra-chave-pix">Chave Pix usada <span class="opcional">(opcional)</span></label>
+        <input type="text" id="compra-chave-pix" name="compra-chave-pix" />
+
+        <label for="compra-observacoes">Observações da compra <span class="opcional">(opcional)</span></label>
+        <textarea id="compra-observacoes" name="compra-observacoes" rows="2"></textarea>
+      </fieldset>
+
+      <details class="termos-documento">
+        <summary>
+          <span>Termos e condições</span>
+          <small>Editar para esta compra</small>
+        </summary>
+        <div class="termos-documento-conteudo">
+          <p>O texto padrão já está preenchido. A alteração vale somente para este contrato e não muda a configuração da empresa.</p>
+          <label for="compra-termos">Texto que sairá no PDF</label>
+          <textarea id="compra-termos" name="compra-termos" rows="6"></textarea>
+          <div class="termos-documento-rodape">
+            <small data-termos-status="compra">Usando o padrão atual</small>
+            <button type="button" class="btn-link-pequeno" data-restaurar-termos-documento="compra">Restaurar padrão</button>
+          </div>
+        </div>
+      </details>
+
+      <label class="checkbox-linha os-assinar-depois" for="compra-assinar-depois">
+        <input type="checkbox" id="compra-assinar-depois" name="compra-assinar-depois" />
+        <span>
+          <strong>Assinar depois</strong>
+          <small>Envia a compra agora e permite incluir a assinatura no mesmo registro mais tarde.</small>
+        </span>
+      </label>
+      <label class="checkbox-linha os-assinar-depois" for="compra-nao-assinado">
+        <input type="checkbox" id="compra-nao-assinado" name="compra-nao-assinado" />
+        <span>
+          <strong>Não assinado</strong>
+          <small>Registra que a Compra foi emitida intencionalmente sem a assinatura do vendedor.</small>
+        </span>
+      </label>
+
+      <p class="erro-geral" id="erro-geral-compra" hidden></p>
+
+      <button type="submit" id="btn-gerar-previa-compra" class="btn-primario">Gerar prévia</button>
+    </form>
+
+    <!-- ===================================================================
+         TELA: Nova Venda (venda de aparelho ao cliente)
+         Campos essenciais, fiel ao contrato "flat" de venda-template.js.
+         =================================================================== -->
+    <form id="form-venda" class="form-os" novalidate hidden>
+
+      <fieldset>
+        <legend>Aparelho vendido</legend>
+
+        <label for="venda-tipo-equipamento">Tipo de equipamento</label>
+        <select id="venda-tipo-equipamento" name="venda-tipo-equipamento">
+          <option value="Smartphone" selected>Smartphone</option>
+          <option value="Tablet">Tablet</option>
+          <option value="Notebook">Notebook</option>
+          <option value="Computador Desktop">Computador Desktop</option>
+          <option value="All In One">All In One</option>
+          <option value="Videogame">Videogame</option>
+          <option value="Outro">Outro</option>
+        </select>
+
+        <label for="venda-marca">Marca <span class="obrigatorio">*</span></label>
+        <input type="text" id="venda-marca" name="venda-marca" />
+        <p class="erro-campo" data-erro-de="marca"></p>
+
+        <label for="venda-modelo">Modelo <span class="obrigatorio">*</span></label>
+        <input type="text" id="venda-modelo" name="venda-modelo" />
+        <p class="erro-campo" data-erro-de="modelo"></p>
+
+        <label for="venda-cor">Cor <span class="opcional">(opcional)</span></label>
+        <input type="text" id="venda-cor" name="venda-cor" />
+
+        <label for="venda-imei">IMEI <span class="opcional">(opcional)</span></label>
+        <input type="text" id="venda-imei" name="venda-imei" inputmode="numeric" />
+
+        <label for="venda-observacoes">Observações do aparelho <span class="opcional">(opcional)</span></label>
+        <textarea id="venda-observacoes" name="venda-observacoes" rows="2"></textarea>
+
+        <label for="venda-garantia">Garantia oferecida <span class="opcional">(opcional)</span></label>
+        <input type="text" id="venda-garantia" name="venda-garantia" placeholder="Ex.: 90 dias ou 0 para sem garantia" />
+      </fieldset>
+
+      <fieldset>
+        <legend>Comprador</legend>
+
+        <label for="venda-comprador-nome">Nome <span class="obrigatorio">*</span></label>
+        <input type="text" id="venda-comprador-nome" name="venda-comprador-nome" autocomplete="name" />
+        <p class="erro-campo" data-erro-de="compradorNome"></p>
+
+        <label for="venda-comprador-telefone">Telefone <span class="obrigatorio">*</span></label>
+        <input type="tel" id="venda-comprador-telefone" name="venda-comprador-telefone" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" />
+        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:13px;font-weight:400;color:var(--texto-sec);cursor:pointer;">
+          <input type="checkbox" id="venda-comprador-sem-numero" style="width:15px;height:15px;cursor:pointer;" />
+          Comprador não tem número
+        </label>
+        <p class="erro-campo" data-erro-de="compradorTelefone"></p>
+
+        <label for="venda-comprador-cpf">CPF <span class="opcional">(opcional)</span></label>
+        <input type="text" id="venda-comprador-cpf" name="venda-comprador-cpf" inputmode="numeric" placeholder="000.000.000-00" />
+        <p class="erro-campo" data-erro-de="compradorCpf"></p>
+
+        <label for="venda-comprador-email">E-mail <span class="opcional">(opcional)</span></label>
+        <input type="email" id="venda-comprador-email" name="venda-comprador-email" inputmode="email" autocomplete="email" autocapitalize="none" placeholder="cliente@email.com" />
+      </fieldset>
+
+      <fieldset>
+        <legend>Pagamento</legend>
+
+        <label for="venda-data">Data da venda <span class="obrigatorio">*</span></label>
+        <input type="date" id="venda-data" name="venda-data" required />
+        <p class="erro-campo" data-erro-de="dataVenda"></p>
+
+        <label for="venda-valor">Valor da venda <span class="obrigatorio">*</span></label>
+        <input type="number" id="venda-valor" name="venda-valor" inputmode="decimal" step="0.01" min="0" placeholder="0,00" />
+        <p class="erro-campo" data-erro-de="valorVenda"></p>
+
+        <label for="venda-forma-pagamento">Forma de pagamento</label>
+        <select id="venda-forma-pagamento" name="venda-forma-pagamento">
+          <option value="Dinheiro">Dinheiro</option>
+          <option value="Pix">Pix</option>
+          <option value="Cartão de débito">Cartão de débito</option>
+          <option value="Cartão de crédito">Cartão de crédito</option>
+          <option value="Transferência">Transferência</option>
+          <option value="Outra">Outra</option>
+        </select>
+      </fieldset>
+
+      <details class="termos-documento">
+        <summary>
+          <span>Termos e condições</span>
+          <small>Editar para esta venda</small>
+        </summary>
+        <div class="termos-documento-conteudo">
+          <p>O texto padrão já está preenchido. A alteração vale somente para esta venda e não muda a configuração da empresa.</p>
+          <label for="venda-termos">Texto que sairá no PDF</label>
+          <textarea id="venda-termos" name="venda-termos" rows="6"></textarea>
+          <div class="termos-documento-rodape">
+            <small data-termos-status="venda">Usando o padrão atual</small>
+            <button type="button" class="btn-link-pequeno" data-restaurar-termos-documento="venda">Restaurar padrão</button>
+          </div>
+        </div>
+      </details>
+
+      <label class="checkbox-linha os-assinar-depois" for="venda-assinar-depois">
+        <input type="checkbox" id="venda-assinar-depois" name="venda-assinar-depois" />
+        <span>
+          <strong>Assinar depois</strong>
+          <small>Envia a venda agora e permite incluir a assinatura no mesmo registro mais tarde.</small>
+        </span>
+      </label>
+      <label class="checkbox-linha os-assinar-depois" for="venda-nao-assinado">
+        <input type="checkbox" id="venda-nao-assinado" name="venda-nao-assinado" />
+        <span>
+          <strong>Não assinado</strong>
+          <small>Registra que a Venda foi emitida intencionalmente sem a assinatura do comprador.</small>
+        </span>
+      </label>
+
+      <p class="erro-geral" id="erro-geral-venda" hidden></p>
+
+      <button type="submit" id="btn-gerar-previa-venda" class="btn-primario">Gerar prévia</button>
+    </form>
+
+    <!-- ===================================================================
+         TELA: Entregas (comprovante de retirada/autorização)
+         Documento novo e simples — NÃO é uma OS, Venda ou Compra: só
+         declara que quem retirou o aparelho é o dono ou está autorizado a
+         retirá-lo. Vinculado a um número de OS já existente no PC, mas o
+         celular não confere isso (texto livre, sem validação contra banco
+         — ver PROMPT-CELULAR-aba-entregas.md, decisão de arquitetura 3).
+         =================================================================== -->
+    <form id="form-entrega" class="form-os" novalidate hidden>
+
+      <fieldset>
+        <legend>Retirada do aparelho</legend>
+
+        <label for="entrega-numero-os">Número da OS <span class="obrigatorio">*</span></label>
+        <input type="text" id="entrega-numero-os" name="entrega-numero-os" inputmode="numeric" pattern="[0-9]*" placeholder="Ex.: 1234" />
+        <p class="erro-campo" data-erro-de="numeroOS"></p>
+
+        <label for="entrega-nome-retirou">Nome de quem retirou o aparelho <span class="obrigatorio">*</span></label>
+        <input type="text" id="entrega-nome-retirou" name="entrega-nome-retirou" autocomplete="name" />
+        <p class="erro-campo" data-erro-de="nomeRetirou"></p>
+
+        <label for="entrega-cpf-retirou">CPF de quem retirou <span class="opcional">(opcional)</span></label>
+        <input type="text" id="entrega-cpf-retirou" name="entrega-cpf-retirou" inputmode="numeric" placeholder="000.000.000-00" />
+
+        <label for="entrega-telefone-retirou">Telefone <span class="opcional">(opcional)</span></label>
+        <input type="tel" id="entrega-telefone-retirou" name="entrega-telefone-retirou" inputmode="tel" placeholder="(00) 00000-0000" />
+      </fieldset>
+
+      <fieldset>
+        <legend>Aparelho</legend>
+
+        <label for="entrega-marca">Marca <span class="opcional">(opcional)</span></label>
+        <input type="text" id="entrega-marca" name="entrega-marca" />
+        <p class="erro-campo" data-erro-de="marca"></p>
+
+        <label for="entrega-modelo">Modelo <span class="opcional">(opcional)</span></label>
+        <input type="text" id="entrega-modelo" name="entrega-modelo" />
+        <p class="erro-campo" data-erro-de="modelo"></p>
+
+        <label for="entrega-reparo-realizado">Reparo realizado <span class="opcional">(opcional)</span></label>
+        <textarea id="entrega-reparo-realizado" name="entrega-reparo-realizado" rows="3" placeholder="Ex.: Troca de tela e bateria"></textarea>
+
+        <label for="entrega-garantia-dias">Garantia (dias) <span class="opcional">(opcional)</span></label>
+        <input type="number" id="entrega-garantia-dias" name="entrega-garantia-dias" min="0" step="1" inputmode="numeric" placeholder="Ex.: 90" />
+        <p class="dica-campo">Maior que zero: gera a garantia automaticamente na nuvem. Zero: sem garantia adicional.</p>
+        <label for="entrega-data">Data da entrega</label>
+        <input type="date" id="entrega-data" />
+        <label for="entrega-garantia-inicio">Início da garantia</label>
+        <input type="date" id="entrega-garantia-inicio" />
+        <label for="entrega-termos-garantia">Termos da garantia</label>
+        <textarea id="entrega-termos-garantia" rows="4" placeholder="Condições desta garantia"></textarea>
+        <p class="erro-campo" data-erro-de="garantiaDias"></p>
+
+        <label for="entrega-valor-reparo">Valor cobrado <span class="obrigatorio">*</span></label>
+        <input type="number" id="entrega-valor-reparo" name="entrega-valor-reparo" min="0" step="0.01" inputmode="decimal" placeholder="0,00" />
+        <p class="erro-campo" data-erro-de="valorReparo"></p>
+
+        <label for="entrega-forma-pagamento">Forma de pagamento <span class="obrigatorio">*</span></label>
+        <select id="entrega-forma-pagamento" name="entrega-forma-pagamento">
+          <option value="">Selecione como foi pago</option>
+          <option>Pix</option>
+          <option>Dinheiro</option>
+          <option>Cartão de débito</option>
+          <option>Cartão de crédito</option>
+          <option>Boleto</option>
+          <option>Mercado Pago</option>
+          <option>Pagamento na retirada</option>
+          <option>Outra</option>
+        </select>
+        <p class="erro-campo" data-erro-de="formaPagamento"></p>
+
+        <label>Fotos de como saiu <span class="opcional">(opcional, até 10)</span></label>
+        <div class="fotos-anexo-cabecalho">
+          <button type="button" id="btn-add-foto-entrega" class="btn-secundario">📷 Adicionar foto</button>
+          <span class="fotos-anexo-contador" id="contador-foto-entrega">0/10</span>
+        </div>
+        <input type="file" id="input-foto-entrega" accept="image/*" multiple hidden />
+        <div class="fotos-anexo-grade" id="grade-foto-entrega"></div>
+      </fieldset>
+
+      <p class="aviso">
+        Ao gerar a prévia, o comprovante trará a seguinte declaração fixa:<br/><br/>
+        <em id="entrega-declaracao-preview-texto"></em>
+      </p>
+
+      <label class="checkbox-linha os-assinar-depois" for="entrega-assinar-depois">
+        <input type="checkbox" id="entrega-assinar-depois" name="entrega-assinar-depois" />
+        <span>
+          <strong>Assinar depois</strong>
+          <small>Envia a entrega agora e permite incluir a assinatura no mesmo comprovante mais tarde.</small>
+        </span>
+      </label>
+      <label class="checkbox-linha os-assinar-depois" for="entrega-nao-assinado">
+        <input type="checkbox" id="entrega-nao-assinado" name="entrega-nao-assinado" />
+        <span>
+          <strong>Não assinado</strong>
+          <small>Registra que o comprovante foi emitido intencionalmente sem a assinatura de quem retirou.</small>
+        </span>
+      </label>
+
+      <p class="erro-geral" id="erro-geral-entrega" hidden></p>
+
+      <button type="submit" id="btn-gerar-previa-entrega" class="btn-primario">Gerar prévia</button>
+    </form>
+
+    <!-- ===================================================================
+         Painéis compartilhados de status / prévia (usados pelos 4 formulários)
+         =================================================================== -->
+    <section class="painel-status" id="painel-status" hidden>
+      <p>Carregando os arquivos originais do PC…</p>
+    </section>
+
+    <section class="painel-preview" id="painel-preview" hidden>
+      <p class="banner-historico-local" id="banner-modo-historico" hidden>
+        📱 Salvo neste aparelho. Ainda não importado no computador.
+      </p>
+      <button type="button" id="btn-editar" class="btn-secundario">Editar dados</button>
+      <button type="button" id="btn-voltar-historico" class="btn-secundario" hidden>◀ Voltar ao histórico</button>
+      <div class="frame-scroll">
+        <iframe id="frame-preview" title="Prévia do documento (via cliente/outra parte + via assistência)"></iframe>
+      </div>
+
+      <button type="button" id="btn-assinar" class="btn-primario">Assinar</button>
+      <p class="aviso-assinado" id="aviso-assinado" hidden>✓ Assinatura capturada.</p>
+
+      <button type="button" id="btn-assinar-assistencia" class="btn-secundario">Assinar assistência (só este documento)</button>
+      <p class="aviso-assinado" id="aviso-assinado-assistencia" hidden>✓ Assinatura da assistência capturada (só neste documento).</p>
+
+      <button type="button" id="btn-emitir-comprovante" class="btn-primario">Emitir comprovante / imprimir</button>
+      <button type="button" id="btn-salvar-historico" class="btn-secundario">Salvar no histórico do celular</button>
+      <button type="button" id="btn-exportar-pc" class="btn-secundario">Exportar para o PC</button>
+      <p class="feedback-acao" id="feedback-acao" hidden></p>
+    </section>
+
+    <!-- ===================================================================
+         TELA: Histórico (OS + Compra + Venda + Entregas, com filtro por tipo)
+         =================================================================== -->
+    <section class="painel-historico" id="painel-historico" hidden>
+      <p class="banner-historico-local">
+        📱 Histórico salvo neste aparelho. Ainda não importado no computador.
+        Isso é separado do histórico oficial do sistema no PC.
+      </p>
+      <div class="filtro-historico" id="filtro-historico">
+        <button type="button" class="filtro-ativo" data-filtro-tipo="todos">Todos</button>
+        <button type="button" data-filtro-tipo="os">OS</button>
+        <button type="button" data-filtro-tipo="compra">Compra</button>
+        <button type="button" data-filtro-tipo="venda">Venda</button>
+        <button type="button" data-filtro-tipo="entrega">Entregas</button>
+      </div>
+      <button type="button" id="btn-exportar-pendentes" class="btn-primario">
+        Exportar pendentes para o PC
+      </button>
+      <p class="feedback-acao" id="feedback-exportar-pendentes" hidden></p>
+      <div id="lista-historico" class="lista-historico"></div>
+    </section>
+
+
+    <!-- ===================================================================
+         TELA: Configurações (dados da assistência técnica)
+         Espelha os campos de js/config.js (CONFIG_PADRAO).
+         =================================================================== -->
+    <section class="painel-config" id="painel-config" hidden>
+
+      <form id="form-config" class="form-os" novalidate>
+        <p class="config-versao-aplicativo">Aplicativo instalado: <strong>1.0.25</strong></p>
+
+        <fieldset class="secao-config">
+          <legend>Identificação da assistência</legend>
+
+          <label for="cfg-nome-fantasia">Nome fantasia <span class="obrigatorio">*</span></label>
+          <input type="text" id="cfg-nome-fantasia" name="cfg-nome-fantasia" />
+
+          <label for="cfg-razao-social">Razão social <span class="opcional">(opcional)</span></label>
+          <input type="text" id="cfg-razao-social" name="cfg-razao-social" />
+
+          <label class="checkbox-linha" for="cfg-possui-cnpj">
+            <input type="checkbox" id="cfg-possui-cnpj" name="cfg-possui-cnpj" />
+            Possui CNPJ
+          </label>
+
+          <div id="bloco-cnpj" hidden>
+            <label for="cfg-cnpj">CNPJ</label>
+            <input type="text" id="cfg-cnpj" name="cfg-cnpj" inputmode="numeric" placeholder="00.000.000/0000-00" />
+
+            <label for="cfg-ie">Inscrição estadual <span class="opcional">(opcional)</span></label>
+            <input type="text" id="cfg-ie" name="cfg-ie" />
+          </div>
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Logo</legend>
+
+          <div class="logo-preview-box" id="logo-preview-box">Sem logo</div>
+          <input type="file" id="cfg-logo-arquivo" accept="image/*" />
+          <div class="linha-botoes-config">
+            <button type="button" id="btn-remover-logo" class="btn-secundario">Remover logo</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Assinatura padrão da assistência técnica</legend>
+          <p class="aviso aviso-tecnico">
+            Usada automaticamente em todo documento gerado. Na tela de cada documento,
+            o botão "Assinar assistência (só este documento)" permite assinar na hora
+            para aquele documento específico, sem alterar esta assinatura salva aqui.
+          </p>
+
+          <div class="assinatura-preview-box" id="assinatura-assistencia-preview-box">Sem assinatura salva</div>
+          <div class="linha-botoes-config">
+            <button type="button" id="btn-desenhar-assinatura-assistencia" class="btn-secundario">Desenhar assinatura</button>
+            <button type="button" id="btn-remover-assinatura-assistencia" class="btn-secundario">Remover</button>
+          </div>
+
+          <label class="checkbox-linha" for="cfg-exigir-assinatura-assistencia">
+            <input type="checkbox" id="cfg-exigir-assinatura-assistencia" name="cfg-exigir-assinatura-assistencia" />
+            Numerar as assinaturas como 1/2 e 2/2 no documento
+          </label>
+          <p class="aviso aviso-tecnico">
+            A assinatura padrão salva acima é sempre usada automaticamente, esteja
+            este check marcado ou não — ele só controla a numeração impressa no
+            papel. Ativado (padrão): "1/2" abaixo da assinatura da outra parte e
+            "2/2" abaixo da sua. Desativado: nenhuma numeração aparece, mas as duas
+            assinaturas continuam presentes normalmente.
+          </p>
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Contato</legend>
+
+          <label for="cfg-telefone">Telefone <span class="opcional">(opcional)</span></label>
+          <input type="tel" id="cfg-telefone" name="cfg-telefone" inputmode="tel" placeholder="(00) 0000-0000" />
+
+          <label for="cfg-whatsapp">WhatsApp <span class="opcional">(opcional)</span></label>
+          <input type="tel" id="cfg-whatsapp" name="cfg-whatsapp" inputmode="tel" placeholder="(00) 00000-0000" />
+
+          <label for="cfg-email">E-mail <span class="opcional">(opcional)</span></label>
+          <input type="email" id="cfg-email" name="cfg-email" inputmode="email" />
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Endereço</legend>
+
+          <label for="cfg-endereco">Endereço <span class="opcional">(opcional)</span></label>
+          <input type="text" id="cfg-endereco" name="cfg-endereco" placeholder="Rua, número, bairro" />
+
+          <label for="cfg-cidade">Cidade <span class="opcional">(opcional)</span></label>
+          <input type="text" id="cfg-cidade" name="cfg-cidade" />
+
+          <label for="cfg-estado">Estado (UF) <span class="opcional">(opcional)</span></label>
+          <input type="text" id="cfg-estado" name="cfg-estado" maxlength="2" placeholder="ES" />
+
+          <label for="cfg-cep">CEP <span class="opcional">(opcional)</span></label>
+          <input type="text" id="cfg-cep" name="cfg-cep" inputmode="numeric" placeholder="00000-000" />
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Termos — Ordem de Serviço</legend>
+
+          <label class="checkbox-linha" for="cfg-termos-predefinidos-os">
+            <input type="checkbox" id="cfg-termos-predefinidos-os" name="cfg-termos-predefinidos-os" checked />
+            Usar os termos padrão do sistema
+          </label>
+
+          <p class="aviso aviso-tecnico" id="aviso-padrao-proprio-os" hidden>
+            ✓ Você já definiu um padrão próprio para OS — "Usar os termos padrão do
+            sistema" (acima) usa este texto, não o original do sistema.
+          </p>
+
+          <div id="bloco-termos-custom-os" hidden>
+            <div class="linha-label-com-acao">
+              <label for="cfg-termos-custom-os">Termos personalizados</label>
+              <button type="button" id="btn-restaurar-termos-os" class="btn-link-pequeno">Restaurar padrão</button>
+            </div>
+            <textarea id="cfg-termos-custom-os" name="cfg-termos-custom-os" rows="4"></textarea>
+            <div class="linha-label-com-acao">
+              <button type="button" id="btn-definir-padrao-os" class="btn-link-pequeno">Definir como novo padrão</button>
+              <button type="button" id="btn-limpar-padrao-os" class="btn-link-pequeno">Voltar ao padrão original do sistema</button>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Termos — Venda</legend>
+
+          <label class="checkbox-linha" for="cfg-termos-predefinidos-venda">
+            <input type="checkbox" id="cfg-termos-predefinidos-venda" name="cfg-termos-predefinidos-venda" checked />
+            Usar os termos padrão do sistema
+          </label>
+
+          <p class="aviso aviso-tecnico" id="aviso-padrao-proprio-venda" hidden>
+            ✓ Você já definiu um padrão próprio para Venda — "Usar os termos padrão do
+            sistema" (acima) usa este texto, não o original do sistema.
+          </p>
+
+          <div id="bloco-termos-custom-venda" hidden>
+            <div class="linha-label-com-acao">
+              <label for="cfg-termos-custom-venda">Termos personalizados</label>
+              <button type="button" id="btn-restaurar-termos-venda" class="btn-link-pequeno">Restaurar padrão</button>
+            </div>
+            <textarea id="cfg-termos-custom-venda" name="cfg-termos-custom-venda" rows="4"></textarea>
+            <div class="linha-label-com-acao">
+              <button type="button" id="btn-definir-padrao-venda" class="btn-link-pequeno">Definir como novo padrão</button>
+              <button type="button" id="btn-limpar-padrao-venda" class="btn-link-pequeno">Voltar ao padrão original do sistema</button>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Termos — Compra</legend>
+
+          <label class="checkbox-linha" for="cfg-termos-predefinidos-compra">
+            <input type="checkbox" id="cfg-termos-predefinidos-compra" name="cfg-termos-predefinidos-compra" checked />
+            Usar os termos padrão do sistema
+          </label>
+
+          <p class="aviso aviso-tecnico" id="aviso-padrao-proprio-compra" hidden>
+            ✓ Você já definiu um padrão próprio para Compra — "Usar os termos padrão
+            do sistema" (acima) usa este texto, não o original do sistema.
+          </p>
+
+          <div id="bloco-termos-custom-compra" hidden>
+            <div class="linha-label-com-acao">
+              <label for="cfg-termos-custom-compra">Termos personalizados</label>
+              <button type="button" id="btn-restaurar-termos-compra" class="btn-link-pequeno">Restaurar padrão</button>
+            </div>
+            <textarea id="cfg-termos-custom-compra" name="cfg-termos-custom-compra" rows="4"></textarea>
+            <div class="linha-label-com-acao">
+              <button type="button" id="btn-definir-padrao-compra" class="btn-link-pequeno">Definir como novo padrão</button>
+              <button type="button" id="btn-limpar-padrao-compra" class="btn-link-pequeno">Voltar ao padrão original do sistema</button>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Fonte dos Termos no PDF</legend>
+
+          <label for="cfg-tamanho-fonte-termos" class="label-slider">
+            Tamanho da fonte: <span id="valor-tamanho-fonte-termos">Padrão do sistema</span>
+          </label>
+          <input
+            type="range"
+            id="cfg-tamanho-fonte-termos"
+            name="cfg-tamanho-fonte-termos"
+            min="0"
+            max="14"
+            step="0.5"
+            value="0"
+          />
+          <p class="aviso aviso-tecnico">
+            Ajusta o tamanho da fonte dos Termos e Condições nos documentos
+            gerados (OS, Venda e Compra). "Padrão do sistema" (valor 0) usa o
+            tamanho original de cada tipo de documento. Se o texto for muito
+            longo para caber na folha, o sistema ainda pode reduzir um pouco
+            a fonte automaticamente, mesmo com um valor definido aqui.
+          </p>
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Garantia</legend>
+
+          <label for="cfg-garantia-dias-padrao">Prazo de garantia padrão (dias)</label>
+          <input
+            type="number"
+            id="cfg-garantia-dias-padrao"
+            name="cfg-garantia-dias-padrao"
+            min="0"
+            step="1"
+            value="90"
+          />
+          <p class="aviso aviso-tecnico">
+            Prazo sugerido automaticamente em Entregas e em Nova OS. Pode ser
+            alterado em cada documento individualmente, sem afetar este
+            padrão. No comprovante de Entrega, este prazo aparece no PDF
+            junto com a data limite calculada a partir da data de
+            assinatura; em Nova OS, o prazo é apenas registrado (não
+            aparece no PDF da OS).
+          </p>
+        </fieldset>
+
+        <fieldset class="secao-config" hidden aria-hidden="true">
+          <legend>Login Supabase</legend>
+          <p class="aviso aviso-tecnico">
+            Desativado por padrão. Depois de configurar e ativar, o app passa
+            exige login e valida usuário, empresa e licença. Dados e arquivos
+            ficam centralizados no Supabase.
+          </p>
+
+          <label class="checkbox-linha" for="cfg-supabase-ativo">
+            <input type="checkbox" id="cfg-supabase-ativo" name="cfg-supabase-ativo" />
+            Exigir login pelo Supabase neste aparelho
+          </label>
+
+          <label for="cfg-supabase-url">URL do projeto Supabase</label>
+          <input type="url" id="cfg-supabase-url" name="cfg-supabase-url" inputmode="url" autocapitalize="none" autocorrect="off" placeholder="https://projeto.supabase.co" />
+
+          <label for="cfg-supabase-publishable-key">Chave pública publishable/anon</label>
+          <input type="password" id="cfg-supabase-publishable-key" name="cfg-supabase-publishable-key" autocomplete="off" autocapitalize="none" autocorrect="off" />
+          <p class="aviso aviso-tecnico">
+            Nunca cole a chave secret/service_role. O APK recusa chaves
+            privilegiadas. Redirecionamento de senha:
+            <code>com.assistencia.sistemaos://auth/callback</code>
+          </p>
+
+          <button type="button" id="btn-testar-conexao-supabase" class="btn-secundario">
+            Testar conexão (Supabase)
+          </button>
+          <div id="resultado-teste-conexao-supabase" class="resultado-consulta" hidden></div>
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Atualização dos dados</legend>
+          <p class="aviso aviso-tecnico">
+            Consultas, prazos, arquivos e alterações ficam atualizados
+            automaticamente. Nenhuma configuração extra é necessária.
+          </p>
+          <button type="button" id="btn-sincronizar-agora" class="btn-primario">Sincronizar agora</button>
+          <div id="resultado-sincronizar-agora" class="resultado-consulta" hidden></div>
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Sessão da conta</legend>
+          <p class="aviso aviso-tecnico">
+            Saia desta conta para entrar com outro usuário ou outra empresa neste aparelho.
+            Os dados permanecem salvos e protegidos na nuvem.
+          </p>
+          <button type="button" id="btn-trocar-usuario-config" class="btn-secundario">Sair e trocar usuário</button>
+          <label id="linha-ativar-troca-rapida" class="checkbox-linha" hidden>
+            <input type="checkbox" id="cfg-troca-rapida-contas" />
+            Permitir contas salvas e troca rápida nesta empresa
+          </label>
+          <div id="contas-rapidas-config" class="contas-rapidas" hidden>
+            <p class="aviso aviso-tecnico">As senhas nunca são armazenadas. As sessões são cifradas somente neste aparelho.</p>
+            <button type="button" id="btn-adicionar-conta-rapida" class="btn-secundario">Adicionar outra conta</button>
+            <div id="lista-contas-rapidas-config" class="lista-contas-rapidas"></div>
+            <p id="status-contas-rapidas" class="feedback-acao" hidden></p>
+          </div>
+        </fieldset>
+
+        <fieldset class="secao-config" id="cfg-politica-exclusao">
+          <legend>Proteção de exclusões</legend>
+          <p class="aviso aviso-tecnico" id="cfg-status-exclusao">Carregando regra de exclusão…</p>
+          <label for="cfg-minha-senha-exclusao">Minha senha de exclusão</label>
+          <input type="password" id="cfg-minha-senha-exclusao" autocomplete="new-password" placeholder="Mínimo de 6 caracteres" />
+          <button type="button" id="btn-cfg-salvar-senha-exclusao" class="btn-secundario">Definir / trocar minha senha</button>
+          <div id="cfg-admin-exclusao" hidden>
+            <label class="checkbox-linha" for="cfg-exclusao-sem-senha-todos">
+              <input type="checkbox" id="cfg-exclusao-sem-senha-todos" />
+              Permitir exclusão sem senha para todos
+            </label>
+            <p class="aviso aviso-tecnico">Ou libere somente usuários específicos:</p>
+            <div id="cfg-usuarios-sem-senha"></div>
+            <button type="button" id="btn-cfg-salvar-politica-exclusao" class="btn-secundario">Salvar permissões</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Atualização do aplicativo</legend>
+          <p class="aviso aviso-tecnico">
+            O Sistema OS verifica novas versões oficiais pelo GitHub. Quando houver uma atualização,
+            o APK será baixado e o Android exibirá a confirmação de instalação.
+          </p>
+          <button type="button" id="btn-verificar-atualizacao-app" class="btn-secundario">Verificar atualização</button>
+          <button type="button" id="btn-instalar-atualizacao-app" class="btn-primario" hidden>Baixar e instalar</button>
+          <p id="status-atualizacao-app" class="feedback-acao" aria-live="polite" hidden></p>
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Suporte</legend>
+          <p class="aviso aviso-tecnico">Abra um chamado para o suporte do Sistema OS. A empresa e a origem desta tela são incluídas automaticamente.</p>
+          <button type="button" id="btn-abrir-chamado-config" class="btn-secundario">Abrir chamado</button>
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Aparência</legend>
+
+          <label class="checkbox-linha" for="cfg-tema-escuro">
+            <input type="checkbox" id="cfg-tema-escuro" name="cfg-tema-escuro" />
+            Modo escuro
+          </label>
+        </fieldset>
+
+        <fieldset class="secao-config">
+          <legend>Backup</legend>
+
+          <p class="aviso aviso-tecnico">
+            Salva TUDO do app num único arquivo: configurações, histórico
+            de OS/Compra/Venda/Entrega e documentos recebidos do PC. Guarde
+            este arquivo em local seguro (Drive, WhatsApp para si mesmo,
+            etc.) — com ele dá para restaurar tudo mesmo depois de apagar
+            ou reinstalar o app.
+          </p>
+          <button type="button" id="btn-exportar-backup" class="btn-primario">Fazer backup (exportar tudo)</button>
+          <button type="button" id="btn-importar-backup" class="btn-secundario">Restaurar backup</button>
+          <input type="file" id="input-importar-backup" accept=".json,application/json" hidden />
+
+          <p class="aviso aviso-tecnico" style="margin-top: 16px;">
+            Apaga permanentemente TUDO que está salvo neste aparelho
+            (configurações e histórico local). Não afeta nada que já foi
+            exportado para o PC. Esta ação não pode ser desfeita — faça um
+            backup antes.
+          </p>
+          <button type="button" id="btn-apagar-tudo" class="btn-perigo">Apagar tudo do app</button>
+        </fieldset>
+
+        <p class="erro-geral" id="erro-geral-config" hidden></p>
+
+        <button type="submit" id="btn-salvar-config" class="btn-primario">Salvar configurações</button>
+        <p class="feedback-acao" id="feedback-config" hidden></p>
+      </form>
+    </section>
+
+    <!-- ===================================================================
+         TELA: Documentos (assinatura remota PC → celular → PC)
+         Lista o que o PC mandou assinar; ao abrir, mostra a prévia (mesmos
+         templates do PC) e permite assinar e devolver a resposta.
+         =================================================================== -->
+    <section class="painel-documentos" id="painel-documentos" hidden>
+
+      <div id="painel-doc-lista">
+        <p class="banner-historico-local">
+          📄 Documentos que o computador enviou para assinar neste celular.
+        </p>
+        <label for="doc-input-importar" class="btn-primario btn-importar-doc">
+          Importar documento do PC (.json)
+        </label>
+        <input type="file" id="doc-input-importar" accept=".json,application/json" hidden />
+        <p class="feedback-acao" id="feedback-documentos" hidden></p>
+        <div id="lista-documentos" class="lista-historico"></div>
+      </div>
+
+      <div id="painel-doc-detalhe" hidden>
+        <button type="button" id="btn-voltar-doc-lista" class="btn-secundario">◀ Voltar aos documentos</button>
+        <p class="aviso">
+          Abaixo: a mesma prévia gerada pelo PC, para conferir antes de assinar.
+        </p>
+        <div class="frame-scroll">
+          <iframe id="frame-doc-detalhe" title="Prévia do documento recebido do PC"></iframe>
+        </div>
+        <div class="acoes-decisao-documento">
+          <button type="button" id="btn-assinar-doc" class="btn-primario">Assinar documento</button>
+          <button type="button" id="btn-nao-assinado-doc" class="btn-secundario">Marcar como não assinado</button>
+        </div>
+        <p class="aviso-assinado" id="aviso-doc-assinado" hidden></p>
+        <button type="button" id="btn-exportar-resposta-doc" class="btn-secundario" hidden>
+          Enviar decisão para o PC
+        </button>
+      </div>
+
+    </section>
+
+    <!-- ===================================================================
+         Aba "Consulta" — buscar número de OS/status/garantia diretamente
+         no Supabase, mantendo os dados da empresa atualizados em qualquer
+         dispositivo autenticado.
+         =================================================================== -->
+    <section class="painel-desbloqueios-mobile" id="painel-desbloqueios" hidden>
+      <header class="desbloqueios-cabecalho">
+        <div><span class="desbloqueios-sobrelinha">AUTORIZAÇÃO DO CLIENTE</span><h2>Desbloqueios</h2><p>Cadastre o cliente, documente os riscos e gere a autorização.</p></div>
+        <button type="button" id="btn-novo-desbloqueio" class="btn-secundario">Nova autorização</button>
+      </header>
+
+      <form id="form-desbloqueio-mobile" class="desbloqueio-form" novalidate>
+        <input type="hidden" id="desbloqueio-id" />
+        <input type="hidden" id="desbloqueio-revision" />
+        <input type="hidden" id="desbloqueio-cliente-id" />
+        <div class="desbloqueio-identificacao" id="desbloqueio-identificacao" hidden></div>
+        <fieldset>
+          <legend>Cliente</legend>
+          <div class="desbloqueio-grade">
+            <label>Nome completo <span class="obrigatorio">*</span><input id="desbloqueio-cliente-nome" type="text" autocomplete="name" required /></label>
+            <label>CPF <span class="opcional">(opcional)</span><input id="desbloqueio-cliente-cpf" type="text" inputmode="numeric" placeholder="000.000.000-00" /></label>
+            <label>Telefone <span class="opcional">(opcional)</span><input id="desbloqueio-cliente-telefone" type="tel" inputmode="tel" autocomplete="tel" /></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Aparelho e procedimento</legend>
+          <div class="desbloqueio-grade">
+            <label>Marca <span class="obrigatorio">*</span><input id="desbloqueio-marca" type="text" required /></label>
+            <label>Modelo <span class="obrigatorio">*</span><input id="desbloqueio-modelo" type="text" required /></label>
+            <label>Cor <span class="opcional">(opcional)</span><input id="desbloqueio-cor" type="text" /></label>
+            <label>IMEI ou número de série <span class="opcional">(opcional)</span><input id="desbloqueio-imei" type="text" /></label>
+            <label>Tipo de bloqueio <span class="obrigatorio">*</span><select id="desbloqueio-tipo" required><option value="">Selecione</option><option>Senha ou PIN</option><option>Padrão de desenho</option><option>Conta Google (FRP)</option><option>Conta Samsung</option><option>Conta Apple / iCloud</option><option>Outro</option></select></label>
+            <label>Valor <span class="opcional">(opcional)</span><input id="desbloqueio-valor" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0,00" /></label>
+          </div>
+          <label>Procedimento previsto <span class="opcional">(opcional)</span><textarea id="desbloqueio-procedimento" rows="2"></textarea></label>
+          <label>Observações <span class="opcional">(opcional)</span><textarea id="desbloqueio-observacoes" rows="2"></textarea></label>
+          <label class="check-inline desbloqueio-titularidade"><input id="desbloqueio-titularidade" type="checkbox" required /> O cliente declara ser titular ou estar autorizado a solicitar o serviço.</label>
+        </fieldset>
+        <p id="desbloqueio-feedback" class="desbloqueio-feedback" aria-live="polite"></p>
+        <div class="desbloqueio-acoes">
+          <button type="button" id="btn-desbloqueio-assinar" class="btn-primario">Assinar e gerar</button>
+          <button type="button" id="btn-desbloqueio-nao-assinado" class="btn-secundario">Gerar não assinado</button>
+          <button type="button" id="btn-desbloqueio-cancelar" class="btn-secundario" hidden>Cancelar edição</button>
+          <button type="button" id="btn-desbloqueio-excluir" class="btn-perigo" hidden>Excluir</button>
+        </div>
+      </form>
+
+      <section class="desbloqueios-registros">
+        <div class="desbloqueios-ferramentas"><h3>Autorizações salvas</h3><input type="search" id="desbloqueio-busca" placeholder="Buscar cliente, número ou aparelho" autocomplete="off" /></div>
+        <p id="desbloqueio-lista-status" class="desbloqueio-feedback">Abra a aba para sincronizar.</p>
+        <div id="desbloqueio-lista" class="desbloqueio-lista"></div>
+      </section>
+    </section>
+
+    <section class="painel-documentos painel-leitor-qr" id="painel-qr" hidden>
+      <div class="qr-introducao-card">
+        <div class="qr-introducao-icone" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM19 14h2v4M14 19h4v2M20 20h1v1"/></svg>
+        </div>
+        <h2>Ler etiqueta do aparelho</h2>
+        <p>Aponte a câmera para a etiqueta. A OS abrirá com status, cliente, aparelho, defeito, prazo, valores e ações.</p>
+        <button type="button" id="btn-iniciar-leitor-qr" class="btn-primario btn-qr-principal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h3l1.5-2h7L17 7h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/><circle cx="12" cy="13" r="4"/></svg>
+          Abrir câmera e ler QR
+        </button>
+        <p id="qr-leitor-status" class="qr-leitor-status" hidden></p>
+      </div>
+      <div class="qr-dicas-card">
+        <h3>Também funciona pela câmera normal</h3>
+        <p>Abra a câmera do celular, aponte para o QR e toque em <strong>Sistema OS</strong>. O aplicativo abrirá a OS automaticamente.</p>
+        <p>Etiquetas antigas também podem ser lidas aqui.</p>
+      </div>
+    </section>
+
+    <section class="painel-documentos" id="painel-consulta" hidden>
+      <p class="banner-historico-local" id="consulta-status-sync" hidden>
+        Entre novamente para consultar os dados da empresa.
+      </p>
+
+      <fieldset class="secao-config consulta-unificada">
+        <legend>Consultar cliente, OS e documentos</legend>
+        <p class="aviso aviso-tecnico">Busque pelo nome ou ID do cliente para ver todos os registros associados.</p>
+        <div class="linha-busca-consulta consulta-busca-cliente">
+          <input type="search" id="consulta-cliente-termo" placeholder="Nome, ID, CPF ou telefone" autocomplete="off" />
+          <button type="button" id="btn-consultar-cliente" class="btn-primario">Buscar cliente</button>
+        </div>
+        <div id="consulta-cliente-resultado" class="consulta-clientes-resultado"></div>
+        <p class="aviso aviso-tecnico">Ou informe o número para abrir uma OS diretamente.</p>
+        <div class="linha-busca-consulta">
+          <input type="text" id="consulta-os-numero" inputmode="numeric" placeholder="Ex: 1 ou OS-0001" />
+          <button type="button" id="btn-consultar-os" class="btn-primario">Buscar</button>
+        </div>
+        <div class="consulta-documentos-grade">
+          <section class="consulta-documento-card">
+            <h3>Ordem de Serviço</h3>
+            <div id="consulta-os-resultado" class="resultado-consulta" hidden></div>
+          </section>
+          <section class="consulta-documento-card">
+            <h3>Garantia</h3>
+            <div id="consulta-garantia-resultado" class="resultado-consulta" hidden></div>
+          </section>
+          <section class="consulta-documento-card">
+            <h3>Entrega</h3>
+            <div id="consulta-entrega-resultado" class="resultado-consulta" hidden></div>
+          </section>
+        </div>
+      </fieldset>
+    </section>
+
+    <section class="painel-cobrancas-mobile" id="painel-cobrancas" hidden>
+      <header class="cobrancas-mobile-cabecalho">
+        <div>
+          <span class="cobrancas-mobile-sobrelinha">AGENDA FINANCEIRA</span>
+          <h2>Próximas cobranças</h2>
+          <p>Lembretes vinculados às OS, sincronizados com o computador.</p>
+        </div>
+        <button type="button" id="btn-nova-cobranca-mobile" class="btn-primario">Nova cobrança</button>
+      </header>
+
+      <div class="cobrancas-mobile-resumo" aria-label="Resumo das cobranças">
+        <div><span>Pendente</span><strong id="cobrancas-resumo-pendentes">0</strong></div>
+        <div><span>Atrasada</span><strong id="cobrancas-resumo-atrasadas">0</strong></div>
+        <div><span>A receber</span><strong id="cobrancas-resumo-valor">R$ 0,00</strong></div>
+      </div>
+
+      <div class="cobrancas-mobile-ferramentas">
+        <input type="search" id="cobrancas-mobile-busca" placeholder="Buscar OS, cliente ou aparelho" autocomplete="off" />
+        <button type="button" id="btn-atualizar-cobrancas-mobile" class="btn-secundario">Atualizar</button>
+      </div>
+      <div id="cobrancas-mobile-filtros" class="cobrancas-mobile-filtros" role="group" aria-label="Filtrar cobranças">
+        <button type="button" class="ativo" data-status="todas">Todas</button>
+        <button type="button" data-status="pendente">Pendentes</button>
+        <button type="button" data-status="atrasada">Atrasadas</button>
+        <button type="button" data-status="paga">Pagas</button>
+        <button type="button" data-status="desativada">Desativadas</button>
+      </div>
+      <p id="cobrancas-mobile-status" class="cobrancas-mobile-status" aria-live="polite">Abra a aba para sincronizar.</p>
+      <div id="cobrancas-mobile-lista" class="cobrancas-mobile-lista"></div>
+      <button type="button" id="btn-testar-notificacao-cobranca" class="btn-secundario cobrancas-mobile-testar">Testar notificação da próxima cobrança</button>
+    </section>
+
+    <section class="painel-estatisticas painel-prazos" id="painel-prazos" hidden>
+      <p class="banner-historico-local" id="prazos-status-sync" hidden>
+        Entre novamente para ver os prazos da empresa.
+      </p>
+      <fieldset class="secao-config">
+        <legend>Acompanhamento de reparos</legend>
+        <p class="aviso aviso-tecnico">Aparelho, defeito, etapa atual e prazo das OS abertas. As alterações são enviadas ao PC automaticamente.</p>
+        <button type="button" id="btn-prazos-sincronizar" class="btn-secundario">Atualizar agora</button>
+        <p class="estatisticas-atualizado-em" id="prazos-atualizado-em" hidden></p>
+        <div id="prazos-lista" class="lista-historico">
+          <p class="historico-vazio">Abra esta aba para carregar os reparos.</p>
+        </div>
+      </fieldset>
+    </section>
+
+    <section class="painel-estoque-mobile" id="painel-estoque" hidden>
+      <div class="estoque-mobile-cabecalho">
+        <div><span class="estoque-mobile-eyebrow">ESTOQUE INTEGRADO</span><h2>Estoque da assistência</h2><p>Celular e PC sincronizados automaticamente.</p></div>
+        <button type="button" id="btn-atualizar-estoque-mobile" class="btn-secundario">Atualizar</button>
+      </div>
+      <div id="estoque-abas" class="estoque-mobile-abas">
+        <button type="button" class="ativo" data-aba="aparelhos">Aparelhos</button>
+        <button type="button" data-aba="pecas">Peças e consumíveis</button>
+      </div>
+      <p id="estoque-mobile-status" class="estoque-mobile-status">Abra a aba para sincronizar.</p>
+      <div id="estoque-sub-aparelhos">
+        <input type="search" id="estoque-busca-aparelhos" class="estoque-mobile-busca" placeholder="Buscar marca, modelo, cor ou IMEI">
+        <div id="estoque-lista-aparelhos" class="estoque-mobile-lista"></div>
+      </div>
+      <div id="estoque-sub-pecas" hidden>
+        <div class="estoque-mobile-ferramentas"><input type="search" id="estoque-busca-pecas" class="estoque-mobile-busca" placeholder="Buscar peça, consumível, categoria ou modelo"><button type="button" id="btn-nova-peca-mobile" class="btn-primario">+ Novo item</button></div>
+        <div id="estoque-lista-pecas" class="estoque-mobile-lista"></div>
+      </div>
+    </section>
+
+    <section class="painel-precos-mobile" id="painel-precos" hidden>
+      <div class="precos-mobile-cabecalho">
+        <div><span class="precos-mobile-eyebrow">CONSULTA RÁPIDA</span><h2>Tabela de preços</h2><p>Modelo, peça ou serviço e valor cobrado.</p></div>
+        <button type="button" id="btn-novo-preco-mobile" class="btn-primario">+ Novo</button>
+      </div>
+      <div class="precos-mobile-ferramentas">
+        <input type="search" id="precos-mobile-busca" placeholder="Buscar modelo, peça ou serviço">
+        <button type="button" id="btn-atualizar-precos-mobile" class="btn-secundario">Atualizar</button>
+      </div>
+      <p id="precos-mobile-status" class="precos-mobile-status">Abra a aba para sincronizar.</p>
+      <div id="precos-mobile-lista" class="precos-mobile-lista"></div>
+    </section>
+
+    <!-- ===================================================================
+         TELA: Estatísticas (status das OS + financeiro, vindos do Supabase)
+         =================================================================== -->
+    <section class="painel-estatisticas" id="painel-estatisticas" hidden>
+      <p class="banner-historico-local" id="estatisticas-status-sync" hidden>
+        Entre novamente para ver as estatísticas da empresa.
+      </p>
+      <p class="estatisticas-atualizado-em" id="estatisticas-atualizado-em" hidden></p>
+
+      <div class="filtro-historico" id="filtro-estatisticas">
+        <button type="button" class="filtro-ativo" data-sub-aba="status">Status das OS</button>
+        <button type="button" data-sub-aba="financeiro">Financeiro</button>
+      </div>
+
+      <div id="estatisticas-sub-status" class="estatisticas-sub-aba">
+        <div class="cards-estatisticas">
+          <button type="button" class="card-estatistica card-estatistica-atrasada" data-grupo="atrasadas">
+            <span class="card-estatistica-numero" id="est-num-atrasadas">0</span>
+            <span class="card-estatistica-rotulo">Atrasadas</span>
+          </button>
+          <button type="button" class="card-estatistica card-estatistica-prazo" data-grupo="pertoDoPrazo">
+            <span class="card-estatistica-numero" id="est-num-perto-prazo">0</span>
+            <span class="card-estatistica-rotulo">Perto do prazo</span>
+          </button>
+          <button type="button" class="card-estatistica card-estatistica-pronta" data-grupo="prontas">
+            <span class="card-estatistica-numero" id="est-num-prontas">0</span>
+            <span class="card-estatistica-rotulo">Prontas</span>
+          </button>
+          <button type="button" class="card-estatistica card-estatistica-entregue" data-grupo="entregues">
+            <span class="card-estatistica-numero" id="est-num-entregues">0</span>
+            <span class="card-estatistica-rotulo">Entregues</span>
+          </button>
+        </div>
+        <div id="estatisticas-lista-os" class="lista-historico">
+          <p class="historico-vazio">Toque em um card acima para ver as OS do grupo.</p>
+        </div>
+
+        <fieldset class="secao-config">
+          <legend>Atividade recente no PC</legend>
+          <p class="aviso aviso-tecnico">
+            OS, compras e vendas criadas ou atualizadas no PC nas últimas 48h —
+            só leitura. Para ver os dados completos e o PDF, use "Buscar pelo
+            número" na aba Consulta.
+          </p>
+          <div id="estatisticas-atividade-recente" class="lista-historico">
+            <p class="historico-vazio">Nenhuma atividade recente.</p>
+          </div>
+        </fieldset>
+      </div>
+
+      <div id="estatisticas-sub-financeiro" class="estatisticas-sub-aba" hidden>
+        <div class="cards-estatisticas cards-estatisticas-financeiro">
+          <div class="card-estatistica card-estatistica-financeiro">
+            <span class="card-estatistica-numero" id="est-total-pago">R$ 0,00</span>
+            <span class="card-estatistica-rotulo">Total recebido</span>
+          </div>
+          <div class="card-estatistica card-estatistica-financeiro">
+            <span class="card-estatistica-numero" id="est-aguardando-pagamento">0</span>
+            <span class="card-estatistica-rotulo">Aguardando pagamento</span>
+          </div>
+          <div class="card-estatistica card-estatistica-financeiro">
+            <span class="card-estatistica-numero" id="est-total-vendas">R$ 0,00</span>
+            <span class="card-estatistica-rotulo" id="est-qtd-vendas">Vendas concluídas</span>
+          </div>
+        </div>
+        <fieldset class="secao-config">
+          <legend>Receita por mês</legend>
+          <div id="estatisticas-grafico-receita" class="grafico-receita-meses"></div>
+        </fieldset>
+      </div>
+    </section>
+
+  </main>
+
+  <section id="painel-suporte-global" class="painel-suporte-global" hidden>
+    <div class="suporte-cabecalho">
+      <div>
+        <p class="suporte-sobrelinha">SISTEMA OS</p>
+        <h2>Central de suporte</h2>
+        <p>Empresas, licenças, cobranças e usuários do sistema.</p>
+      </div>
+      <div class="suporte-cabecalho-acoes">
+        <button type="button" id="btn-suporte-atualizar" class="btn-secundario">Atualizar</button>
+        <button type="button" id="btn-suporte-sair" class="btn-secundario">Sair / trocar conta</button>
+      </div>
+    </div>
+    <label class="suporte-busca" for="suporte-busca-empresa">Buscar empresa</label>
+    <input id="suporte-busca-empresa" type="search" placeholder="Nome ou código da empresa" autocomplete="off" />
+    <p id="suporte-status" class="suporte-status" aria-live="polite"></p>
+    <div id="suporte-lista-empresas" class="suporte-lista-empresas"></div>
+    <section class="suporte-chamados">
+      <h3>Chamados recebidos</h3>
+      <div id="suporte-lista-chamados" class="suporte-lista-empresas"></div>
+    </section>
+    <section class="suporte-chamados">
+      <div class="suporte-secao-titulo">
+        <div>
+          <h3>Relatorios de erros dos usuarios</h3>
+          <p>Falhas registradas automaticamente no PC e no Android, separadas por empresa.</p>
+        </div>
+        <select id="suporte-filtro-erros" aria-label="Filtrar relatorios de erros">
+          <option value="aberto">Abertos</option>
+          <option value="analisando">Em analise</option>
+          <option value="todos">Todos</option>
+          <option value="resolvido">Resolvidos</option>
+          <option value="ignorado">Ignorados</option>
+        </select>
+      </div>
+      <div id="suporte-lista-erros" class="suporte-lista-empresas"></div>
+    </section>
+  </section>
+
+  <div id="modal-nova-peca-mobile" class="modal-estoque-mobile" hidden>
+    <form id="form-nova-peca-mobile" class="modal-estoque-mobile-caixa">
+      <header><div><span class="estoque-mobile-eyebrow">ESTOQUE SINCRONIZADO</span><h2 id="titulo-peca-mobile">Novo item</h2></div><button type="button" id="btn-fechar-peca-mobile" class="modal-mobile-fechar" aria-label="Fechar" title="Fechar">&times;</button></header>
+      <p id="peca-mobile-id" class="estoque-mobile-id-edicao" hidden></p>
+      <label>Tipo do item *<select id="peca-mobile-tipo" required><option>Peça / Componente</option><option>Consumível</option><option>Acessório</option></select></label>
+      <label>Nome do item *<input id="peca-mobile-nome" maxlength="120" required></label>
+      <label>Categoria *<select id="peca-mobile-categoria" required><option>Tela / Display</option><option>Bateria</option><option>Conector de Carga</option><option>Flex / Cabo</option><option>Alto-falante</option><option>Microfone</option><option>Câmera Traseira</option><option>Câmera Frontal</option><option>Tampa Traseira</option><option>Carcaça</option><option>Película</option><option>Capa Protetora</option><option>Carregador</option><option>Cabo USB / Dados</option><option>Fonte / Adaptador</option><option>Fone de Ouvido</option><option>Adesivos / Colas</option><option>Material de Limpeza</option><option>Parafusos / Fixadores</option><option>Componentes Eletrônicos</option><option>Ferramentas</option><option>Memória</option><option>Placa-mãe</option><option>Botão</option><option>Sensor</option><option selected>Outro</option></select></label>
+      <label>Compatibilidade<input id="peca-mobile-compat" maxlength="250" placeholder="Ex.: Galaxy S23, S23+"></label>
+      <label>Fornecedor<input id="peca-mobile-fornecedor" maxlength="120" placeholder="Nome do fornecedor"></label>
+      <div class="modal-estoque-mobile-grade"><label>Quantidade<input id="peca-mobile-quantidade" type="number" min="0" value="0"><small id="peca-mobile-quantidade-ajuda">Informe o saldo inicial do item.</small></label><label>Estoque mínimo<input id="peca-mobile-minimo" type="number" min="0" value="0"></label><label>Custo unitário<input id="peca-mobile-custo" type="number" min="0" step="0.01" inputmode="decimal"></label><label>Localização<input id="peca-mobile-local" maxlength="80" placeholder="Gaveta A1"></label></div>
+      <label>Observações<textarea id="peca-mobile-obs" rows="3" maxlength="500"></textarea></label>
+      <footer class="modal-mobile-acoes">
+        <button type="button" class="btn-secundario" data-fechar-peca-mobile>Cancelar</button>
+        <button type="submit" id="btn-salvar-peca-mobile" class="btn-primario">Adicionar item</button>
+      </footer>
+    </form>
+  </div>
+
+  <div id="modal-cobranca-mobile" class="modal-estoque-mobile" hidden>
+    <form id="form-cobranca-mobile" class="modal-estoque-mobile-caixa cobranca-mobile-modal">
+      <header>
+        <div><span class="cobrancas-mobile-sobrelinha">LEMBRETE DA OS</span><h2 id="titulo-cobranca-mobile">Nova cobrança</h2></div>
+        <button type="button" id="btn-fechar-cobranca-mobile" class="modal-mobile-fechar" aria-label="Fechar" title="Fechar">&times;</button>
+      </header>
+      <input id="cobranca-mobile-id" type="hidden" />
+      <label>Número da OS *<input id="cobranca-mobile-os" inputmode="numeric" placeholder="Ex.: 20 ou OS-0020" required /></label>
+      <div class="modal-estoque-mobile-grade">
+        <label>Valor *<input id="cobranca-mobile-valor" type="number" min="0.01" step="0.01" inputmode="decimal" required /></label>
+        <label>Vencimento *<input id="cobranca-mobile-data" type="date" required /></label>
+      </div>
+      <div class="modal-estoque-mobile-grade">
+        <label>Situação
+          <select id="cobranca-mobile-situacao">
+            <option value="pendente">Pendente</option>
+            <option value="atrasada">Atrasada</option>
+            <option value="paga">Paga</option>
+            <option value="desativada">Desativada</option>
+          </select>
+        </label>
+        <label>Avisar antes
+          <select id="cobranca-mobile-antecedencia">
+            <option value="0">No dia</option>
+            <option value="1">1 dia antes</option>
+            <option value="3">3 dias antes</option>
+            <option value="7">7 dias antes</option>
+            <option value="15">15 dias antes</option>
+            <option value="30">30 dias antes</option>
+          </select>
+        </label>
+      </div>
+      <label>Observação <span class="campo-opcional">opcional</span><textarea id="cobranca-mobile-observacao" rows="3" maxlength="240" placeholder="Ex.: segunda parcela do reparo"></textarea></label>
+      <p id="cobranca-mobile-ajuda" class="cobrancas-mobile-status">A notificação será criada neste celular e a cobrança ficará disponível no PC.</p>
+      <footer class="modal-mobile-acoes">
+        <button type="button" id="btn-cancelar-cobranca-mobile" class="btn-secundario">Cancelar</button>
+        <button type="submit" id="btn-salvar-cobranca-mobile" class="btn-primario">Salvar cobrança</button>
+      </footer>
+    </form>
+  </div>
+
+  <div id="modal-editar-aparelho-mobile" class="modal-estoque-mobile" hidden>
+    <form id="form-editar-aparelho-mobile" class="modal-estoque-mobile-caixa">
+      <header>
+        <div><span class="estoque-mobile-eyebrow">ESTOQUE SINCRONIZADO</span><h2>Editar aparelho</h2></div>
+        <button type="button" id="btn-fechar-aparelho-mobile" class="modal-mobile-fechar" aria-label="Fechar" title="Fechar">&times;</button>
+      </header>
+      <p id="aparelho-mobile-id" class="estoque-mobile-id-edicao"></p>
+      <div class="modal-estoque-mobile-grade">
+        <label>Tipo *
+          <select id="aparelho-mobile-tipo" required>
+            <option>Smartphone</option><option>Tablet</option><option>Notebook</option><option>Computador Desktop</option><option>All In One</option><option>Videogame</option><option>Outro</option>
+          </select>
+        </label>
+        <label>Status *
+          <select id="aparelho-mobile-status" required>
+            <option>Aguardando chegada</option><option>Em análise</option><option>Aguardando peça</option><option>Em reparo</option><option>Pronto para venda</option><option>Reservado</option><option>Vendido</option><option>Cancelado</option>
+          </select>
+        </label>
+      </div>
+      <div class="modal-estoque-mobile-grade">
+        <label>Marca *<input id="aparelho-mobile-marca" maxlength="80" required></label>
+        <label>Modelo *<input id="aparelho-mobile-modelo" maxlength="120" required></label>
+        <label>Cor<input id="aparelho-mobile-cor" maxlength="60"></label>
+        <label>Valor de venda (R$) *<input id="aparelho-mobile-valor" type="number" min="0.01" step="0.01" inputmode="decimal" required></label>
+      </div>
+      <label>IMEI <span class="opcional">(opcional)</span><input id="aparelho-mobile-imei" inputmode="numeric" maxlength="15"></label>
+      <section class="aparelho-mobile-pecas" aria-labelledby="aparelho-mobile-pecas-titulo">
+        <div class="aparelho-mobile-pecas-topo">
+          <div><strong id="aparelho-mobile-pecas-titulo">Peças usadas</strong><small>Descrição e custo de cada peça aplicada</small></div>
+          <button type="button" id="btn-adicionar-peca-usada-mobile" class="btn-secundario">+ Adicionar</button>
+        </div>
+        <div id="aparelho-mobile-pecas-lista" class="aparelho-mobile-pecas-lista"></div>
+        <label>Total gasto com peças (R$)<input id="aparelho-mobile-total-pecas" type="number" min="0" step="0.01" inputmode="decimal"><small>Calculado pelas peças; pode ser ajustado manualmente.</small></label>
+        <p id="aparelho-mobile-pecas-resumo" class="estoque-mobile-ajuda-venda">Nenhuma peça detalhada.</p>
+      </section>
+      <label>Observações<textarea id="aparelho-mobile-obs" rows="3" maxlength="500"></textarea></label>
+      <div class="estoque-mobile-modal-acoes">
+        <button type="submit" id="btn-salvar-aparelho-mobile" class="btn-secundario">Salvar alterações</button>
+        <button type="button" id="btn-vender-aparelho-mobile" class="btn-primario">Preencher venda e assinar</button>
+      </div>
+      <p class="estoque-mobile-ajuda-venda">Os dados do comprador, a forma de pagamento e a assinatura serão solicitados antes de concluir a venda. O mesmo aparelho será atualizado no PC, sem duplicação.</p>
+    </form>
+  </div>
+
+  <!-- Tela cheia de assinatura (compartilhada entre OS / Compra / Venda / Entregas / Assinatura padrão da assistência) -->
+  <div id="modal-preco-mobile" class="modal-estoque-mobile" hidden>
+    <form id="form-preco-mobile" class="modal-estoque-mobile-caixa modal-preco-mobile-conteudo">
+      <header>
+        <div><span class="precos-mobile-eyebrow">TABELA DE PREÇOS</span><h2 id="preco-mobile-titulo-modal">Novo preço</h2><p>Informe o aparelho, o serviço e o valor cobrado.</p></div>
+        <button type="button" id="btn-fechar-preco-mobile" class="modal-mobile-fechar" aria-label="Fechar" title="Fechar">&times;</button>
+      </header>
+      <input type="hidden" id="preco-mobile-id">
+      <input type="hidden" id="preco-mobile-revision">
+      <div class="modal-mobile-corpo">
+        <label>Modelo do celular *
+          <input id="preco-mobile-modelo" type="text" maxlength="160" placeholder="Digite para buscar um modelo" autocomplete="off" required>
+        </label>
+        <label>Peça ou serviço *
+          <input id="preco-mobile-peca" type="text" maxlength="160" placeholder="Ex.: Troca de tela" required>
+        </label>
+        <label>Valor cobrado (R$) *
+          <span class="preco-mobile-campo-valor"><span>R$</span><input id="preco-mobile-valor" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00" required></span>
+        </label>
+        <label>Fornecedor <small>opcional</small>
+          <input id="preco-mobile-fornecedor" type="text" maxlength="160" placeholder="Ex.: Distribuidora Central" autocomplete="off">
+        </label>
+        <label>Observações <small>opcional</small>
+          <textarea id="preco-mobile-observacoes" rows="3" maxlength="400" placeholder="Ex.: peça premium, sob encomenda"></textarea>
+        </label>
+      </div>
+      <footer class="modal-mobile-acoes">
+        <button type="button" class="btn-secundario" data-fechar-modal-preco>Cancelar</button>
+        <button type="submit" id="btn-salvar-preco-mobile" class="btn-primario">Salvar preço</button>
+      </footer>
+    </form>
+  </div>
+
+  <div id="leitor-qr-camera" class="leitor-qr-camera" hidden aria-live="polite">
+    <div class="leitor-qr-topo">
+      <button type="button" id="btn-cancelar-leitor-qr" class="leitor-qr-controle">Cancelar</button>
+      <strong>Ler etiqueta da OS</strong>
+      <button type="button" id="btn-flash-leitor-qr" class="leitor-qr-controle" disabled>Ativar flash</button>
+    </div>
+    <div class="leitor-qr-mira" aria-hidden="true">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="leitor-qr-instrucao">
+      <strong>Aponte para o QR Code</strong>
+      <span>Mantenha a etiqueta dentro do quadrado</span>
+      <p id="leitor-qr-camera-status">Câmera iniciando…</p>
+    </div>
+  </div>
+
+  <div id="tela-assinatura" class="tela-assinatura" hidden>
+    <div class="assinatura-topo">
+      <p id="assinatura-topo-texto">Assine com o dedo no espaço abaixo</p>
+    </div>
+    <canvas id="canvas-assinatura" class="canvas-assinatura"></canvas>
+    <div class="assinatura-acoes">
+      <button type="button" id="btn-limpar-assinatura" class="btn-secundario">Limpar</button>
+      <button type="button" id="btn-confirmar-assinatura" class="btn-primario" disabled>Confirmar</button>
+    </div>
+  </div>
+
+  <!-- Tela cheia do padrão de desbloqueio (grade 3x3), reaproveitável em
+       qualquer campo de senha via data-alvo-pin no botão que a abre. -->
+  <div id="tela-pin" class="tela-pin" hidden>
+    <div class="pin-topo">
+      <p>Desenhe o padrão de desbloqueio</p>
+      <p>Arraste o dedo conectando os pontos</p>
+    </div>
+    <div class="pin-area">
+      <div class="pin-grade-wrapper">
+        <svg id="pin-svg" viewBox="0 0 300 300"></svg>
+      </div>
+    </div>
+    <p id="pin-resumo" class="pin-resumo"></p>
+    <div class="pin-acoes">
+      <button type="button" id="btn-limpar-pin" class="btn-secundario">Limpar</button>
+      <button type="button" id="btn-confirmar-pin" class="btn-primario" disabled>Confirmar</button>
+    </div>
+  </div>
+
+  <script src="src/templates/browser-shim.js"></script>
+  <script src="js/supabase/public-config.js"></script>
+  <script src="js/numero-os.js"></script>
+  <script src="js/config.js"></script>
+  <script src="vendor/supabase.js"></script>
+  <script src="js/supabase/supabase-client.js"></script>
+  <script src="js/supabase/edge-error.js"></script>
+  <script src="js/supabase/auth-service.js"></script>
+  <script src="js/supabase/empresa-service.js"></script>
+  <script src="js/supabase/os-service.js"></script>
+  <script src="js/supabase/garantia-service.js"></script>
+  <script src="js/supabase/entrega-service.js"></script>
+<script src="js/auth/permissoes.js"></script>
+<script src="js/exclusao.js"></script>
+<script src="js/auth/contas-rapidas.js"></script>
+<script src="js/auth/sessao.js"></script>
+<script src="js/relatorio-erros.js"></script>
+<script src="js/chamados.js"></script>
+<script src="js/auth/login-tela.js"></script>
+  <script src="js/auth/contas-rapidas-ui.js"></script>
+  <script src="js/suporte-global.js"></script>
+  <script src="js/marca-app.js"></script>
+  <script src="js/tema-app.js"></script>
+  <script src="js/assinatura-injetor.js"></script>
+  <script src="js/validacao.js"></script>
+  <script src="js/assinatura.js"></script>
+  <script src="js/pin-padrao.js"></script>
+  <script src="js/toast.js"></script>
+  <script src="js/fotos.js"></script>
+  <script src="js/compartilhar-arquivo.js"></script>
+  <script src="js/id-exportacao.js"></script>
+  <script src="js/historico.js"></script>
+  <script src="js/supabase/arquivo-service.js"></script>
+  <script src="js/supabase/sync-service.js"></script>
+  <script src="js/supabase/estoque-service.js"></script>
+  <script src="js/supabase/precos-service.js"></script>
+  <script src="js/backup.js"></script>
+  <script src="js/cloud-data.js"></script>
+  <script src="js/sync-retry.js"></script>
+  <script src="js/estatisticas.js"></script>
+  <script src="js/notificacoes.js"></script>
+  <script src="js/catalogo-aparelhos.js"></script>
+  <script src="js/comprovante-os.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/documentos-recebidos.js"></script>
+  <script src="js/desbloqueios-tela.js"></script>
+  <script src="js/consulta.js"></script>
+  <script src="js/cobrancas-tela.js"></script>
+  <script src="js/garantia-tela.js"></script>
+  <script src="js/qr-os.js"></script>
+  <script src="js/estatisticas-tela.js"></script>
+  <script src="js/prazos.js"></script>
+  <script src="js/estoque-tela.js"></script>
+  <script src="js/precos-tela.js"></script>
+  <script src="js/atualizacao-app.js"></script>
+  <script src="js/atualizacao-tela.js"></script>
+  <script src="js/config-tela.js"></script>
+  <script src="js/assinaturas-saas.js"></script>
+  <script src="js/navegacao-voltar.js"></script>
+</body>
+</html>

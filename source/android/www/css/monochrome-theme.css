@@ -1,0 +1,436 @@
+/* Sistema OS Mobile — identidade monocromática
+   Camada final: preto/branco, superfícies planas e hierarquia tipográfica. */
+
+html {
+  --cor-fundo: #000000;
+  --cor-fundo-elevado: #050505;
+  --cor-card: #101010;
+  --cor-card-alto: #171717;
+  --cor-borda: #303030;
+  --cor-borda-forte: #5b5b5b;
+  --cor-texto: #f7f7f5;
+  --cor-texto-fraco: #b5b5b0;
+  --cor-texto-mais-fraco: #969691;
+  --cor-texto-mais-fraco-aa: #969691;
+  --acento-primario: #ffffff;
+  --acento-primario-fundo: #1c1c1c;
+  --acento-primario-texto: #000000;
+  --acento-secundario: #ffffff;
+  --acento-secundario-fundo: #1c1c1c;
+  --acento-aviso-texto: #241a03;
+  --raio-card: 7px;
+  --raio-input: 5px;
+  --raio-botao: 5px;
+  --raio-pequeno: 4px;
+  --sombra-card: none;
+  --sombra-elevada: 0 18px 52px rgba(0,0,0,.52);
+  --fonte: Roboto, "Arial Nova", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --fundo: var(--cor-fundo);
+  --fundo-card: var(--cor-card);
+  --fundo-input: var(--cor-card-alto);
+  --bg-card: var(--cor-card);
+  --borda: var(--cor-borda);
+  --texto: var(--cor-texto);
+  --texto-sec: var(--cor-texto-fraco);
+  --texto-secundario: var(--cor-texto-fraco);
+  --primario: var(--acento-primario);
+}
+
+html[data-tema="claro"] {
+  --cor-fundo: #f3f3f0;
+  --cor-fundo-elevado: #ffffff;
+  --cor-card: #ffffff;
+  --cor-card-alto: #fafaf8;
+  --cor-borda: #cecec8;
+  --cor-borda-forte: #858580;
+  --cor-texto: #090909;
+  --cor-texto-fraco: #565650;
+  --cor-texto-mais-fraco: #686862;
+  --cor-texto-mais-fraco-aa: #686862;
+  --acento-primario: #000000;
+  --acento-primario-fundo: #e8e8e4;
+  --acento-primario-texto: #ffffff;
+  --acento-secundario: #000000;
+  --acento-secundario-fundo: #e8e8e4;
+  --acento-aviso-texto: #ffffff;
+}
+
+body { letter-spacing: -.005em; background-image: none !important; }
+::selection { background: var(--cor-texto); color: var(--cor-fundo); }
+
+/* Cabeçalho e navegação */
+.topo {
+  padding: max(14px, env(safe-area-inset-top)) 16px 13px;
+  background: var(--cor-fundo-elevado) !important;
+  border-bottom: 1px solid var(--cor-borda);
+  box-shadow: none !important;
+}
+.topo-identidade { gap: 12px; }
+.topo-logo {
+  width: 48px;
+  height: 31px;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  object-fit: contain;
+}
+html[data-tema="claro"] .topo-logo[data-marca="sistema"] { filter: invert(1); }
+.topo h1 { font-size: 16px; font-weight: 650; letter-spacing: -.025em; }
+.nav-topo,
+.abas-topo {
+  gap: 0;
+  padding: 0;
+  background: var(--cor-fundo-elevado) !important;
+  border-bottom: 1px solid var(--cor-borda);
+  box-shadow: none !important;
+}
+.nav-topo-5 { gap: 0; }
+.btn-nav,
+.btn-aba {
+  min-height: 52px;
+  padding: 8px 14px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--cor-texto-fraco) !important;
+  box-shadow: none !important;
+}
+.btn-nav-ativo,
+.btn-aba-ativa {
+  background: var(--cor-texto) !important;
+  color: var(--acento-primario-texto) !important;
+}
+.btn-icone-topo { border-radius: 4px !important; background: transparent !important; border: 1px solid var(--cor-borda) !important; }
+
+/* Cards e seções */
+.painel-status,
+.form-os,
+.painel-historico,
+.painel-documentos,
+.secao-config,
+.item-historico,
+.card-estatistica,
+.painel-estatisticas,
+.form-novo-chamado-app,
+.contas-rapidas,
+.conta-rapida-item,
+.estoque-mobile-card,
+.qr-introducao-card,
+.qr-dicas-card,
+.painel-precos-mobile,
+.precos-mobile-card,
+.assinatura-preview-box {
+  background: var(--cor-card) !important;
+  background-image: none !important;
+  border: 1px solid var(--cor-borda) !important;
+  border-radius: var(--raio-card) !important;
+  box-shadow: none !important;
+}
+.secao-config { padding: 18px; }
+.secao-config:active,
+.item-historico:active,
+.card-estatistica:active { transform: none !important; background: var(--cor-card-alto) !important; }
+.card-estatistica::before { display: none !important; }
+.card-estatistica-numero { color: var(--cor-texto) !important; }
+.card-estatistica.card-estatistica-selecionada { border-color: var(--cor-texto) !important; box-shadow: 0 0 0 1px var(--cor-texto) !important; }
+.card-estatistica-atrasada .card-estatistica-numero { color: var(--acento-erro) !important; }
+.card-estatistica-prazo .card-estatistica-numero { color: var(--acento-aviso) !important; }
+
+/* Campos */
+.form-os label,
+.form-login label,
+.secao-config label,
+.form-novo-chamado-app label { color: var(--cor-texto-fraco) !important; font-size: .76rem; letter-spacing: .035em; }
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+select,
+textarea,
+.form-os input,
+.form-os select,
+.form-os textarea,
+.form-login input,
+.modal-estoque-mobile-caixa input,
+.modal-estoque-mobile-caixa select,
+.modal-estoque-mobile-caixa textarea {
+  min-height: 48px;
+  padding: 12px 13px;
+  border: 1px solid var(--cor-borda) !important;
+  border-radius: var(--raio-input) !important;
+  background: var(--cor-card-alto) !important;
+  color: var(--cor-texto) !important;
+  box-shadow: none !important;
+}
+input:focus,
+select:focus,
+textarea:focus,
+.form-os input:focus,
+.form-os select:focus,
+.form-os textarea:focus,
+.form-login input:focus {
+  border-color: var(--cor-texto) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cor-texto) 16%, transparent) !important;
+  outline: 0;
+}
+input[type="checkbox"], input[type="radio"] { accent-color: var(--cor-texto); }
+
+/* Botões */
+.btn-primario,
+.btn-secundario,
+.btn-perigo,
+button {
+  border-radius: var(--raio-botao) !important;
+  box-shadow: none !important;
+  background-image: none !important;
+  transform: none !important;
+  color: var(--cor-texto);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background-color 110ms ease-out, border-color 110ms ease-out,
+    color 110ms ease-out, opacity 110ms ease-out, transform 80ms ease-out !important;
+}
+.btn-primario {
+  background: var(--cor-texto) !important;
+  border: 1px solid var(--cor-texto) !important;
+  color: var(--acento-primario-texto) !important;
+}
+.btn-primario:active { opacity: .86; }
+.btn-secundario {
+  background: transparent !important;
+  border: 1px solid var(--cor-borda) !important;
+  color: var(--cor-texto) !important;
+}
+.btn-secundario:active { background: var(--cor-card-alto) !important; }
+.btn-perigo,
+.btn-excluir-historico {
+  background: transparent !important;
+  border: 1px solid var(--acento-erro) !important;
+  color: var(--acento-erro) !important;
+}
+.btn-link-pequeno { color: var(--cor-texto) !important; text-decoration-color: var(--cor-borda-forte); }
+button:not(:disabled):active {
+  transform: translateY(1px) scale(.985) !important;
+}
+button:disabled,
+button[aria-disabled="true"] {
+  background: var(--cor-card-alto) !important;
+  border-color: var(--cor-borda) !important;
+  color: var(--cor-texto-fraco) !important;
+  opacity: .58 !important;
+}
+.filtro-historico button.filtro-ativo,
+.estoque-mobile-abas button.ativo {
+  background: var(--cor-texto) !important;
+  border-color: var(--cor-texto) !important;
+  color: var(--acento-primario-texto) !important;
+}
+.badge-tipo-doc-os,
+.badge-tipo-doc-venda {
+  background: var(--cor-texto) !important;
+  color: var(--acento-primario-texto) !important;
+}
+.badge-tipo-doc-compra {
+  background: var(--acento-aviso) !important;
+  color: var(--acento-aviso-texto) !important;
+}
+.filtro-historico button:not(.filtro-ativo):active,
+.btn-nav:not(.btn-nav-ativo):active,
+.btn-aba:not(.btn-aba-ativa):active {
+  background: var(--cor-card-alto) !important;
+  color: var(--cor-texto) !important;
+}
+.modal-mobile-acoes button,
+.estoque-mobile-card-acoes button,
+.precos-mobile-acoes button {
+  min-height: 48px;
+  font-weight: 700;
+}
+
+/* Valores financeiros: leitura imediata, sem verde decorativo nem números
+   comprimidos. O alinhamento tabular evita que os totais pareçam tortos. */
+.cards-estatisticas-financeiro {
+  grid-template-columns: 1fr !important;
+  gap: 10px;
+}
+.cards-estatisticas-financeiro .card-estatistica {
+  min-height: 104px;
+  padding: 18px 20px;
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
+}
+.cards-estatisticas-financeiro .card-estatistica-rotulo {
+  order: -1;
+  color: var(--cor-texto-fraco) !important;
+  font-size: .76rem;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+.cards-estatisticas-financeiro .card-estatistica-numero {
+  color: var(--cor-texto) !important;
+  font-size: clamp(30px, 8vw, 42px) !important;
+  line-height: 1;
+  letter-spacing: -.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+.precos-mobile-card .precos-mobile-valor {
+  color: var(--cor-texto) !important;
+}
+.precos-mobile-card small { border-color: var(--cor-borda) !important; color: var(--cor-texto-fraco) !important; }
+
+/* Modais */
+.modal-estoque-mobile,
+.modal-senha-exclusao,
+.modal-comprovante-os { background: rgba(0,0,0,.82) !important; backdrop-filter: none !important; }
+.modal-estoque-mobile-caixa,
+.modal-senha-exclusao-card,
+.modal-comprovante-os-caixa,
+.modal-preco-mobile-conteudo {
+  background: var(--cor-card) !important;
+  background-image: none !important;
+  border: 1px solid var(--cor-borda-forte) !important;
+  border-radius: 9px !important;
+  box-shadow: var(--sombra-elevada) !important;
+}
+.modal-estoque-mobile-caixa header,
+.modal-mobile-acoes,
+.estoque-mobile-modal-acoes,
+.modal-comprovante-os-caixa > header,
+.modal-comprovante-os-caixa > footer {
+  background: var(--cor-card) !important;
+  border-color: var(--cor-borda) !important;
+  backdrop-filter: none !important;
+}
+.modal-senha-exclusao-icone,
+.qr-introducao-icone {
+  background: var(--cor-card-alto) !important;
+  color: var(--cor-texto) !important;
+  border: 1px solid var(--cor-borda-forte) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+/* Estoque e QR: remove azul/verde decorativo, preserva alertas reais. */
+.estoque-mobile-eyebrow,
+.estoque-mobile-id-edicao,
+.modal-comprovante-os-caixa > header span { color: var(--cor-texto-fraco) !important; }
+.estoque-mobile-abas {
+  padding: 4px;
+  background: var(--cor-fundo-elevado) !important;
+  border: 1px solid var(--cor-borda) !important;
+  border-radius: 6px !important;
+}
+.estoque-mobile-abas button { border-radius: 3px !important; color: var(--cor-texto-fraco) !important; }
+.estoque-mobile-abas button.ativo { background: var(--cor-texto) !important; color: var(--acento-primario-texto) !important; }
+.estoque-mobile-badge { background: var(--cor-card-alto) !important; color: var(--cor-texto) !important; border: 1px solid var(--cor-borda); }
+.estoque-mobile-badge.critico { color: var(--acento-erro) !important; border-color: var(--acento-erro); }
+.qr-leitor-status { background: var(--cor-card-alto) !important; border-color: var(--cor-borda-forte) !important; color: var(--cor-texto) !important; }
+.qr-leitor-status.erro { border-color: var(--acento-erro) !important; color: var(--acento-erro) !important; }
+
+/* Login minimalista */
+.tela-login {
+  display: grid;
+  place-items: center;
+  padding: max(28px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom));
+  background: #000 !important;
+  background-image: none !important;
+}
+.card-login {
+  width: min(100%, 420px);
+  padding: 30px 24px;
+  background: #080808 !important;
+  background-image: none !important;
+  border: 1px solid #303030 !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  text-align: left;
+}
+.marca-login {
+  width: 108px;
+  height: 64px;
+  margin: 0 0 22px;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #fff;
+  box-shadow: none !important;
+}
+.marca-login img { width: 100%; height: 100%; object-fit: contain; }
+.card-login h1 { margin: 0; color: #fff !important; font-size: 1.7rem; font-weight: 650; letter-spacing: -.045em; }
+.login-subtitulo { margin: 7px 0 25px; color: #999 !important; }
+.auth-status { color: #aaa !important; }
+.form-login label { color: #aaa !important; }
+.form-login input { background: #101010 !important; border-color: #343434 !important; color: #fff !important; }
+.form-login input:focus { border-color: #fff !important; }
+.form-login > .btn-primario { min-height: 50px; margin-top: 10px; background: #fff !important; color: #000 !important; border-color: #fff !important; }
+.form-login > .btn-secundario { color: #fff !important; border-color: #3b3b3b !important; }
+.login-seguranca { justify-content: flex-start; color: #777 !important; letter-spacing: .01em; }
+.login-seguranca span { display: none !important; }
+
+.toast { background: var(--cor-card) !important; color: var(--cor-texto) !important; border: 1px solid var(--cor-borda-forte) !important; border-radius: 5px !important; box-shadow: var(--sombra-elevada) !important; }
+
+/* Contrato global de contraste: qualquer controle preenchido pela cor
+   principal recebe o texto inverso, inclusive ícones e estados ativos. */
+.btn-primario,
+.btn-nav-ativo,
+.btn-aba-ativa,
+.btn-icone-topo.btn-nav-ativo,
+.filtro-historico button.filtro-ativo,
+.estoque-mobile-abas button.ativo {
+  background: var(--cor-texto) !important;
+  border-color: var(--cor-texto) !important;
+  color: var(--acento-primario-texto) !important;
+}
+.btn-primario svg,
+.btn-nav-ativo svg,
+.btn-aba-ativa svg,
+.btn-icone-topo.btn-nav-ativo svg,
+.filtro-historico button.filtro-ativo svg,
+.estoque-mobile-abas button.ativo svg {
+  color: currentColor !important;
+  stroke: currentColor;
+}
+.seletor-fonte-foto-opcao {
+  background: var(--cor-card-alto) !important;
+  border-color: var(--cor-borda) !important;
+  color: var(--cor-texto) !important;
+}
+.logo-preview-box,
+.assinatura-preview-box {
+  background: #ffffff !important;
+  color: #4b5563 !important;
+}
+.assinatura-acoes .btn-primario {
+  background: #111111 !important;
+  border-color: #111111 !important;
+  color: #ffffff !important;
+}
+.assinatura-acoes .btn-secundario {
+  background: #ffffff !important;
+  border-color: #686868 !important;
+  color: #111111 !important;
+}
+input::placeholder,
+textarea::placeholder { color: var(--cor-texto-mais-fraco) !important; opacity: 1 !important; }
+button:disabled,
+button[aria-disabled="true"] {
+  background: var(--cor-card-alto) !important;
+  border-color: var(--cor-borda) !important;
+  color: var(--cor-texto-mais-fraco) !important;
+  opacity: 1 !important;
+}
+
+:focus-visible { outline: 2px solid var(--cor-texto) !important; outline-offset: 2px; }
+
+@media (max-width: 520px) {
+  .card-login { padding: 26px 20px; }
+  .painel-estoque-mobile { padding-left: 12px; padding-right: 12px; }
+  .modal-estoque-mobile-grade { grid-template-columns: 1fr !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

@@ -1,0 +1,29 @@
+.auditoria-dialog { width: min(1080px, calc(100vw - 32px)); max-height: calc(100vh - 40px); margin: auto; padding: 0; border: 1px solid var(--borda); border-radius: 12px; background: var(--bg-card); color: var(--texto); }
+.auditoria-dialog::backdrop { background: rgba(0,0,0,.72); }
+.auditoria-cabecalho { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 24px; border-bottom: 1px solid var(--borda); }
+.auditoria-cabecalho h2 { margin: 0 0 6px; font-size: 23px; }
+.auditoria-cabecalho p, .auditoria-status { color: var(--texto-sec); margin: 0; font-size: 14px; }
+.auditoria-conteudo { padding: 24px; }
+.auditoria-filtros { display: grid; grid-template-columns: 2fr 1fr 1fr 1.3fr auto; gap: 12px; align-items: end; margin-bottom: 16px; }
+.auditoria-filtros label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
+.auditoria-filtros input, .auditoria-filtros select { box-sizing: border-box; width: 100%; min-width: 0; height: 42px; padding: 8px 10px; color: var(--texto); background: var(--bg-input); border: 1px solid var(--borda); border-radius: 6px; font: inherit; }
+.auditoria-dialog button { min-height: 42px; }
+.auditoria-dialog :focus-visible { outline: 2px solid var(--texto); outline-offset: 3px; }
+.auditoria-lista { margin-top: 18px; }
+.auditoria-item { border-top: 1px solid var(--borda); padding: 16px 0; }
+.auditoria-item summary { display: grid; grid-template-columns: 145px minmax(120px, 1fr) 2fr 90px; gap: 16px; cursor: pointer; align-items: baseline; }
+.auditoria-item time { font-variant-numeric: tabular-nums; color: var(--texto-sec); font-size: 13px; }
+.auditoria-item small { color: var(--texto-sec); font-size: 12px; }
+.auditoria-detalhes { margin: 14px 0 0 161px; font-size: 14px; }
+.auditoria-mudanca { display: grid; grid-template-columns: 1fr 1fr 24px 1fr; gap: 10px; border-top: 1px solid var(--borda); padding: 12px 0; overflow-wrap: anywhere; }
+.auditoria-antes { color: var(--texto-sec); }
+.auditoria-vazio { padding: 40px 16px; text-align: center; color: var(--texto-sec); border: 1px solid var(--borda); border-radius: 8px; }
+@media (max-width: 760px) {
+  .auditoria-filtros { grid-template-columns: 1fr 1fr; }
+  .auditoria-filtros label:first-child { grid-column: 1 / -1; }
+  .auditoria-item summary { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .auditoria-detalhes { margin-left: 0; }
+  .auditoria-mudanca { grid-template-columns: 1fr 20px 1fr; }
+  .auditoria-mudanca strong { grid-column: 1 / -1; }
+  .auditoria-cabecalho, .auditoria-conteudo { padding: 16px; }
+}

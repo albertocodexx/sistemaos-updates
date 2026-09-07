@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Manual do Sistema OS v26.6.1</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #1a1a1a; background: #fff; }
+
+  /* CAPA */
+  .capa {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; background: #111; color: #fff; text-align: center; padding: 60px 40px;
+    page-break-after: always;
+  }
+  .capa-linha { width: 60px; height: 4px; background: #fff; margin: 0 auto 32px; }
+  .capa h1 { font-size: 42px; font-weight: 900; color: #fff; margin-bottom: 10px; letter-spacing: -1px; }
+  .capa h2 { font-size: 18px; font-weight: 400; color: #aaa; margin-bottom: 40px; letter-spacing: 1px; text-transform: uppercase; }
+  .capa .versao { font-size: 12px; color: #666; letter-spacing: 2px; text-transform: uppercase; margin-top: 60px; }
+  .capa-monograma {
+    width: 80px; height: 80px; background: #fff; border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px; font-weight: 900; color: #111; margin-bottom: 32px; letter-spacing: -2px;
+  }
+
+  /* SECOES */
+  .secao { padding: 36px 52px; page-break-before: always; }
+  .secao:first-of-type { page-break-before: avoid; }
+
+  /* TITULOS */
+  h2.titulo-secao {
+    font-size: 20px; font-weight: 800; color: #111;
+    border-bottom: 3px solid #111; padding-bottom: 10px; margin-bottom: 22px;
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+  h3 { font-size: 14px; font-weight: 700; margin: 22px 0 8px; color: #111; border-left: 3px solid #111; padding-left: 8px; }
+  h4 { font-size: 13px; font-weight: 600; margin: 14px 0 5px; color: #444; }
+  p { line-height: 1.75; margin-bottom: 10px; color: #333; }
+  ul, ol { margin: 8px 0 14px 24px; }
+  li { line-height: 1.75; margin-bottom: 5px; color: #333; }
+
+  /* CAIXAS */
+  .aviso  { background: #f5f5f5; border-left: 4px solid #555; padding: 10px 14px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 12px; }
+  .dica   { background: #f0f0f0; border-left: 4px solid #111; padding: 10px 14px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 12px; }
+  .perigo { background: #e8e8e8; border-left: 4px solid #111; padding: 10px 14px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 12px; font-weight: 600; }
+
+  /* TABELA */
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 12px; }
+  th { background: #111; color: #fff; padding: 8px 12px; text-align: left; font-weight: 700; letter-spacing: .3px; }
+  td { padding: 7px 12px; border-bottom: 1px solid #ddd; color: #333; }
+  tr:nth-child(even) td { background: #f8f8f8; }
+
+  /* INDICE */
+  .indice-item { display: flex; justify-content: space-between; align-items: baseline; padding: 7px 0; border-bottom: 1px dotted #ccc; font-size: 13px; }
+  .num-secao { font-weight: 800; color: #111; margin-right: 8px; }
+  .indice-pag { font-size: 11px; color: #888; }
+
+  /* CODE */
+  code { background: #eee; padding: 2px 6px; border-radius: 3px; font-family: 'Consolas', monospace; font-size: 11px; color: #111; }
+
+  @media print {
+    .capa { min-height: 100vh; }
+    .secao { padding: 28px 44px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- CAPA -->
+<div class="capa">
+  <div class="capa-monograma">OS</div>
+  <div class="capa-linha"></div>
+  <h1>Sistema OS v26.6.1</h1>
+  <h2>Manual de Uso — Assistencia Tecnica</h2>
+  <p style="color:#888;max-width:380px;line-height:1.8;font-size:13px;">Guia completo de uso, configuracao, backup e instalacao do Sistema de Ordens de Servico.</p>
+  <div class="versao">Versao 4.0 &mdash; 2026</div>
+</div>
+
+<!-- INDICE -->
+<div class="secao" style="page-break-before:always;">
+  <h2 class="titulo-secao">Indice</h2>
+  <div class="indice-item"><span><span class="num-secao">1.</span> Visao Geral do Sistema</span><span class="indice-pag">pag. 3</span></div>
+  <div class="indice-item"><span><span class="num-secao">2.</span> Instalacao e Primeiro Acesso</span><span class="indice-pag">pag. 4</span></div>
+  <div class="indice-item"><span><span class="num-secao">3.</span> Configuracoes Iniciais</span><span class="indice-pag">pag. 5</span></div>
+  <div class="indice-item"><span><span class="num-secao">4.</span> Ordens de Servico (OS)</span><span class="indice-pag">pag. 6</span></div>
+  <div class="indice-item"><span><span class="num-secao">5.</span> Checklist Tecnico e Diagnostico</span><span class="indice-pag">pag. 9</span></div>
+  <div class="indice-item"><span><span class="num-secao">6.</span> Estoque de Aparelhos</span><span class="indice-pag">pag. 11</span></div>
+  <div class="indice-item"><span><span class="num-secao">7.</span> Compras de Aparelhos</span><span class="indice-pag">pag. 13</span></div>
+  <div class="indice-item"><span><span class="num-secao">8.</span> Backup e Restauracao</span><span class="indice-pag">pag. 15</span></div>
+  <div class="indice-item"><span><span class="num-secao">9.</span> Permissoes e Exclusao</span><span class="indice-pag">pag. 16</span></div>
+  <div class="indice-item"><span><span class="num-secao">10.</span> Relatorios e PDFs</span><span class="indice-pag">pag. 17</span></div>
+  <div class="indice-item"><span><span class="num-secao">11.</span> Personalizacao de Cores e Tema</span><span class="indice-pag">pag. 19</span></div>
+  <div class="indice-item"><span><span class="num-secao">12.</span> Usuarios, Cargos e Permissoes</span><span class="indice-pag">pag. 20</span></div>
+  <div class="indice-item"><span><span class="num-secao">13.</span> Resolucao de Problemas</span><span class="indice-pag">pag. 22</span></div>
+</div>
+
+<!-- 1. VISAO GERAL -->
+<div class="secao">
+  <h2 class="titulo-secao">1. Visao Geral do Sistema</h2>
+  <p>O <strong>Sistema OS</strong> e uma aplicacao desktop desenvolvida em Electron para gerenciamento completo de assistencias tecnicas. Centraliza ordens de servico, estoque de aparelhos, emissao de documentos PDF, controle financeiro e backup automatico dos dados.</p>
+
+  <h3>Principais Funcionalidades</h3>
+  <ul>
+    <li><strong>Ordens de Servico (OS):</strong> criacao, edicao, acompanhamento de status e geracao automatica de PDF.</li>
+    <li><strong>Checklist Tecnico:</strong> registro de defeitos, acessorios recebidos, testes de entrada e diagnostico com orcamento estimado.</li>
+    <li><strong>Estoque de Aparelhos:</strong> cadastro de aparelhos para revenda, com checklist, fotos, financeiro e comprovante de venda.</li>
+    <li><strong>Compras de Aparelhos:</strong> contratos de compra de terceiros (pessoas fisicas) com geracao de PDF.</li>
+    <li><strong>Calculo de Lucro:</strong> percentual de lucro com preco sugerido calculado automaticamente.</li>
+    <li><strong>Backup Automatico:</strong> backup diario com retencao dos ultimos 15 arquivos.</li>
+    <li><strong>Permissoes:</strong> cargos configuráveis por modulo, bloqueio de usuarios e senha de exclusao com auditoria.</li>
+    <li><strong>Painel:</strong> estatisticas, graficos e resumo financeiro.</li>
+  </ul>
+
+  <h3>Onde os Dados Sao Salvos</h3>
+  <table>
+    <tr><th>O que</th><th>Caminho (dentro de Documentos)</th></tr>
+    <tr><td>Banco de dados principal</td><td><code>Sistema OS\database.json</code></td></tr>
+    <tr><td>PDFs de OS</td><td><code>Sistema OS\PDFs\</code></td></tr>
+    <tr><td>PDFs de Venda</td><td><code>Sistema OS\PDFs-Venda\</code></td></tr>
+    <tr><td>PDFs de Compra</td><td><code>Sistema OS\PDFs-Compra\</code></td></tr>
+    <tr><td>Fotos do Estoque</td><td><code>Sistema OS\Fotos-Estoque\</code></td></tr>
+    <tr><td>Backups manuais</td><td><code>Sistema OS\BACKUP - OS\</code></td></tr>
+    <tr><td>Backups automaticos</td><td><code>Sistema OS\BACKUP - OS\auto\</code></td></tr>
+    <tr><td>Logo da empresa</td><td><code>Sistema OS\Logo\</code></td></tr>
+  </table>
+</div>
+
+<!-- 2. INSTALACAO -->
+<div class="secao">
+  <h2 class="titulo-secao">2. Instalacao e Primeiro Acesso</h2>
+
+  <h3>Requisitos do Sistema</h3>
+  <ul>
+    <li>Windows 10 ou superior (64 bits recomendado)</li>
+    <li>Node.js 18 ou superior (modo desenvolvimento)</li>
+    <li>Ou o instalador <code>.exe</code> gerado pelo Electron Builder (producao)</li>
+  </ul>
+
+  <h3>Instalacao em Modo Desenvolvimento</h3>
+  <ol>
+    <li>Extraia o arquivo do projeto em uma pasta.</li>
+    <li>Abra o terminal na pasta do projeto.</li>
+    <li>Execute: <code>npm install</code></li>
+    <li>Para iniciar: <code>npm start</code></li>
+  </ol>
+
+  <h3>Gerando o Instalador (Producao)</h3>
+  <ol>
+    <li>No terminal da pasta do projeto, execute: <code>npm run build</code></li>
+    <li>O instalador sera gerado em <code>dist\</code>.</li>
+    <li>Distribua o arquivo <code>.exe</code> para os usuarios.</li>
+  </ol>
+
+  <div class="dica"><strong>Importante:</strong> Os dados ficam em <em>Meus Documentos/Sistema OS</em>, nunca dentro da pasta do programa. Atualizar ou reinstalar o sistema nao apaga seus dados.</div>
+
+  <h3>Primeiro Acesso</h3>
+  <p>Ao abrir pela primeira vez, o sistema cria o banco de dados vazio e solicita que voce configure os dados da empresa antes de continuar.</p>
+</div>
+
+<!-- 3. CONFIGURACOES -->
+<div class="secao">
+  <h2 class="titulo-secao">3. Configuracoes Iniciais</h2>
+  <p>Clique no botao <strong>Configuracoes</strong> no topo da tela para abrir o painel de configuracao.</p>
+
+  <h3>Dados da Empresa</h3>
+  <ul>
+    <li><strong>Nome da empresa:</strong> aparece no cabecalho de todos os PDFs.</li>
+    <li><strong>Endereco e Telefone:</strong> exibidos nos documentos.</li>
+  </ul>
+
+  <h3>CNPJ</h3>
+  <p>Ative a opcao "Possuo CNPJ" para inserir o CNPJ. Escolha se ele aparece ou nao nos documentos PDF.</p>
+
+  <h3>Lucro Padrao</h3>
+  <p>Define o percentual de lucro padrao usado ao criar novas OS ou calcular preco de venda no estoque. Pode ser sobrescrito individualmente em cada OS ou item.</p>
+
+  <h3>Logo da Empresa</h3>
+  <p>Faca upload de uma imagem (PNG, JPG) para aparecer no cabecalho dos PDFs. Tamanho recomendado: 300x100 px ou proporcional.</p>
+
+  <h3>Permissoes de Exclusao</h3>
+  <p>Defina uma senha opcional. Quando configurada, qualquer exclusao de OS ou item do estoque exigira essa senha e o nome do responsavel, registrado em historico.</p>
+
+  <h3>Tema e Cores</h3>
+  <p>Personalize as cores da interface e dos PDFs. Consulte a secao 11 para detalhes.</p>
+
+  <h3>Backup Automatico</h3>
+  <p>Esta secao mostra os ultimos backups gerados. Use o botao <strong>Fazer Backup Agora</strong> para backup imediato ou baixe qualquer backup listado.</p>
+</div>
+
+<!-- 4. OS -->
+<div class="secao">
+  <h2 class="titulo-secao">4. Ordens de Servico (OS)</h2>
+
+  <h3>Criando uma Nova OS</h3>
+  <ol>
+    <li>Clique em <strong>Nova OS</strong> no topo da tela.</li>
+    <li>Preencha os dados do cliente: nome, telefone, CPF (opcional), e-mail.</li>
+    <li>Informe o aparelho: tipo, marca, modelo, cor, IMEI, senha do aparelho, acessorios e defeito relatado.</li>
+    <li>No card <strong>Orcamento e Lucro</strong>, informe o valor investido e o percentual de lucro. O preco sugerido e calculado automaticamente.</li>
+    <li>Revise os termos da OS (pre-preenchidos com o padrao configurado).</li>
+    <li>Clique em <strong>Salvar e Gerar PDF</strong>.</li>
+  </ol>
+
+  <div class="dica">O numero da OS e gerado automaticamente em ordem crescente (EST-0001, EST-0002...) e nao pode ser alterado.</div>
+
+  <h3>Status da OS</h3>
+  <table>
+    <tr><th>Status</th><th>Significado</th></tr>
+    <tr><td>Aguardando analise</td><td>OS criada, aguardando tecnico avaliar</td></tr>
+    <tr><td>Em orcamento</td><td>Tecnico elaborando o orcamento</td></tr>
+    <tr><td>Aguardando aprovacao</td><td>Orcamento enviado ao cliente</td></tr>
+    <tr><td>Em reparo</td><td>Aprovado, reparo em andamento</td></tr>
+    <tr><td>Finalizado</td><td>Reparo concluido, aguardando retirada</td></tr>
+    <tr><td>Entregue</td><td>Aparelho devolvido ao cliente</td></tr>
+    <tr><td>Cancelado</td><td>OS cancelada</td></tr>
+  </table>
+
+  <h3>Editando uma OS</h3>
+  <p>Na lista de OS, clique em <strong>Editar</strong> na linha desejada. Voce pode alterar todos os campos, incluindo o status. Ao salvar, o PDF e regenerado automaticamente.</p>
+
+  <h3>PDF da OS</h3>
+  <p>Gerado automaticamente ao criar ou editar uma OS. Para abri-lo, clique em <strong>Ver PDF</strong>. Para regenerar manualmente, use o botao <strong>Gerar PDF</strong>.</p>
+
+  <h3>Excluindo uma OS</h3>
+  <p>Clique em <strong>Excluir</strong> na linha da OS. Se uma senha de exclusao estiver configurada, ela sera solicitada junto com o nome do responsavel.</p>
+  <div class="perigo">A exclusao de uma OS e permanente e nao pode ser desfeita.</div>
+
+  <h3>Pesquisa e Filtros</h3>
+  <p>Use o campo de busca para filtrar por nome, numero de OS, IMEI, marca ou modelo. A busca e em tempo real.</p>
+</div>
+
+<!-- 5. CHECKLIST -->
+<div class="secao">
+  <h2 class="titulo-secao">5. Checklist Tecnico e Diagnostico</h2>
+  <p>Ao criar ou editar uma OS, o sistema disponibiliza ferramentas de diagnostico divididas em tres abas: <strong>Defeitos</strong>, <strong>Acessorios Recebidos</strong> e <strong>Testes de Entrada</strong>, alem da secao de <strong>Diagnostico Tecnico</strong>.</p>
+
+  <h3>Checklist de Defeitos</h3>
+  <p>Disponivel para <strong>Notebook</strong> e <strong>Computador Desktop / All In One</strong>. A lista e adaptada automaticamente ao tipo de equipamento. Para outros tipos (Smartphone, Tablet etc.), use o campo livre de defeito relatado.</p>
+
+  <h3>Acessorios Recebidos</h3>
+  <p>Registre os itens fisicos entregues junto ao equipamento: Carregador, Fonte, Mouse, Teclado, Mochila, Bolsa, Cabos, Adaptador etc. Esses dados aparecem no PDF da OS como comprovante de recebimento.</p>
+
+  <h3>Testes de Entrada</h3>
+  <p>Registre os testes realizados no recebimento: Liga normalmente, Carrega bateria, Imagem, Audio, USB, Rede, Wi-Fi, Webcam, Touchpad e Teclado. Documentam o estado do aparelho no momento do recebimento.</p>
+
+  <h3>Diagnostico Tecnico</h3>
+  <table>
+    <tr><th>Campo</th><th>O que registrar</th></tr>
+    <tr><td>Diagnostico</td><td>Conclusao tecnica apos analise</td></tr>
+    <tr><td>Solucao recomendada</td><td>Procedimento ou reparo sugerido</td></tr>
+    <tr><td>Pecas necessarias</td><td>Lista de pecas para orcamento</td></tr>
+    <tr><td>Valor estimado</td><td>Valor da mao de obra e pecas em reais</td></tr>
+    <tr><td>Prazo estimado</td><td>Tempo estimado para conclusao</td></tr>
+  </table>
+</div>
+
+<!-- 6. ESTOQUE -->
+<div class="secao">
+  <h2 class="titulo-secao">6. Estoque de Aparelhos</h2>
+  <p>O modulo de Estoque gerencia aparelhos comprados pela assistencia para revenda, incluindo pecas e componentes. Acesse pela aba <strong>Estoque</strong>.</p>
+
+  <h3>Cadastrando um Aparelho</h3>
+  <ol>
+    <li>Clique em <strong>+ Novo Aparelho</strong>.</li>
+    <li>Se o aparelho veio de um contrato de compra, informe o número no campo <strong>Compra vinculada</strong>. Você pode digitar 1 ou 0001; o sistema transforma em CP-0001 e sincroniza aparelho e custos.</li>
+    <li>Na aba <strong>Dados</strong>, preencha marca, modelo, cor, IMEI, tipo e condicao.</li>
+    <li>Na aba <strong>Checklist</strong>, marque os itens testados.</li>
+    <li>Na aba <strong>Financeiro</strong>, informe o valor pago, custo de pecas (se houver), extras e percentual de lucro. O sistema calcula o preco sugerido de venda automaticamente.</li>
+    <li>Na aba <strong>Fotos</strong>, adicione fotos do aparelho (ate 5 fotos).</li>
+    <li>Clique em <strong>Salvar</strong>.</li>
+  </ol>
+
+  <h3>Cadastrando uma Peca, Consumivel ou Acessorio</h3>
+  <ol>
+    <li>Clique em <strong>+ Novo Item</strong> na aba de pecas e consumiveis.</li>
+    <li>Escolha entre <strong>Peca / Componente</strong>, <strong>Consumivel</strong> ou <strong>Acessorio</strong>.</li>
+    <li>Cadastre itens como pelicula, carregador, cabo USB, fonte, cola ou material de limpeza.</li>
+    <li>Depois do cadastro, use os botoes <strong>Entrada</strong> e <strong>Saida</strong> para alterar o saldo com historico e motivo.</li>
+    <li>Use <strong>Excluir</strong> somente quando o item nao deve mais existir no cadastro.</li>
+    <li>Informe o valor pago e o preco de venda desejado.</li>
+    <li>Clique em <strong>Salvar</strong>.</li>
+  </ol>
+
+  <h3>Status do Estoque</h3>
+  <table>
+    <tr><th>Status</th><th>Significado</th></tr>
+    <tr><td>Em analise</td><td>Aparelho aguardando avaliacao</td></tr>
+    <tr><td>Em reparo</td><td>Em processo de conserto</td></tr>
+    <tr><td>Pronto para venda</td><td>Disponivel para venda</td></tr>
+    <tr><td>Reservado</td><td>Separado para um cliente especifico</td></tr>
+    <tr><td>Vendido</td><td>Venda concluida</td></tr>
+  </table>
+
+  <h3>Registrando uma Venda</h3>
+  <ol>
+    <li>Abra o aparelho no estoque e mude o status para <strong>Vendido</strong>.</li>
+    <li>A aba <strong>Venda</strong> sera exibida automaticamente.</li>
+    <li>Preencha os campos obrigatorios: nome do comprador, telefone, valor, data e garantia.</li>
+    <li>Clique em <strong>Salvar</strong> e depois em <strong>Comprovante de Venda</strong> para gerar o PDF.</li>
+  </ol>
+
+  <h3>Filtros Rapidos</h3>
+  <p>Use os botoes de filtro acima da lista para exibir apenas aparelhos por status, ou clique em <strong>Pecas</strong> para listar somente pecas e componentes.</p>
+</div>
+
+<!-- 7. COMPRAS -->
+<div class="secao">
+  <h2 class="titulo-secao">7. Compras de Aparelhos</h2>
+  <p>Registra a aquisicao de aparelhos de terceiros (pessoas fisicas), gerando contrato formal de compra e venda. Acesse pela aba <strong>Compra de Aparelhos</strong>.</p>
+
+  <h3>Registrar Nova Compra</h3>
+  <ol>
+    <li>Clique em <strong>+ Nova Compra</strong>.</li>
+    <li>Preencha os dados do vendedor. O nome é obrigatório; CPF e telefone são opcionais.</li>
+    <li>Informe os dados do aparelho: tipo, marca, modelo, cor, IMEI, capacidade e estado de conservacao.</li>
+    <li>Preencha os dados da compra: valor pago, forma de pagamento e data.</li>
+    <li>Adicione observacoes e condicoes, se necessario.</li>
+    <li>Clique em <strong>Salvar</strong>. O contrato em PDF e gerado automaticamente.</li>
+  </ol>
+
+  <h3>PDF do Contrato de Compra</h3>
+  <p>Gerado ao salvar, o contrato inclui: número do contrato, dados disponíveis do vendedor, dados do aparelho, valor pago, forma de pagamento, data e espaço para assinaturas. Os PDFs ficam em <code>Sistema OS\PDFs-Compra\</code>.</p>
+
+  <div class="dica">As cores do cabecalho e titulos do PDF de compra seguem automaticamente o tema configurado em Configuracoes, mantendo identidade visual consistente.</div>
+</div>
+
+<!-- 8. BACKUP -->
+<div class="secao">
+  <h2 class="titulo-secao">8. Backup e Restauracao</h2>
+
+  <h3>Backup Automatico Diario</h3>
+  <p>O sistema faz backup automatico uma vez por dia em <code>Documentos\Sistema OS\BACKUP - OS\auto\</code>. Sao mantidos os ultimos 15 backups — os mais antigos sao removidos automaticamente.</p>
+
+  <h3>Backup Manual</h3>
+  <ul>
+    <li><strong>Backup:</strong> exporta todos os dados em um arquivo JSON. Escolha onde salvar.</li>
+    <li><strong>Restaurar:</strong> importa dados de um arquivo de backup. Registros duplicados sao ignorados automaticamente.</li>
+  </ul>
+
+  <h3>Estrategia de Backup Recomendada</h3>
+  <ol>
+    <li><strong>Diario (automatico):</strong> o sistema ja faz sozinho na pasta local.</li>
+    <li><strong>Semanal (manual):</strong> exporte via botao "Backup" e salve em OneDrive ou Google Drive.</li>
+    <li><strong>Mensal:</strong> guarde uma copia em HD externo ou pen drive fora do local.</li>
+  </ol>
+
+  <div class="perigo">Backups so tem valor se estiverem em local diferente do computador principal.</div>
+</div>
+
+<!-- 9. PERMISSOES -->
+<div class="secao">
+  <h2 class="titulo-secao">9. Permissoes e Exclusao</h2>
+
+  <h3>Senha de Exclusao</h3>
+  <p>Configure em <strong>Configuracoes &gt; Permissoes de Exclusao</strong>. Quando configurada, toda exclusao de OS, item do estoque ou contrato exigira a senha e o nome do responsavel, gravados em historico de auditoria.</p>
+
+  <h3>Historico de Exclusoes</h3>
+  <p>Todas as exclusoes sao registradas em <code>database.json</code> no campo <code>historicoExclusoes</code>, com: ID excluido, data, responsavel e dados resumidos do registro removido.</p>
+
+  <div class="aviso"><strong>Sem senha configurada:</strong> qualquer usuario pode excluir registros. O nome do responsavel ainda sera solicitado para fins de registro.</div>
+</div>
+
+<!-- 10. RELATORIOS -->
+<div class="secao">
+  <h2 class="titulo-secao">10. Relatorios e PDFs</h2>
+
+  <h3>Aba Relatorios</h3>
+  <p>Acesse pela aba <strong>Relatorios</strong> para visualizar estatisticas consolidadas. Os dados sao atualizados ao abrir a aba ou ao clicar em <strong>Atualizar</strong>.</p>
+  <table>
+    <tr><th>Grafico / Secao</th><th>O que mostra</th></tr>
+    <tr><td>Cards de Resumo</td><td>Total de OS, Em Aberto, Finalizadas, Canceladas, Estoque, Lucro</td></tr>
+    <tr><td>OS por Tipo de Equipamento</td><td>Volume de OS por tipo (Notebook, Smartphone etc.)</td></tr>
+    <tr><td>OS por Status</td><td>Distribuicao entre os status das OS</td></tr>
+    <tr><td>OS por Mes</td><td>Comparativo mensal recebidas vs. finalizadas (ultimos 6 meses)</td></tr>
+    <tr><td>Top Marcas</td><td>Ranking das marcas mais atendidas</td></tr>
+    <tr><td>Top 5 Defeitos</td><td>Defeitos mais registrados via checklist tecnico</td></tr>
+    <tr><td>Estoque por Tipo</td><td>Total, disponíveis e vendidos por tipo de equipamento</td></tr>
+  </table>
+
+  <h3>Tipos de PDF Gerados</h3>
+  <ul>
+    <li><strong>PDF de OS:</strong> gerado ao criar ou editar. Inclui dados do cliente, aparelho, checklist, diagnostico, termos e logo da empresa.</li>
+    <li><strong>Comprovante de Venda:</strong> gerado ao registrar venda de aparelho do estoque. Inclui dados do comprador, aparelho, valor, data e garantia.</li>
+    <li><strong>Contrato de Compra:</strong> gerado ao salvar ou reabrir contrato. Inclui dados do vendedor (com CPF), aparelho, valor, forma de pagamento e assinaturas.</li>
+  </ul>
+</div>
+
+<!-- 11. PERSONALIZACAO -->
+<div class="secao">
+  <h2 class="titulo-secao">11. Personalizacao de Cores e Tema</h2>
+  <p>Acesse em <strong>Configuracoes &gt; Personalizacao Visual do Sistema</strong>.</p>
+
+  <h3>Modo Claro / Escuro</h3>
+  <p>Alterne pelo icone no topo da tela. A preferencia e salva automaticamente.</p>
+
+  <h3>Cores Personalizadas</h3>
+  <table>
+    <tr><th>Campo</th><th>Onde e aplicado</th></tr>
+    <tr><td>Cor Principal</td><td>Botoes, destaques e elementos principais</td></tr>
+    <tr><td>Cor Secundaria</td><td>Bordas e fundos secundarios</td></tr>
+    <tr><td>Cor de Destaque</td><td>Badges e indicadores</td></tr>
+    <tr><td>Cor dos Cabecalhos</td><td>Titulos e cabecalhos de secao</td></tr>
+    <tr><td>Cor dos Cards</td><td>Fundo dos paineis e cards</td></tr>
+    <tr><td>Cor dos Links</td><td>Links clicareis na interface</td></tr>
+  </table>
+
+  <h3>Tema nos PDFs</h3>
+  <p>Com a opcao <strong>"Utilizar mesmo tema do sistema nos PDFs"</strong> ativada, as cores configuradas sao automaticamente aplicadas nos PDFs de OS, Venda e Compra. Para usar cores independentes, desative a opcao e configure as cores de PDF separadamente.</p>
+</div>
+
+<!-- 12. USUARIOS E CARGOS -->
+<div class="secao">
+  <h2 class="titulo-secao">12. Usuarios, Cargos e Permissoes</h2>
+  <p>Acesse via botao <strong>Usuarios</strong> ou <strong>Cargos</strong> no topo da tela (visivel apenas para quem tem permissao de usuarios).</p>
+
+  <h3>Gerenciamento de Usuarios</h3>
+  <ul>
+    <li><strong>Novo Usuario:</strong> cria usuario com login, senha e cargo.</li>
+    <li><strong>Gerar Automaticamente:</strong> gera usuario com credenciais aleatorias.</li>
+    <li><strong>Editar:</strong> altera nome e cargo do usuario.</li>
+    <li><strong>Bloquear / Desativar:</strong> impede o acesso sem excluir o usuario.</li>
+    <li><strong>Reativar:</strong> restaura o acesso de usuario bloqueado ou inativo.</li>
+  </ul>
+
+  <div class="aviso">Usuarios nao podem ser excluidos permanentemente — apenas bloqueados ou desativados. Isso preserva o historico de OS e acoes vinculadas ao usuario.</div>
+
+  <h3>Cargos e Permissoes</h3>
+  <p>Os cargos definem quais modulos cada usuario pode acessar. O sistema vem com 4 cargos de fabrica:</p>
+  <table>
+    <tr><th>Cargo</th><th>Acesso padrao</th></tr>
+    <tr><td>Administrador</td><td>Acesso total — nao pode ser editado ou excluido</td></tr>
+    <tr><td>Gerente</td><td>Acesso total — permissoes editaveis</td></tr>
+    <tr><td>Tecnico</td><td>OS, Clientes, Estoque, Relatorios</td></tr>
+    <tr><td>Atendente</td><td>OS e Clientes</td></tr>
+  </table>
+
+  <h3>Cargos Personalizados</h3>
+  <p>Em <strong>Cargos</strong>, clique em <strong>+ Novo Cargo Personalizado</strong> para criar cargos com permissoes especificas por modulo: OS, Estoque, Financeiro, Relatorios, Configuracoes, Usuarios.</p>
+
+  <div class="dica">Cargos de sistema (Gerente, Tecnico, Atendente) podem ter suas permissoes editadas, mas nao podem ser excluidos enquanto houver usuarios vinculados. O cargo Administrador e fixo e nao pode ser alterado.</div>
+</div>
+
+<!-- 13. PROBLEMAS -->
+<div class="secao">
+  <h2 class="titulo-secao">13. Resolucao de Problemas</h2>
+
+  <h3>O sistema nao abre</h3>
+  <ul>
+    <li>Verifique se o Node.js esta instalado: <code>node --version</code> no terminal.</li>
+    <li>Execute <code>npm install</code> na pasta do projeto antes de <code>npm start</code>.</li>
+  </ul>
+
+  <h3>PDF nao e gerado</h3>
+  <ul>
+    <li>Verifique se <code>Documentos\Sistema OS\PDFs\</code> existe e tem permissao de escrita.</li>
+    <li>O antivirus pode bloquear a criacao de arquivos — adicione a pasta a lista de exclusoes.</li>
+  </ul>
+
+  <h3>Banco de dados corrompido</h3>
+  <p>Se o banco for corrompido, o sistema faz backup do arquivo danificado com sufixo <code>.corrompido-TIMESTAMP.bak</code> e recria o banco vazio. Restaure com um backup via botao <strong>Restaurar</strong>.</p>
+
+  <h3>Erro ao importar backup</h3>
+  <ul>
+    <li>Certifique-se de que o arquivo e um backup gerado pelo proprio Sistema OS.</li>
+    <li>Registros duplicados sao ignorados silenciosamente — comportamento esperado.</li>
+  </ul>
+
+  <h3>Fotos nao aparecem no estoque</h3>
+  <p>As fotos sao copiadas para <code>Documentos\Sistema OS\Fotos-Estoque\</code>. Se o banco for restaurado em outro computador, as fotos precisam ser copiadas manualmente.</p>
+
+  <h3>Usuario nao consegue acessar uma aba</h3>
+  <p>Verifique o cargo do usuario em <strong>Usuarios</strong> e confirme se o modulo correspondente esta habilitado no cargo dele via <strong>Cargos</strong>.</p>
+
+  <h3>Contato e Suporte</h3>
+  <p>Para duvidas ou customizacoes, consulte o developer responsável pelo sistema — Development Binance.</p>
+</div>
+
+</body>
+</html>

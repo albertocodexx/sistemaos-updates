@@ -1,0 +1,168 @@
+.painel-precos-mobile {
+  width: min(100%, 860px);
+  margin: 0 auto;
+  padding: 28px 18px 110px;
+  box-sizing: border-box;
+}
+.precos-mobile-cabecalho,
+.precos-mobile-ferramentas {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+}
+.precos-mobile-cabecalho {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+.precos-mobile-cabecalho h2 {
+  margin: 6px 0;
+  font-size: clamp(28px, 7vw, 38px);
+  line-height: 1.05;
+}
+.precos-mobile-cabecalho p {
+  max-width: 430px;
+  margin: 0;
+  color: var(--texto-secundario, #a6afbf);
+  line-height: 1.45;
+}
+.precos-mobile-cabecalho .btn-primario {
+  width: auto;
+  min-width: 132px;
+  min-height: 52px;
+  padding-inline: 22px;
+}
+.precos-mobile-eyebrow {
+  color: var(--cor-texto-fraco);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+.precos-mobile-ferramentas {
+  grid-template-columns: minmax(0, 1fr) auto;
+  background: var(--cor-card);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-card);
+  padding: 12px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .18);
+}
+.precos-mobile-ferramentas input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 54px;
+  margin: 0;
+  padding: 0 17px;
+  box-sizing: border-box;
+  border-radius: 13px;
+}
+.precos-mobile-ferramentas button {
+  width: auto;
+  min-width: 126px;
+  min-height: 54px;
+  margin: 0;
+}
+.precos-mobile-status {
+  color: var(--texto-secundario, #9ca6b8);
+  font-size: 13px;
+  min-height: 20px;
+  margin: 13px 2px 18px;
+}
+.precos-mobile-lista { display: grid; gap: 12px; }
+.precos-mobile-card {
+  background: var(--cor-card);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-card);
+  padding: 18px;
+}
+.precos-mobile-card-topo {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.precos-mobile-card h3,
+.precos-mobile-card p { margin: 0; }
+.precos-mobile-card h3 { color: var(--cor-texto); font-size: 18px; line-height: 1.25; }
+.precos-mobile-card p { color: var(--cor-texto-fraco); margin-top: 5px; }
+.precos-mobile-card .precos-mobile-fornecedor {
+  color: #93a0b3;
+  font-size: 13px;
+  margin-top: 11px;
+}
+.precos-mobile-fornecedor strong { color: #cbd5e1; }
+.precos-mobile-card .precos-mobile-valor {
+  color: var(--cor-texto);
+  font-size: clamp(28px, 7.5vw, 36px);
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: -.045em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.precos-mobile-fornecedor strong { color: var(--cor-texto); font-size: inherit; }
+.precos-mobile-card small {
+  display: block;
+  border-top: 1px solid #273244;
+  color: #8e99aa;
+  margin-top: 12px;
+  padding-top: 10px;
+}
+.precos-mobile-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 14px; }
+.precos-mobile-vazio {
+  border: 1px dashed #344157;
+  border-radius: 16px;
+  color: #8e99aa;
+  padding: 42px 18px;
+  text-align: center;
+}
+.modal-preco-mobile-conteudo {
+  max-width: 620px;
+}
+.modal-preco-mobile-conteudo header p {
+  margin: 5px 0 0;
+  color: #929daf;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.modal-preco-mobile-conteudo h2 { margin: 0; }
+.modal-preco-mobile-conteudo label small {
+  margin-left: 5px;
+  color: #7f8a9b;
+  font-size: 11px;
+  font-weight: 600;
+}
+.preco-mobile-campo-valor {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #344156;
+  border-radius: 14px;
+  background: #0b111a;
+}
+.preco-mobile-campo-valor:focus-within {
+  border-color: #45dda4;
+  box-shadow: 0 0 0 3px rgba(69, 221, 164, .12);
+}
+.preco-mobile-campo-valor > span {
+  padding: 0 14px;
+  color: #65e7b4;
+  font-weight: 900;
+}
+.preco-mobile-campo-valor input {
+  border: 0 !important;
+  border-left: 1px solid #2b374a !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 640px) {
+  .painel-precos-mobile { padding: 24px 16px 110px; }
+  .precos-mobile-cabecalho { grid-template-columns: 1fr; }
+  .precos-mobile-cabecalho .btn-primario { width: 100%; margin-top: 4px; }
+  .precos-mobile-ferramentas { grid-template-columns: 1fr; }
+  .precos-mobile-ferramentas button { width: 100%; }
+  .precos-mobile-card-topo { display: grid; }
+  .precos-mobile-card .precos-mobile-valor { margin-top: 8px; }
+}

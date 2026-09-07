@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QA visual — Sistema OS Android</title>
+  <link rel="stylesheet" href="../../www/css/app.css">
+  <link rel="stylesheet" href="../../www/css/precos.css">
+  <link rel="stylesheet" href="../../www/css/monochrome-theme.css">
+  <style>
+    body { width: 390px; min-height: 100vh; margin: 0 auto; overflow-x: hidden; }
+    main { padding: 18px 14px 40px; }
+    .qa-bloco { margin-bottom: 26px; }
+    .qa-bloco > h2 { margin: 0 0 12px; font-size: 14px; color: var(--cor-texto-fraco); }
+  </style>
+</head>
+<body>
+  <header class="topo">
+    <div class="topo-identidade"><strong>Sistema OS</strong></div>
+  </header>
+  <nav class="nav-topo">
+    <button class="btn-nav btn-nav-ativo">Reparos</button>
+    <button class="btn-nav">Preços</button>
+    <button class="btn-nav">Estoque</button>
+  </nav>
+  <main>
+    <section class="qa-bloco">
+      <h2>Valores dos reparos</h2>
+      <div class="cards-estatisticas cards-estatisticas-financeiro">
+        <div class="card-estatistica card-estatistica-financeiro">
+          <span class="card-estatistica-numero">R$ 4.890,00</span>
+          <span class="card-estatistica-rotulo">Total recebido</span>
+        </div>
+        <div class="card-estatistica card-estatistica-financeiro">
+          <span class="card-estatistica-numero">R$ 720,00</span>
+          <span class="card-estatistica-rotulo">Aguardando pagamento</span>
+        </div>
+      </div>
+    </section>
+    <section class="qa-bloco">
+      <h2>Tabela de preços</h2>
+      <div class="precos-mobile-lista">
+        <article class="precos-mobile-card">
+          <div class="precos-mobile-card-topo">
+            <div><h3>Galaxy S23</h3><p>Troca de tela completa</p></div>
+            <strong class="precos-mobile-valor">R$ 580,00</strong>
+          </div>
+          <p class="precos-mobile-fornecedor"><strong>Fornecedor:</strong> Central Peças</p>
+          <div class="precos-mobile-acoes">
+            <button class="btn-secundario">Editar</button>
+            <button class="btn-perigo">Excluir</button>
+          </div>
+        </article>
+      </div>
+    </section>
+    <section class="qa-bloco">
+      <h2>Contraste dos botões</h2>
+      <div class="modal-mobile-acoes" style="position:static;margin:0;padding:12px;grid-template-columns:1fr 1fr">
+        <button class="btn-secundario">Cancelar</button>
+        <button class="btn-primario">Salvar</button>
+      </div>
+    </section>
+  </main>
+  <script>
+    if (new URLSearchParams(location.search).get('tema') === 'claro') {
+      document.documentElement.setAttribute('data-tema', 'claro');
+    }
+  </script>
+</body>
+</html>

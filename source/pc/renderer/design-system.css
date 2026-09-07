@@ -1,0 +1,240 @@
+/* ════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM — Sistema OS
+   Fonte única de verdade para cores, tipografia, espaçamentos,
+   bordas, sombras, transições e estados de todos os componentes.
+   Carregado ANTES de style.css no index.html.
+
+   Filosofia:
+   • Nunca usar preto puro (#000000) — sempre tons escuros modernos.
+   • Hierarquia visual clara por camadas (Janela > Cabeçalho > Menu
+     > Conteúdo > Cards > Campos > Botões > Inputs > Texto).
+   • Contraste WCAG AA garantido em texto.
+   • Nenhuma cor "hardcoded" deve aparecer fora deste arquivo.
+   • As 8 variáveis --cor-* continuam sendo sobrescritas em tempo real
+     pelo JS (personalização visual do usuário); todas as OUTRAS tokens
+     são fixas premium e derivam delas quando faz sentido.
+
+   Softwares de referência: VS Code, Figma, Notion Dark, GitHub Dark,
+   Discord, JetBrains IDEs, Linear, Obsidian.
+════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────
+   1. TOKENS DE COR — TEMA ESCURO (padrão do sistema)
+   ───────────────────────────────────────────────────────────── */
+:root {
+  /* ── Camadas (hierarquia visual) ────────────────────────────
+     Cada camada é 1 degrau mais clara que a anterior, criando
+     profundidade sem sombras exageradas.                          */
+  --ds-janela:       #121212; /* fundo mais atrás (atrás do topo) */
+  --ds-fundo:        #171717; /* fundo principal do conteúdo       */
+  --ds-superficie:   #1C1C1C; /* áreas secundárias / painéis       */
+  --ds-card:         #242424; /* cards, modais, dropdowns           */
+  --ds-campo:        #2E2E2E; /* inputs, comboboxes, textareas — mais claro que o card, "clicável" */
+  --ds-elevado:      #3A3A3A; /* hover de cards, itens selecionados*/
+
+  /* ── Bordas ─────────────────────────────────────────────── */
+  --ds-borda:        #3A3A3A; /* borda padrão visível             */
+  --ds-borda-frac:   #242424; /* borda sutil entre camadas         */
+  --ds-borda-forte:  #52525B; /* hover/active de bordas           */
+
+  /* ── Texto ──────────────────────────────────────────────── */
+  --ds-texto:        #F8FAFC; /* texto principal                  */
+  --ds-texto-sec:    #CBD5E1; /* texto secundário                 */
+  --ds-texto-desab:  #94A3B8; /* texto desabilitado/placeholder    */
+  --ds-texto-invert: #0F172A; /* texto sobre fundo claro/brand    */
+  --ds-impressao-ink:#111111; /* texto no extrato impresso         */
+
+  /* ── Marca (sobrescritas em tempo real pelo JS) ──────────── */
+  /* Estas 8 são as variáveis "públicas" que o renderer.js aplica.
+     Apontam por padrão para o tema verde/preto, mas ao trocar a
+     predefinição (Profissional, Azul) elas mudam.                  */
+  --cor-principal:   #3B82F6;
+  --cor-secundaria:  #111827;
+  --cor-destaque:    #3B82F6;
+  --cor-botoes:      #3B82F6;
+  --cor-cabecalhos:  #1E293B;
+  --cor-barra-lateral: #16223A;
+  --cor-cards:       #1E293B;
+  --cor-links:       #60A5FA;
+
+  /* ── Derivados da marca (usar var(--ds-brand) onde possível) ─ */
+  --ds-brand:        var(--cor-principal);
+  --ds-brand-hover:  color-mix(in srgb, var(--cor-principal) 82%, #000000);
+  --ds-brand-ativo:  color-mix(in srgb, var(--cor-principal) 88%, #FFFFFF);
+  --ds-brand-frac:   color-mix(in srgb, var(--cor-principal) 14%, transparent);
+  --ds-brand-tinta:  color-mix(in srgb, var(--cor-principal) 12%, var(--ds-card));
+  --sombra-focus:   color-mix(in srgb, var(--cor-principal) 35%, transparent);
+
+  /* ── Semânticas (significado, não decoração) ────────────── */
+  --ds-sucesso:      #22C55E;
+  --ds-sucesso-hover:#16A34A;
+  --ds-sucesso-frac: rgba(34,197,94,.12);
+  --ds-sucesso-texto:#86EFAC;
+
+  --ds-aviso:        #F59E0B;
+  --ds-aviso-hover:  #D97706;
+  --ds-aviso-frac:   rgba(245,158,11,.14);
+  --ds-aviso-texto:  #FCD34D;
+
+  --ds-erro:         #EF4444;
+  --ds-erro-hover:   #DC2626;
+  --ds-erro-frac:    rgba(239,68,68,.12);
+  --ds-erro-texto:   #FCA5A5;
+
+  --ds-info:         #3B82F6;
+  --ds-info-frac:    rgba(59,130,246,.14);
+  --ds-info-texto:   #93C5FD;
+
+  --ds-roxo:         #8B5CF6;
+  --ds-roxo-frac:    rgba(139,92,246,.14);
+  --ds-roxo-texto:   #C4B5FD;
+
+  /* ── Aliases (mapeia tokens Design System para os nomes que
+     o style.css já usa, evitando reescrever todas as regras) ─ */
+  --bg:              var(--ds-fundo);
+  --bg-card:         var(--cor-cards);   /* respeita personalização */
+  --bg-input:        var(--ds-campo);    /* usado pelos inputs/campos do style.css */
+  --bg-topo:         var(--cor-barra-lateral);
+  --borda:           var(--ds-borda);
+  --texto:           var(--ds-texto);
+  --texto-sec:       var(--ds-texto-sec);
+  --sombra:          0 1px 3px rgba(0,0,0,.28), 0 1px 2px rgba(0,0,0,.20);
+
+  /* ── Tipografia ─────────────────────────────────────────── */
+  --ds-fonte:        'Segoe UI', 'Inter', system-ui, -apple-system, Arial, sans-serif;
+  --ds-fonte-display:'Bahnschrift', 'Segoe UI Variable Display', sans-serif;
+  --ds-fonte-mono:   'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+  --fs-h1:           20px;
+  --fs-h2:           16px;
+  --fs-h3:           14px;
+  --fs-corpo:        14px;
+  --fs-pequeno:      13px;
+  --fs-mini:         11px;
+  --fs-micro:        10px;
+  --fw-regular:      400;
+  --fw-medio:        500;
+  --fw-semibold:      600;
+  --fw-bold:          700;
+  --fw-extrabold:    800;
+  --lh-apertado:     1.25;
+  --lh-normal:       1.45;
+  --lh-folga:        1.6;
+  --ls-titulo:       -0.2px;
+  --ls-label:        0.6px;
+
+  /* ── Espaçamentos (escala 4px) ───────────────────────────── */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* ── Raios de borda ──────────────────────────────────────── */
+  --raio:        10px;   /* cards, modais */
+  --raio-sm:     6px;    /* inputs, botões */
+  --raio-xs:     4px;    /* chips pequenos, badges internas */
+  --raio-pill:   999px;  /* status badges, chips */
+  --raio-circ:   50%;    /* avatares, dots */
+
+  /* ── Sombras (sutis, premium) ────────────────────────────── */
+  --ds-sombra-1: 0 1px 2px rgba(0,0,0,.20), 0 1px 1px rgba(0,0,0,.14);
+  --ds-sombra-2: 0 4px 12px rgba(0,0,0,.28);
+  --ds-sombra-3: 0 12px 32px rgba(0,0,0,.38);
+  --ds-sombra-float: 0 16px 48px rgba(0,0,0,.45);
+
+  /* ── Transições ──────────────────────────────────────────── */
+  --tr-rapida:  .12s ease;
+  --tr-padrao:  .18s ease;
+  --tr-lenta:   .28s ease;
+
+  /* ── Elevações z-index ───────────────────────────────────── */
+  --z-topo:    100;
+  --z-abas:    99;
+  --z-modal:   200;
+  --z-toast:   999;
+  --z-lightbox: 300;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   2. TEMA CLARO — sobrescreve apenas as tokens de cor.
+   Mesmo Design System, mesma hierarquia, versão clara.
+   ───────────────────────────────────────────────────────────── */
+body:not(.tema-escuro) {
+  /* Alto contraste continua escuro. O produto nao usa superficies brancas,
+     evitando mistura de texto escuro com cards pretos personalizados. */
+  --ds-janela:       #0B0E13;
+  --ds-fundo:        #10141B;
+  --ds-superficie:   #151A22;
+  --ds-card:         #1A202A;
+  --ds-campo:        #242B36;
+  --ds-elevado:      #303947;
+
+  --ds-borda:        #364050;
+  --ds-borda-frac:   #252D38;
+  --ds-borda-forte:  #526076;
+
+  --ds-texto:        #F7F9FC;
+  --ds-texto-sec:    #C5CFDC;
+  --ds-texto-desab:  #8D99A9;
+  --ds-texto-invert: #0B0E13;
+
+  --sombra:          0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.22);
+  --ds-sombra-1: 0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.18);
+  --ds-sombra-2: 0 4px 12px rgba(0,0,0,.32);
+  --ds-sombra-3: 0 12px 28px rgba(0,0,0,.42);
+  --ds-sombra-float: 0 16px 40px rgba(0,0,0,.52);
+}
+
+/* No tema claro, os campos desktop default do usuário podem haver
+   personalizado --cor-cards com uma cor escura customizada — se vier
+   escura, o contraste quebra. Para evitar isso, no modo claro forçamos
+   --cor-cards e --cor-barra-lateral a seguirem a paleta clara quando o
+   tema personalizado NÃO foi explícito. Mantemos simplesmente a
+   superfcie clara como card, deixando a personalização só na cor de
+   marca. */
+body:not(.tema-escuro) {
+  --cor-cards:         var(--ds-card);
+  --cor-barra-lateral: var(--ds-janela);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   3. BASE — reset tipográfico usando tokens.
+   ───────────────────────────────────────────────────────────── */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html,
+body { overflow-x: clip; }
+
+body {
+  font-family: var(--ds-fonte);
+  font-size: var(--fs-corpo);
+  line-height: var(--lh-normal);
+  background: var(--ds-fundo);
+  color: var(--ds-texto);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--ds-brand-frac);
+  color: var(--ds-texto);
+}
+
+/* Scrollbar discreta seguindo o tema */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--ds-borda);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--ds-borda-forte); }
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ds-borda) transparent;
+}

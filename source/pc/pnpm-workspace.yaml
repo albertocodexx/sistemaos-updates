@@ -1,0 +1,8 @@
+allowBuilds:
+  '@whiskeysockets/baileys': true
+  electron: true
+  electron-winstaller: true
+  protobufjs: true
+overrides:
+  builder-util-runtime: 9.7.0
+  js-yaml: 4.3.1
