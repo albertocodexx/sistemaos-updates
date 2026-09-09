@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="modules/auditoria/atividades.css" />
 <link rel="stylesheet" href="modules/desbloqueios/desbloqueios.css" />
 <link rel="stylesheet" href="form-layout.css" />
+<link rel="stylesheet" href="theme-accessibility.css" />
 </head>
 <body class="tema-escuro">
 
@@ -84,15 +85,6 @@
         <circle cx="9" cy="7" r="4"/>
         <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
         <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-      </symbol>
-      <!-- 🤖 Log/Assistente IA -->
-      <symbol id="icone-robo" viewBox="0 0 24 24">
-        <rect x="3" y="8" width="18" height="12" rx="2"/>
-        <path d="M12 2v6"/>
-        <circle cx="12" cy="4" r="1.5"/>
-        <circle cx="8.5" cy="14" r="1.5"/>
-        <circle cx="15.5" cy="14" r="1.5"/>
-        <path d="M9 18h6"/>
       </symbol>
       <!-- 📊 Relatórios / Dashboard / Visão Geral -->
       <symbol id="icone-grafico" viewBox="0 0 24 24">
@@ -276,7 +268,7 @@
           <img src="assets/logo-os-white.png" alt="" width="58" height="58">
           <div>
             <h1 id="loginTitulo">Sistema OS</h1>
-            <span class="login-brand-versao">v30.5.131</span>
+            <span class="login-brand-versao">v30.5.132</span>
           </div>
         </header>
 
@@ -459,20 +451,20 @@
   </header>
 
   <!-- ABAS -->
-  <nav class="abas">
-    <button class="aba ativa" data-aba="nova-os" data-permissao="os"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-ferramenta"/></svg> Nova OS</button>
-    <button class="aba" data-aba="orcamentos" data-permissao="os"><span class="icone-svg"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span> Autorizadas</button>
-    <button class="aba" data-aba="historico" data-permissao="os"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-lista"/></svg> Histórico</button>
-    <button class="aba" data-aba="entregas" data-permissao="os"><span class="icone-svg"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span> Entregas</button>
-    <button class="aba" data-aba="garantia" data-permissao="os"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-escudo"/></svg> Garantia</button>
-    <button class="aba" data-aba="desbloqueios" data-permissao="os"><span class="icone-svg"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.8-1.2"/><path d="M12 14v3"/></svg></span> Desbloqueios</button>
-    <button class="aba" data-aba="clientes" data-permissao="clientes"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-pessoa"/></svg> Clientes</button>
-    <button class="aba" data-aba="mensagens-wapp" data-permissao="os"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-mensagem"/></svg> Mensagens</button>
-    <button class="aba" data-aba="log-ia" data-permissao="os"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-robo"/></svg> Log IA</button>
-    <button class="aba" data-aba="estoque" data-permissao="estoque"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-caixa"/></svg> Estoque</button>
-    <button class="aba" data-aba="precos" data-permissao="estoque"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-etiqueta"/></svg> Tabela de preços</button>
-    <button class="aba" data-aba="relatorios" data-permissao="relatorios" data-permissao-alternativa="financeiro"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-grafico"/></svg> Relatórios</button>
-    <button class="aba" data-aba="pagamentos" data-permissao="financeiro"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-nota"/></svg> Pagamentos</button>
+  <nav class="abas" aria-label="Áreas do Sistema OS">
+    <button class="aba ativa" data-aba="nova-os" data-permissao="os" title="Nova OS: cadastre cliente, aparelho, orçamento, prazo e cobrança"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-ferramenta"/></svg> Nova OS</button>
+    <button class="aba" data-aba="orcamentos" data-permissao="os" title="Autorizadas: acompanhe orçamentos aprovados e reparos liberados"><span class="icone-svg"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span> Autorizadas</button>
+    <button class="aba" data-aba="historico" data-permissao="os" title="Histórico: consulte todas as OS, valores, assinaturas e status"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-lista"/></svg> Histórico</button>
+    <button class="aba" data-aba="entregas" data-permissao="os" title="Entregas: gere, edite e acompanhe comprovantes de retirada"><span class="icone-svg"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span> Entregas</button>
+    <button class="aba" data-aba="garantia" data-permissao="os" title="Garantia: emita garantias e registre retornos sem perder o histórico"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-escudo"/></svg> Garantia</button>
+    <button class="aba" data-aba="desbloqueios" data-permissao="os" title="Desbloqueios: crie autorizações, termos de risco e assinaturas"><span class="icone-svg"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.8-1.2"/><path d="M12 14v3"/></svg></span> Desbloqueios</button>
+    <button class="aba" data-aba="clientes" data-permissao="clientes" title="Clientes: veja cadastro, contato e todos os documentos associados"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-pessoa"/></svg> Clientes</button>
+    <button class="aba" data-aba="mensagens-wapp" data-permissao="os" title="Mensagens: consulte os envios e atendimentos pelo WhatsApp"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-mensagem"/></svg> Mensagens</button>
+    <button class="aba" data-aba="log-ia" data-permissao="os" title="Log IA: acompanhe classificações e decisões do assistente"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-estrela"/></svg> Log IA</button>
+    <button class="aba" data-aba="estoque" data-permissao="estoque" title="Estoque: controle aparelhos, peças, acessórios, custos e vendas"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-caixa"/></svg> Estoque</button>
+    <button class="aba" data-aba="precos" data-permissao="estoque" title="Tabela de preços: pesquise e cadastre valores de peças e serviços"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-etiqueta"/></svg> Tabela de preços</button>
+    <button class="aba" data-aba="relatorios" data-permissao="relatorios" data-permissao-alternativa="financeiro" title="Relatórios: analise receitas, custos, lucros, estoque e desempenho"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-grafico"/></svg> Relatórios</button>
+    <button class="aba" data-aba="pagamentos" data-permissao="financeiro" title="Pagamentos: confira cobranças, recebimentos e comprovantes"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-nota"/></svg> Pagamentos</button>
 
     <button class="aba aba-sininho" data-aba="notificacoes" id="btnAbaNotificacoes" title="Notificações">
       <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-sino"/></svg> <span id="notifBadge" class="notif-badge escondido">0</span>
@@ -671,24 +663,17 @@
                 </select>
               </div>
             </div>
-            <div id="novaParcelasOS" class="lembretes-cobranca-editor parcelamento-os-editor">
+            <div id="novaParcelasOS" class="lembretes-cobranca-editor">
               <div>
-                <strong>Parcelas da OS</strong>
-                <span>O valor de cada parcela será calculado automaticamente a partir do valor do orçamento.</span>
+                <strong>Lembretes de cobrança</strong>
+                <span>O PC e o celular usam a mesma lista na nuvem. Altere a situação ou exclua e salve a OS para sincronizar.</span>
               </div>
-              <div class="lembrete-cobranca-campos parcela-os-configuracao">
-                <div class="campo">
-                  <label for="novaQuantidadeParcelas">Quantidade</label>
-                  <select id="novaQuantidadeParcelas">
-                    <option value="2">2 parcelas</option><option value="3">3 parcelas</option><option value="4">4 parcelas</option>
-                    <option value="5">5 parcelas</option><option value="6">6 parcelas</option><option value="10">10 parcelas</option><option value="12">12 parcelas</option>
-                  </select>
-                </div>
-                <div class="campo"><label for="novaPrimeiraParcelaData">Primeiro vencimento</label><input id="novaPrimeiraParcelaData" type="date" /></div>
-                <button type="button" id="btnGerarParcelasNovaOS" class="botao botao-secundario">Dividir valor</button>
+              <div class="lembrete-cobranca-campos">
+                <div class="campo"><label for="novaLembreteCobrancaData">Data</label><input id="novaLembreteCobrancaData" type="date" /></div>
+                <div class="campo"><label for="novaLembreteCobrancaValor">Valor (opcional)</label><input id="novaLembreteCobrancaValor" type="number" min="0" step="0.01" placeholder="Usar saldo da OS" /></div>
+                <button type="button" id="btnAdicionarNovoLembreteCobranca" class="botao botao-secundario">Adicionar lembrete</button>
               </div>
-              <p id="novaParcelasResumo" class="dica-campo" aria-live="polite">Informe o valor da OS, escolha a quantidade e a primeira data.</p>
-              <div id="novaListaParcelasOS" class="lembretes-cobranca-lista"></div>
+              <div id="novaListaLembretesCobranca" class="lembretes-cobranca-lista"></div>
             </div>
           </div>
 
@@ -1021,7 +1006,7 @@
     <!-- ═══ ABA: LOG IA (v40.2) — classificação automática da forma de pagamento manual ═══ -->
     <section id="aba-log-ia" class="secao-aba escondido">
       <div class="card" style="margin-bottom:16px;">
-        <div class="card-titulo" style="margin:0 0 4px 0;"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-robo"/></svg> Log da IA — Classificação de Pagamento</div>
+        <div class="card-titulo" style="margin:0 0 4px 0;"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-estrela"/></svg> Log da IA — Classificação de Pagamento</div>
         <p class="dica-campo" style="margin-top:2px;">
           Cada linha é uma vez que um cliente respondeu como ia pagar (pagamento manual) e o sistema
           classificou essa resposta. "Por IA" indica que a Groq classificou o texto; "Fallback" indica
@@ -2493,7 +2478,7 @@
 
       <!-- v40.2: Integração IA (Groq) — classificação automática da forma de pagamento manual -->
       <div class="config-secao" hidden aria-hidden="true">
-        <div class="config-secao-titulo"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-robo"/></svg> Integração IA — Classificação de Pagamento (Groq)</div>
+        <div class="config-secao-titulo"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-estrela"/></svg> Integração IA — Classificação de Pagamento (Groq)</div>
         <p class="campo-desc">
           Quando o cliente escolhe <strong>pagamento manual</strong> e digita livremente como vai pagar
           (ex.: "vou pagar na maquininha da stone"), a IA lê a mensagem e identifica automaticamente a
@@ -4015,7 +4000,7 @@
       <div id="iaChatCabecalho">
         <div class="iaChatMarca">
           <span class="iaChatLogo" aria-hidden="true">
-            <svg viewBox="0 0 48 48" fill="none"><path d="M24 3.8 41.5 14v20L24 44.2 6.5 34V14L24 3.8Z" stroke="currentColor" stroke-width="2.2"/><path d="M14 24h7l4-5h9M14 31h6l4-4h10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="14" cy="24" r="2.2" fill="currentColor"/><circle cx="34" cy="19" r="2.2" fill="currentColor"/><circle cx="34" cy="27" r="2.2" fill="currentColor"/><path d="m29.5 9.5 1.2 2.8 2.8 1.2-2.8 1.2-1.2 2.8-1.2-2.8-2.8-1.2 2.8-1.2 1.2-2.8Z" fill="currentColor"/></svg>
+            <svg viewBox="0 0 48 48" fill="none"><path d="m24 5 5.6 12 13 1.6-9.5 9 2.6 12.8L24 34l-11.7 6.4 2.6-12.8-9.5-9 13-1.6L24 5Z" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/></svg>
           </span>
           <span class="iaChatTitulo"><strong id="iaChatTituloTexto">Assistente Sistema OS</strong><small><i></i> IA conectada ao seu sistema</small></span>
         </div>
@@ -4031,7 +4016,7 @@
         <button id="iaChatEnviar" title="Enviar mensagem" aria-label="Enviar mensagem"><span>Enviar</span><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-exportar-seta"/></svg></button>
       </div>
     </div>
-    <button id="iaChatBotao" title="Assistente IA" aria-label="Abrir assistente IA" aria-controls="iaChatPainel" aria-expanded="false"><span class="iaChatPulso"></span><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M24 3.8 41.5 14v20L24 44.2 6.5 34V14L24 3.8Z" stroke="currentColor" stroke-width="2.2"/><path d="M14 24h7l4-5h9M14 31h6l4-4h10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="14" cy="24" r="2.2" fill="currentColor"/><circle cx="34" cy="19" r="2.2" fill="currentColor"/><circle cx="34" cy="27" r="2.2" fill="currentColor"/><path d="m29.5 9.5 1.2 2.8 2.8 1.2-2.8 1.2-1.2 2.8-1.2-2.8-2.8-1.2 2.8-1.2 1.2-2.8Z" fill="currentColor"/></svg></button>
+    <button id="iaChatBotao" title="Assistente IA" aria-label="Abrir assistente IA" aria-controls="iaChatPainel" aria-expanded="false"><span class="iaChatPulso"></span><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="m24 5 5.6 12 13 1.6-9.5 9 2.6 12.8L24 34l-11.7 6.4 2.6-12.8-9.5-9 13-1.6L24 5Z" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/></svg></button>
   </div>
 
   <script src="shared/dom.js"></script>

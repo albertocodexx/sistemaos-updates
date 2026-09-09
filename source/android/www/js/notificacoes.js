@@ -21,12 +21,18 @@
 // as notificações agendadas abaixo não aparecem no Android 13+.
 
 (function (root, factory) {
+  var api = factory(root);
   if (typeof module === 'object' && module.exports) {
-    module.exports = factory(typeof window !== 'undefined' ? window : globalThis);
+    module.exports = api;
   } else {
-    root.Notificacoes = factory(root);
+    root.Notificacoes = api;
+    root.SistemaOSNotificacoes = api;
   }
-})(typeof self !== 'undefined' ? self : this, function (root) {
+  if (root) {
+    root.Notificacoes = api;
+    root.SistemaOSNotificacoes = api;
+  }
+})(typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : globalThis), function (root) {
   'use strict';
 
   function plugin() {
@@ -256,10 +262,11 @@
     if (!Number.isFinite(quando.getTime())) return Promise.resolve({ agendada: false, motivo: 'data-invalida' });
     quando.setDate(quando.getDate() - Math.max(0, Math.min(30, Number(item.avisarAntesDias || 0))));
     var atrasado = status === 'atrasada' || quando.getTime() < Date.now();
+    var chaveAvisoAtrasado = '';
     if (atrasado) {
       try {
-        if (root.localStorage.getItem(chaveLembreteAgendado(os, item)) === 'avisado') return Promise.resolve({ agendada: false, motivo: 'ja-avisado' });
-        root.localStorage.setItem(chaveLembreteAgendado(os, item), 'avisado');
+        chaveAvisoAtrasado = chaveLembreteAgendado(os, item);
+        if (root.localStorage.getItem(chaveAvisoAtrasado) === 'avisado') return Promise.resolve({ agendada: false, motivo: 'ja-avisado' });
       } catch (_) {}
       quando = new Date(Date.now() + 1200);
     }
@@ -277,7 +284,12 @@
         schedule: { at: quando, allowWhileIdle: true },
         extra: { numeroOS: rotuloOS(os.numero), tela: 'cobrancas', tipo: 'cobranca-os', lembreteId: item.id || '' }
       }]
-    }).then(function () { return { agendada: true }; }).catch(function (erro) { return { agendada: false, erro: erro }; });
+    }).then(function () {
+      if (chaveAvisoAtrasado) {
+        try { root.localStorage.setItem(chaveAvisoAtrasado, 'avisado'); } catch (_) {}
+      }
+      return { agendada: true };
+    }).catch(function (erro) { return { agendada: false, erro: erro }; });
   }
 
   function notificarTesteCobranca(os, item) {
@@ -543,8 +555,11 @@
           root.SistemaOSConsulta.abrirOS(extra.numeroOS, { origem: 'notificacao', lembreteId: extra.lembreteId || '' });
         }
       };
-      if (root.SistemaOSConsulta) abrir();
-      else root.document && root.document.addEventListener('sistema-os:consulta-pronta', abrir, { once: true });
+      if ((extra.tela === 'cobrancas' && root.SistemaOSCobrancas) || root.SistemaOSConsulta) abrir();
+      else if (root.document) {
+        root.document.addEventListener('sistema-os:consulta-pronta', abrir, { once: true });
+        root.document.addEventListener('sistema-os:cobrancas-pronta', abrir, { once: true });
+      }
     });
   }
 
@@ -581,6 +596,8 @@
     notificarPagamentoRecebido: notificarPagamentoRecebido,
     assinaturaPagamentoRecebido: assinaturaPagamentoRecebido,
     verificarNovasAutorizacoes: verificarNovasAutorizacoes,
-    osEstaAutorizada: osEstaAutorizada
+    osEstaAutorizada: osEstaAutorizada,
+    _instalarAberturaNotificacao: instalarAberturaNotificacao,
+    _idNotificacaoParaOS: idNotificacaoParaOS
   };
 });

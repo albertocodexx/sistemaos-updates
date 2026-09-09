@@ -47,7 +47,7 @@ assert.match(organizador, /#modalEditarOS \.formulario-layout/);
 assert.match(organizador, /#modalFormCompra \.modal-compra-conteudo/);
 assert.match(organizador, /document\.addEventListener\('invalid'/);
 assert.match(organizador, /#modalConfig > \.modal-caixa/);
-assert.match(organizador, /Encontre uma função/);
+assert.match(organizador, /Buscar nas configurações/);
 assert.match(css, /\.config-secao\.config-recolhivel/);
 assert.match(css, /\.config-organizador/);
 

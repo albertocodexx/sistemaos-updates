@@ -112,10 +112,11 @@
     { titulo: 'Relatórios › Financeiro', aba: 'relatorios', subaba: 'financeiro', termos: 'financeiro finanças faturamento receita despesas lucro caixa relatório de pagamentos os pagas valor cobrado' },
     { titulo: 'Relatórios › Visão geral', aba: 'relatorios', subaba: 'geral', termos: 'relatório relatórios indicadores estatísticas desempenho visão geral' },
     { titulo: 'Nova OS', aba: 'nova-os', termos: 'nova os ordem serviço atendimento cadastrar aparelho cliente' },
-    { titulo: 'OS autorizadas', aba: 'autorizadas', termos: 'autorizadas aprovação aprovada reparo orçamento' },
+    { titulo: 'OS autorizadas', aba: 'orcamentos', termos: 'autorizadas aprovação aprovada reparo orçamento' },
     { titulo: 'Histórico de OS', aba: 'historico', termos: 'histórico os pagas finalizadas canceladas buscar ordem serviço' },
     { titulo: 'Entregas', aba: 'entregas', termos: 'entrega retirada comprovante entregar assinatura' },
     { titulo: 'Garantia', aba: 'garantia', termos: 'garantia retorno cobertura prazo' },
+    { titulo: 'Desbloqueios', aba: 'desbloqueios', termos: 'desbloqueio autorização titularidade riscos assinatura reset aparelho' },
     { titulo: 'Clientes', aba: 'clientes', termos: 'cliente clientes cadastro telefone histórico' },
     { titulo: 'Estoque', aba: 'estoque', termos: 'estoque consumível consumíveis peças aparelhos venda compra entrada saída' },
     { titulo: 'Tabela de preços', aba: 'precos', termos: 'tabela preço preços serviço peça orçamento' },
@@ -384,25 +385,16 @@
       toolbar.className = 'config-organizador';
       toolbar.innerHTML = `
         <div class="config-busca">
-          <label for="configBuscaFuncoes">Encontre uma função</label>
+          <label for="configBuscaFuncoes">Buscar nas configurações</label>
           <div class="config-busca-campo">
             <span class="config-busca-icone" aria-hidden="true">⌕</span>
             <input id="configBuscaFuncoes" type="search"
-              placeholder="Digite o que quer fazer: nota fiscal, senha, WhatsApp..."
+              placeholder="Ex.: WhatsApp, nota fiscal, senha ou backup"
               aria-describedby="configBuscaStatus" autocomplete="off" spellcheck="false">
             <button type="button" class="config-busca-limpar" data-config-limpar hidden>Limpar</button>
           </div>
           <span id="configBuscaStatus" class="config-busca-status" data-config-status aria-live="polite"></span>
-          <button type="button" class="config-busca-rota" data-config-rota hidden></button>
           <div class="config-busca-resultados" data-config-resultados aria-label="Resultados da busca"></div>
-          <div class="config-busca-atalhos" aria-label="Buscas rápidas">
-            <button type="button" class="config-busca-atalho" data-config-atalho="WhatsApp">WhatsApp</button>
-            <button type="button" class="config-busca-atalho" data-config-atalho="nota fiscal">Nota fiscal</button>
-            <button type="button" class="config-busca-atalho" data-config-atalho="pagamento">Pagamento</button>
-            <button type="button" class="config-busca-atalho" data-config-atalho="usuários e senha">Usuários</button>
-            <button type="button" class="config-busca-atalho" data-config-atalho="backup">Backup</button>
-            <button type="button" class="config-busca-atalho" data-config-atalho="atualização">Atualização</button>
-          </div>
         </div>
         <div class="config-organizador-acoes">
           <button type="button" class="botao botao-fantasma botao-xs" data-config-recolher>Mostrar essenciais</button>
@@ -423,7 +415,6 @@
       const inputBusca = toolbar.querySelector('#configBuscaFuncoes');
       const botaoLimpar = toolbar.querySelector('[data-config-limpar]');
       const statusBusca = toolbar.querySelector('[data-config-status]');
-      const botaoRota = toolbar.querySelector('[data-config-rota]');
       const caixaResultados = toolbar.querySelector('[data-config-resultados]');
       let buscaEstavaAtiva = false;
 
@@ -454,32 +445,34 @@
 
         botaoLimpar.hidden = !consulta;
         toolbar.classList.toggle('config-sem-resultado', !!consulta && !encontradas);
-        if (!consulta) statusBusca.textContent = `${disponiveis.length} funções disponíveis · busque pelo nome ou pelo que deseja fazer`;
+        if (!consulta) statusBusca.textContent = 'Digite acima para localizar uma opção ou uma área do sistema.';
         else if (!encontradas) statusBusca.textContent = 'Nenhuma função encontrada. Tente uma palavra mais simples, como “senha”, “nota” ou “backup”.';
-        else {
-          const melhores = resultados.slice(0, 3)
-            .map(({ secao }) => tituloConfigDireto(secao)?.textContent?.trim())
-            .filter(Boolean);
-          if (rota) melhores.unshift(rota.titulo);
-          statusBusca.textContent = `${encontradas} ${encontradas === 1 ? 'resultado' : 'resultados'} · melhor: ${melhores.join(' · ')} · Enter para abrir`;
-        }
-        botaoRota.hidden = !rota;
-        botaoRota.textContent = rota ? `Abrir ${rota.titulo}` : '';
+        else statusBusca.textContent = `${encontradas} ${encontradas === 1 ? 'resultado encontrado' : 'resultados encontrados'}. Pressione Enter para abrir o primeiro.`;
         caixaResultados.replaceChildren();
-        resultados.slice(0, 6).forEach(({ secao }) => {
-          const titulo = tituloConfigDireto(secao);
+        const adicionarResultado = (tituloResultado, tipoResultado, aoAbrir) => {
           const botao = document.createElement('button');
           botao.type = 'button';
           botao.className = 'config-busca-resultado';
-          botao.textContent = titulo?.textContent?.trim() || 'Abrir configuração';
-          botao.addEventListener('click', () => {
+          const nome = document.createElement('span');
+          nome.textContent = tituloResultado;
+          const tipo = document.createElement('small');
+          tipo.textContent = tipoResultado;
+          botao.append(nome, tipo);
+          botao.addEventListener('click', aoAbrir);
+          caixaResultados.appendChild(botao);
+        };
+        if (rota) adicionarResultado(rota.titulo, 'Abrir área do sistema', () => abrirRotaDaBusca(rota));
+        resultados.slice(0, 6).forEach(({ secao }) => {
+          const titulo = tituloConfigDireto(secao);
+          adicionarResultado(titulo?.textContent?.trim() || 'Abrir configuração', 'Configuração', () => {
+            inputBusca.value = '';
+            aplicarBusca();
             recolherConfig(secao, false);
             titulo?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
             setTimeout(() => titulo?.focus?.(), 180);
           });
-          caixaResultados.appendChild(botao);
         });
-        caixaResultados.hidden = !consulta || !resultados.length;
+        caixaResultados.hidden = !consulta || !encontradas;
         toolbar._rotaResultado = rota;
         toolbar._primeiroResultado = rota || resultados[0]?.secao || null;
       };
@@ -507,14 +500,6 @@
         inputBusca.value = '';
         aplicarBusca();
         inputBusca.focus();
-      });
-      botaoRota.addEventListener('click', () => abrirRotaDaBusca(toolbar._rotaResultado));
-      toolbar.querySelectorAll('[data-config-atalho]').forEach((atalho) => {
-        atalho.addEventListener('click', () => {
-          inputBusca.value = atalho.dataset.configAtalho || '';
-          aplicarBusca();
-          inputBusca.focus();
-        });
       });
       toolbar._aplicarBusca = aplicarBusca;
     }

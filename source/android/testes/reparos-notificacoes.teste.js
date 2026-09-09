@@ -36,16 +36,29 @@ assert.ok(migrationRealtime.includes('alter publication supabase_realtime add ta
   'tabela de OS deve estar habilitada na publicacao Realtime');
 
 let agendada = null;
+let totalAgendamentos = 0;
+let cancelada = null;
+let listenerAcao = null;
+const armazenamento = new Map();
 global.window = {
+  localStorage: {
+    getItem: (chave) => armazenamento.has(chave) ? armazenamento.get(chave) : null,
+    setItem: (chave, valor) => armazenamento.set(chave, String(valor))
+  },
   Capacitor: {
     Plugins: {
       LocalNotifications: {
         requestPermissions: async () => ({ display: 'granted' }),
-        schedule: async (dados) => { agendada = dados.notifications[0]; },
-        cancel: async () => {}
+        schedule: async (dados) => { agendada = dados.notifications[0]; totalAgendamentos += 1; },
+        cancel: async (dados) => { cancelada = dados.notifications[0]; },
+        addListener: (nome, callback) => { if (nome === 'localNotificationActionPerformed') listenerAcao = callback; }
       }
     }
-  }
+  },
+  setTimeout,
+  clearTimeout,
+  setInterval,
+  clearInterval
 };
 global.window.SistemaOSNumero = NumeroOS;
 
@@ -95,5 +108,43 @@ const Notificacoes = require(path.join(raiz, 'www', 'js', 'notificacoes.js'));
   assert.ok(agendada.body.includes('50% confirmado') && agendada.body.includes('Pix') && agendada.body.includes('Ana'));
   assert.ok(/\d{2}\/\d{2}\/\d{4}[^\d]+\d{2}:\d{2}/.test(agendada.body),
     'notificacao de pagamento deve mostrar data e hora');
+  const dataCobranca = new Date(Date.now() + 8 * 86400000);
+  const dataCobrancaISO = [dataCobranca.getFullYear(), String(dataCobranca.getMonth() + 1).padStart(2, '0'), String(dataCobranca.getDate()).padStart(2, '0')].join('-');
+  const osCobranca = {
+    numero: 'OS-0200', valorTotalServico: 600, valorRecebidoConfirmado: 200,
+    cliente: { nome: 'Cliente Teste' }
+  };
+  const itemCobranca = { id: 'parcela-1', data: dataCobrancaISO, valor: 200, status: 'pendente', avisarAntesDias: 2 };
+  const lembrete = await Notificacoes.agendarLembreteCobranca(osCobranca, itemCobranca);
+  assert.equal(lembrete.agendada, true);
+  assert.equal(agendada.schedule.allowWhileIdle, true);
+  assert.equal(agendada.schedule.at.getHours(), 9);
+  assert.equal(agendada.schedule.at.getTime(), new Date(dataCobrancaISO + 'T09:00:00').getTime() - 2 * 86400000);
+  assert.deepEqual(agendada.extra, { numeroOS: 'OS-0200', tela: 'cobrancas', tipo: 'cobranca-os', lembreteId: 'parcela-1' });
+  assert.ok(agendada.body.includes('Cliente Teste') && agendada.body.includes('Falta'));
+
+  const idCobranca = agendada.id;
+  await Notificacoes.agendarLembreteCobranca(osCobranca, { ...itemCobranca, status: 'paga', confirmadoEm: new Date().toISOString() });
+  assert.equal(cancelada.id, idCobranca, 'parcela paga deve cancelar o aviso pendente');
+  await Notificacoes.agendarLembreteCobranca(osCobranca, { ...itemCobranca, status: 'desativada' });
+  assert.equal(cancelada.id, idCobranca, 'parcela desativada deve cancelar o aviso pendente');
+
+  const ontem = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const atrasada = { id: 'atrasada-1', data: ontem, valor: 150, status: 'pendente' };
+  const antesAtrasada = totalAgendamentos;
+  assert.equal((await Notificacoes.agendarLembreteCobranca(osCobranca, atrasada)).agendada, true);
+  assert.equal(totalAgendamentos, antesAtrasada + 1);
+  const repetida = await Notificacoes.agendarLembreteCobranca(osCobranca, atrasada);
+  assert.equal(repetida.motivo, 'ja-avisado', 'cobrança atrasada não pode duplicar a cada sincronização');
+  assert.equal(totalAgendamentos, antesAtrasada + 1);
+
+  let abriuCobranca = null;
+  global.window.SistemaOSCobrancas = { abrir: (numero, lembreteId) => { abriuCobranca = { numero, lembreteId }; } };
+  Notificacoes._instalarAberturaNotificacao();
+  assert.equal(typeof listenerAcao, 'function', 'toque da notificação deve instalar listener nativo');
+  listenerAcao({ notification: { extra: { numeroOS: 'OS-0200', tela: 'cobrancas', lembreteId: 'parcela-1' } } });
+  assert.deepEqual(abriuCobranca, { numero: 'OS-0200', lembreteId: 'parcela-1' }, 'toque deve abrir exatamente a cobrança avisada');
+  assert.strictEqual(global.window.Notificacoes, Notificacoes);
+  assert.strictEqual(global.window.SistemaOSNotificacoes, Notificacoes, 'tela de cobranças deve receber a API de notificações');
   console.log('OK: aba Reparos e notificacoes nativas de prazo/autorizacao validadas.');
 })().catch((erro) => { console.error(erro); process.exitCode = 1; });

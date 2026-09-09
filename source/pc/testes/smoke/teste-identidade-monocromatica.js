@@ -11,7 +11,13 @@ const runtime = fs.readFileSync(path.join(raiz, 'renderer', 'core', 'legacy-runt
 const templateOS = fs.readFileSync(path.join(raiz, 'src', 'templates', 'os-template.js'), 'utf8');
 
 assert(html.includes('monochrome-theme.css'), 'tema monocromático precisa ser carregado no renderer');
-assert(html.indexOf('monochrome-theme.css') > html.indexOf('modules/precos/tabela-precos.css'), 'tema monocromático deve ser a última camada CSS');
+assert(html.indexOf('monochrome-theme.css') > html.indexOf('modules/precos/tabela-precos.css'), 'tema monocromático deve vir depois dos módulos');
+assert(html.indexOf('theme-accessibility.css') > html.indexOf('monochrome-theme.css'), 'acessibilidade deve ser a última camada visual');
+assert(!html.includes('id="icone-robo"'), 'ícone antigo de robô não deve permanecer no sistema');
+assert.match(html, /data-aba="log-ia"[^>]+title="[^"]+"[\s\S]*?#icone-estrela/, 'Log IA deve usar estrela e explicar a aba');
+const abasPrincipais = [...html.matchAll(/<button class="aba(?: ativa)?"[^>]*data-aba="([^"]+)"[^>]*>/g)];
+assert(abasPrincipais.length >= 13, 'menu principal deve manter todas as áreas');
+abasPrincipais.forEach(([tag, aba]) => assert.match(tag, /title="[^\"]{12,}"/, `aba ${aba} precisa explicar seu conteúdo ao passar o mouse`));
 assert(html.includes('assets/logo-os-white.png'), 'login e cabeçalho devem usar a nova marca');
 assert(css.includes('--cor-principal: #ffffff !important'), 'modo escuro deve usar branco como ação principal');
 assert(css.includes('--cor-principal: #000000 !important'), 'modo claro deve usar preto como ação principal');

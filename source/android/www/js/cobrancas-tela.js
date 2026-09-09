@@ -3,7 +3,12 @@
 (function (root, factory) {
   var api = factory(root);
   if (typeof module === 'object' && module.exports) module.exports = api;
-  if (root) root.SistemaOSCobrancas = api;
+  if (root) {
+    root.SistemaOSCobrancas = api;
+    if (root.document && typeof root.CustomEvent === 'function') {
+      root.document.dispatchEvent(new root.CustomEvent('sistema-os:cobrancas-pronta'));
+    }
+  }
 })(typeof self !== 'undefined' ? self : globalThis, function (root) {
   'use strict';
 

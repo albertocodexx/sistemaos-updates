@@ -1780,86 +1780,81 @@ let novoChecklistEntrada = [];
 let novoChecklistSaida = [];
 let novosLembretesCobranca = [];
 
-function _dataParcelaMes(dataIso, meses) {
-  const partes = String(dataIso || '').split('-').map(Number);
-  if (partes.length !== 3 || partes.some(n => !Number.isFinite(n))) return '';
-  const ano = partes[0];
-  const mesBase = partes[1] - 1 + meses;
-  const anoDestino = ano + Math.floor(mesBase / 12);
-  const mesDestino = ((mesBase % 12) + 12) % 12;
-  const ultimoDia = new Date(anoDestino, mesDestino + 1, 0).getDate();
-  const diaDestino = Math.min(partes[2], ultimoDia);
-  return `${anoDestino}-${String(mesDestino + 1).padStart(2, '0')}-${String(diaDestino).padStart(2, '0')}`;
+function renderizarLembretesCobrancaNovaOS() {
+  const lista = $('novaListaLembretesCobranca');
+  if (!lista) return;
+  lista.innerHTML = novosLembretesCobranca.length ? novosLembretesCobranca.map((item, indice) => {
+    const estado = _estadoLembreteCobranca(item);
+    const valor = Number(item.valor || 0);
+    return `<div class="lembrete-cobranca-item" data-estado="${estado.toLowerCase()}">
+      <div><strong>${fmtData(item.data)}</strong><span>${valor > 0 ? fmtMoeda(valor) : 'Usar saldo da OS'} · ${estado}</span></div>
+      <div class="lembrete-cobranca-acoes">
+        <label class="sr-only" for="novaStatusCobranca-${indice}">Situação da cobrança de ${fmtData(item.data)}</label>
+        <select id="novaStatusCobranca-${indice}" class="lembrete-cobranca-status" onchange="alterarStatusLembreteCobrancaNovaOS(${indice}, this.value)">
+          <option value="pendente" ${estado === 'Agendado' ? 'selected' : ''}>Pendente</option>
+          <option value="atrasada" ${estado === 'Atrasada' || estado === 'Atrasado' ? 'selected' : ''}>Atrasada</option>
+          <option value="paga" ${estado === 'Paga' ? 'selected' : ''}>Paga</option>
+          <option value="desativada" ${estado === 'Desativada' ? 'selected' : ''}>Desativada</option>
+        </select>
+        <button type="button" class="botao botao-fantasma botao-xs" onclick="removerLembreteCobrancaNovaOS(${indice})">Excluir</button>
+      </div>
+    </div>`;
+  }).join('') : '<p class="campo-desc">Nenhum lembrete programado.</p>';
 }
 
-function _valoresParcelasEmCentavos(total, quantidade) {
-  const totalCentavos = Math.round(Number(total || 0) * 100);
-  const base = Math.floor(totalCentavos / quantidade);
-  const resto = totalCentavos % quantidade;
-  return Array.from({ length: quantidade }, (_, indice) => (base + (indice < resto ? 1 : 0)) / 100);
-}
-
-function renderizarParcelasNovaOS() {
-  const lista = $('novaListaParcelasOS');
-  const resumo = $('novaParcelasResumo');
-  if (!lista || !resumo) return;
-  if (!novosLembretesCobranca.length) {
-    lista.innerHTML = '';
-    resumo.textContent = 'Informe o valor da OS, escolha a quantidade e a primeira data.';
-    return;
-  }
-  const total = novosLembretesCobranca.reduce((soma, item) => soma + Number(item.valor || 0), 0);
-  resumo.textContent = `${novosLembretesCobranca.length} parcelas · total ${fmtMoeda(total)}. Você pode ajustar cada vencimento.`;
-  lista.innerHTML = novosLembretesCobranca.map((item, indice) => `
-    <div class="lembrete-cobranca-item parcela-os-item">
-      <div><small>Parcela ${indice + 1} de ${novosLembretesCobranca.length}</small><strong>${fmtMoeda(item.valor)}</strong></div>
-      <div class="campo"><label for="novaParcelaData-${indice}">Vencimento</label><input id="novaParcelaData-${indice}" type="date" value="${item.data || ''}" data-parcela-data="${indice}" /></div>
-    </div>`).join('');
-  lista.querySelectorAll('[data-parcela-data]').forEach(input => {
-    input.addEventListener('change', () => {
-      const indice = Number(input.dataset.parcelaData);
-      if (novosLembretesCobranca[indice]) novosLembretesCobranca[indice].data = input.value;
-    });
-  });
-}
-
-function gerarParcelasNovaOS() {
-  const valorOS = Number($('diagValorEstimado')?.value || 0);
-  const quantidade = Number($('novaQuantidadeParcelas')?.value || 0);
-  const primeiraData = $('novaPrimeiraParcelaData')?.value || '';
-  if (valorOS <= 0) {
-    toast('Informe primeiro o valor do orçamento da OS.', 'erro');
-    $('diagValorEstimado')?.focus();
-    return;
-  }
-  if (!Number.isInteger(quantidade) || quantidade < 2 || quantidade > 12) {
-    toast('Escolha uma quantidade válida de parcelas.', 'erro');
-    $('novaQuantidadeParcelas')?.focus();
-    return;
-  }
-  if (!primeiraData) {
-    toast('Escolha a data do primeiro vencimento.', 'erro');
-    $('novaPrimeiraParcelaData')?.focus();
-    return;
-  }
+window.alterarStatusLembreteCobrancaNovaOS = function(indice, status) {
+  const posicao = Number(indice);
+  const permitido = ['pendente', 'atrasada', 'paga', 'desativada'];
+  if (!Number.isInteger(posicao) || !novosLembretesCobranca[posicao] || !permitido.includes(status)) return;
   const agora = new Date().toISOString();
-  const valores = _valoresParcelasEmCentavos(valorOS, quantidade);
-  novosLembretesCobranca = valores.map((valor, indice) => ({
-    id: `cob-${Date.now()}-${indice}-${Math.random().toString(36).slice(2, 6)}`,
-    data: _dataParcelaMes(primeiraData, indice), valor, criadoEm: agora,
-    status: 'pendente', avisarAntesDias: 0, confirmadoEm: '', valorRecebido: 0
-  }));
-  renderizarParcelasNovaOS();
-}
+  const atual = { ...novosLembretesCobranca[posicao], status, atualizadoEm: agora };
+  if (status === 'paga') {
+    atual.confirmadoEm = atual.confirmadoEm || agora;
+    atual.pagoEm = atual.pagoEm || atual.confirmadoEm;
+    atual.valorRecebido = Number(atual.valor || 0);
+    atual.impactaRecebimento = atual.impactaRecebimento !== false;
+    delete atual.desativadoEm;
+  } else {
+    delete atual.confirmadoEm;
+    delete atual.pagoEm;
+    delete atual.valorRecebido;
+    delete atual.impactaRecebimento;
+    if (status === 'desativada') atual.desativadoEm = agora;
+    else delete atual.desativadoEm;
+  }
+  if (status === 'atrasada') atual.atrasadoEm = agora;
+  else delete atual.atrasadoEm;
+  novosLembretesCobranca[posicao] = atual;
+  renderizarLembretesCobrancaNovaOS();
+};
 
-$('btnGerarParcelasNovaOS')?.addEventListener('click', gerarParcelasNovaOS);
-$('diagValorEstimado')?.addEventListener('input', () => {
-  if (!novosLembretesCobranca.length) return;
-  const valorOS = Number($('diagValorEstimado')?.value || 0);
-  if (valorOS <= 0) return;
-  const valores = _valoresParcelasEmCentavos(valorOS, novosLembretesCobranca.length);
-  novosLembretesCobranca = novosLembretesCobranca.map((item, indice) => ({ ...item, valor: valores[indice] }));
-  renderizarParcelasNovaOS();
+window.removerLembreteCobrancaNovaOS = function(indice) {
+  novosLembretesCobranca.splice(Number(indice), 1);
+  renderizarLembretesCobrancaNovaOS();
+};
+
+$('btnAdicionarNovoLembreteCobranca')?.addEventListener('click', () => {
+  const data = $('novaLembreteCobrancaData')?.value || '';
+  const valor = Number($('novaLembreteCobrancaValor')?.value || 0);
+  if (!data) {
+    toast('Escolha a data do lembrete de cobrança.', 'erro');
+    $('novaLembreteCobrancaData')?.focus();
+    return;
+  }
+  novosLembretesCobranca.push({
+    id: `cob-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    data,
+    valor: valor > 0 ? valor : 0,
+    criadoEm: new Date().toISOString(),
+    status: 'pendente',
+    avisarAntesDias: 0,
+    confirmadoEm: '',
+    valorRecebido: 0
+  });
+  novosLembretesCobranca.sort((a, b) => String(a.data).localeCompare(String(b.data)));
+  if ($('novaLembreteCobrancaData')) $('novaLembreteCobrancaData').value = '';
+  if ($('novaLembreteCobrancaValor')) $('novaLembreteCobrancaValor').value = '';
+  renderizarLembretesCobrancaNovaOS();
 });
 
 function calcularPrecoSugeridoOS() {
@@ -1906,11 +1901,6 @@ $('btnSalvarOS').addEventListener('click', async () => {
   if (cpf && !validarCPF(cpf)) { marcarErro('cpf', 'CPF inválido.'); valido = false; }
   // Validação de formato: IMEI (apenas se preenchido)
   if (imei && !validarIMEI(imei)) { marcarErro('imei', 'IMEI inválido (deve ter 15 dígitos).'); valido = false; }
-  if (novosLembretesCobranca.some(item => !item.data)) {
-    mostrarMsg('mensagemFormulario', 'Informe a data de vencimento de todas as parcelas.', 'erro');
-    [...($('novaListaParcelasOS')?.querySelectorAll('input[type="date"]') || [])].find(input => !input.value)?.focus();
-    return;
-  }
   if (!valido) { mostrarMsg('mensagemFormulario', 'Corrija os campos destacados em vermelho.', 'erro'); return; }
 
   $('btnSalvarOS').disabled = true;
@@ -2019,9 +2009,9 @@ function limparFormOS() {
   if ($('horaPrevista')) $('horaPrevista').value = '';
   if ($('semPrazoOS')) $('semPrazoOS').checked = false;
   novosLembretesCobranca = [];
-  if ($('novaQuantidadeParcelas')) $('novaQuantidadeParcelas').value = '2';
-  if ($('novaPrimeiraParcelaData')) $('novaPrimeiraParcelaData').value = '';
-  renderizarParcelasNovaOS();
+  if ($('novaLembreteCobrancaData')) $('novaLembreteCobrancaData').value = '';
+  if ($('novaLembreteCobrancaValor')) $('novaLembreteCobrancaValor').value = '';
+  renderizarLembretesCobrancaNovaOS();
   aplicarEstadoSemPrazo('semPrazoOS', 'dataPrevista', 'horaPrevista');
   aplicarTermosPadraoNoCampo('os', 'termos', true);
   // ETAPA 8.6.1 — reseta checklists técnicos e diagnóstico

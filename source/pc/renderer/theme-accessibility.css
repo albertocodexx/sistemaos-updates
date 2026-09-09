@@ -1,0 +1,75 @@
+/* Última camada de contraste da interface. Mantém o tema escuro intacto e
+   impede que estilos legados brancos permaneçam sobre o fundo claro. */
+body:not(.tema-escuro) {
+  --ds-fundo: #f5f6f7;
+  --ds-superficie: #eceef0;
+  --ds-card: #ffffff;
+  --ds-campo: #ffffff;
+  --ds-elevado: #e7e9ec;
+  --ds-borda: #c5c9ce;
+  --ds-borda-frac: #dde0e3;
+  --ds-borda-forte: #737981;
+  --ds-texto: #111318;
+  --ds-texto-sec: #42474f;
+  --ds-texto-desab: #5f6670;
+  --texto: #111318;
+  --texto-sec: #42474f;
+  --bg: #f5f6f7;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --borda: #c5c9ce;
+}
+
+body:not(.tema-escuro) .topo,
+body:not(.tema-escuro) .abas,
+body:not(.tema-escuro) .modal-cabecalho,
+body:not(.tema-escuro) .modal-rodape { color: #111318 !important; }
+
+body:not(.tema-escuro) .topo .botao-fantasma,
+body:not(.tema-escuro) .topo .botao-secundario,
+body:not(.tema-escuro) .topo .botao-icone,
+body:not(.tema-escuro) .topo .btn-wapp-status,
+body:not(.tema-escuro) .usuario-logado-nome,
+body:not(.tema-escuro) .usuario-logado-perfil { color: #111318 !important; }
+
+body:not(.tema-escuro) .aba:not(.ativa),
+body:not(.tema-escuro) .aba-interna:not(.ativa),
+body:not(.tema-escuro) .tab-historico-interna:not(.ativa) { color: #343940 !important; }
+
+body:not(.tema-escuro) .botao-secundario,
+body:not(.tema-escuro) .botao-fantasma,
+body:not(.tema-escuro) .botao-icone,
+body:not(.tema-escuro) .btn-secundario,
+body:not(.tema-escuro) .config-busca-resultado { color: #111318 !important; }
+
+body:not(.tema-escuro) .botao-secundario:hover,
+body:not(.tema-escuro) .botao-fantasma:hover,
+body:not(.tema-escuro) .botao-icone:hover,
+body:not(.tema-escuro) .btn-secundario:hover,
+body:not(.tema-escuro) .aba:not(.ativa):hover,
+body:not(.tema-escuro) .aba-interna:not(.ativa):hover,
+body:not(.tema-escuro) .tab-historico-interna:not(.ativa):hover {
+  background: #e7e9ec !important;
+  border-color: #737981 !important;
+  color: #090b0e !important;
+}
+
+body:not(.tema-escuro) th { background: #eceef0 !important; color: #2f343b !important; }
+body:not(.tema-escuro) tbody tr:nth-child(even) td { background: #fafafa !important; }
+body:not(.tema-escuro) tr:hover td { background: #eceef0 !important; }
+body:not(.tema-escuro) .modal-fundo { background: rgba(17,19,24,.58) !important; }
+body:not(.tema-escuro) .campo-desc,
+body:not(.tema-escuro) .dica-campo,
+body:not(.tema-escuro) small { color: #4b515a; }
+body:not(.tema-escuro) [style*="color:#888"],
+body:not(.tema-escuro) [style*="color: #888"],
+body:not(.tema-escuro) [style*="color:#aaa"],
+body:not(.tema-escuro) [style*="color: #aaa"] { color: #555c66 !important; }
+body:not(.tema-escuro) input:disabled,
+body:not(.tema-escuro) select:disabled,
+body:not(.tema-escuro) textarea:disabled { background: #eceef0 !important; color: #555c66 !important; opacity: 1; }
+body:not(.tema-escuro) a { color: #111318; }
+
+@media (prefers-contrast: more) {
+  body:not(.tema-escuro) { --ds-borda: #8c929a; --borda: #8c929a; }
+}

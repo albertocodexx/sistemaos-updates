@@ -76,10 +76,8 @@
     if (cobrancas) {
       const tituloCobranca = cobrancas.querySelector('strong');
       const ajudaCobranca = cobrancas.querySelector('span');
-      if (tituloCobranca) tituloCobranca.textContent = edicao ? 'Parcelas e lembretes de cobrança' : 'Parcelas da OS';
-      if (ajudaCobranca) ajudaCobranca.textContent = edicao
-        ? 'Informe a data e o valor de cada cobrança. A agenda e a situação aparecem também no celular.'
-        : 'Divida o valor do orçamento e informe as datas. As cobranças aparecerão também no celular.';
+      if (tituloCobranca) tituloCobranca.textContent = 'Parcelas e lembretes de cobrança';
+      if (ajudaCobranca) ajudaCobranca.textContent = 'Informe a data e o valor de cada cobrança. A agenda e a situação aparecem também no celular.';
       cobrancas.dataset.formEssencial = 'true';
       atendimento.append(cobrancas);
     }

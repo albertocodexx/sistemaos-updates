@@ -41,14 +41,14 @@ app.whenReady().then(async () => {
   console.log(await pc.webContents.executeJavaScript(`
     exigir(controlesAntes.every(el=>el.isConnected), 'Nenhum controle ou valor legado pode ser perdido');
     const ids = ['diagValorEstimado','statusOS','dataPrevista','prioridadeOS','nome','telefone','defeitoRelatado',
-      'novaQuantidadeParcelas','novaPrimeiraParcelaData','btnGerarParcelasNovaOS'];
+      'novaLembreteCobrancaData','novaLembreteCobrancaValor','btnAdicionarNovoLembreteCobranca'];
     ids.forEach(id=>exigir(visivel(document.getElementById(id)), 'Essencial oculto: '+id));
     document.querySelector('[data-form-todas]').click();
     ['codigoInterno','etiquetaInterna','tagBancada','numeroPatrimonio','tecnicoAuxiliar','diagPrazoEstimado','diagPecas','obsSaida']
       .forEach(id=>exigir(!visivel(document.getElementById(id)), 'Campo aposentado reapareceu: '+id));
     document.querySelector('[data-form-essenciais]').click();
     ids.forEach(id=>exigir(visivel(document.getElementById(id)), 'Essencial recolhido: '+id));
-    ['novaQuantidadeParcelas','novaPrimeiraParcelaData','btnGerarParcelasNovaOS'].forEach(id => {
+    ['novaLembreteCobrancaData','novaLembreteCobrancaValor','btnAdicionarNovoLembreteCobranca'].forEach(id => {
       const el = document.getElementById(id);
       exigir(!!el.closest('.form-atendimento'), 'Parcelamento fora de Valor, prazo e status: '+id);
       exigir(!el.closest('details'), 'Parcelamento escondido: '+id);
