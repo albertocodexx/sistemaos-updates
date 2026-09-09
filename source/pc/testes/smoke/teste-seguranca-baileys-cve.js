@@ -10,6 +10,7 @@ const versaoResolvida = lock.packages?.['node_modules/@whiskeysockets/baileys']?
 const versaoYaml = lock.packages?.['node_modules/js-yaml']?.version || '';
 const versaoSharp = lock.packages?.['node_modules/sharp']?.version || '';
 const versaoBuilder = lock.packages?.['node_modules/electron-builder']?.version || '';
+const pnpmLock = fs.readFileSync(path.join(raiz, 'pnpm-lock.yaml'), 'utf8');
 
 assert.equal(pacote.dependencies['@whiskeysockets/baileys'], '6.7.23');
 assert.equal(versaoResolvida, '6.7.23');
@@ -18,7 +19,12 @@ assert.equal(pacote.devDependencies['electron-builder'], '26.16.0');
 assert.equal(versaoBuilder, '26.16.0');
 assert.equal(pacote.overrides['js-yaml'], '4.3.2');
 assert.equal(versaoYaml, '4.3.2');
+assert.equal(pacote.overrides.sharp, '0.35.4');
 assert.equal(versaoSharp, '0.35.4');
+assert.match(pnpmLock, /js-yaml:\s+4\.3\.2/);
+assert.match(pnpmLock, /sharp:\s+0\.35\.4/);
+assert.doesNotMatch(pnpmLock, /js-yaml@4\.3\.1/);
+assert.doesNotMatch(pnpmLock, /sharp@0\.35\.3/);
 assert.match(whatsapp, /BAILEYS_MINIMO_SEGURO = \[6, 7, 22\]/);
 assert.match(whatsapp, /_validarVersaoSeguraBaileys\(\)/);
 assert.match(whatsapp, /if \(upsert\?\.requestId\)/);

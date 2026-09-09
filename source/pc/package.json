@@ -1,6 +1,6 @@
 {
   "name": "sistema-os-at",
-  "version": "30.5.130",
+  "version": "30.5.131",
   "packageManager": "pnpm@11.16.0",
   "description": "Sistema de Ordens de Serviço para Assistências Técnicas",
   "main": "main.js",
@@ -33,7 +33,8 @@
   },
   "overrides": {
     "builder-util-runtime": "9.7.0",
-    "js-yaml": "4.3.2"
+    "js-yaml": "4.3.2",
+    "sharp": "0.35.4"
   },
   "build": {
     "appId": "com.sistemaos.assistencia",
