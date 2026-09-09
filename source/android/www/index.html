@@ -876,7 +876,7 @@
     <section class="painel-config" id="painel-config" hidden>
 
       <form id="form-config" class="form-os" novalidate>
-        <p class="config-versao-aplicativo">Aplicativo instalado: <strong>1.0.86</strong></p>
+        <p class="config-versao-aplicativo">Aplicativo instalado: <strong>1.0.87</strong></p>
 
         <fieldset class="secao-config config-empresa-somente-leitura">
           <legend>Dados da empresa</legend>
@@ -1318,11 +1318,6 @@
         </div>
       </form>
 
-      <section class="desbloqueios-registros">
-        <div class="desbloqueios-ferramentas"><h3>Autorizações salvas</h3><input type="search" id="desbloqueio-busca" placeholder="Buscar cliente, número ou aparelho" autocomplete="off" /></div>
-        <p id="desbloqueio-lista-status" class="desbloqueio-feedback">Abra a aba para sincronizar.</p>
-        <div id="desbloqueio-lista" class="desbloqueio-lista"></div>
-      </section>
     </section>
 
     <section class="painel-documentos painel-leitor-qr" id="painel-qr" hidden>
@@ -1378,6 +1373,15 @@
           </section>
         </div>
       </fieldset>
+
+      <section class="desbloqueios-registros desbloqueios-consulta">
+        <div class="desbloqueios-ferramentas">
+          <div><h3>Autorizações de desbloqueio</h3><p>Consulte os documentos já gerados sem misturar com o formulário de uma nova autorização.</p></div>
+          <input type="search" id="desbloqueio-busca" placeholder="Cliente, número ou aparelho" autocomplete="off" />
+        </div>
+        <p id="desbloqueio-lista-status" class="desbloqueio-feedback">Abra a aba Consultas para sincronizar.</p>
+        <div id="desbloqueio-lista" class="desbloqueio-lista"></div>
+      </section>
     </section>
 
     <section class="painel-cobrancas-mobile" id="painel-cobrancas" hidden>

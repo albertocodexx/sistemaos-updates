@@ -1778,6 +1778,89 @@ let novoChecklistAcessorios = [];
 let novoChecklistTestes = [];
 let novoChecklistEntrada = [];
 let novoChecklistSaida = [];
+let novosLembretesCobranca = [];
+
+function _dataParcelaMes(dataIso, meses) {
+  const partes = String(dataIso || '').split('-').map(Number);
+  if (partes.length !== 3 || partes.some(n => !Number.isFinite(n))) return '';
+  const ano = partes[0];
+  const mesBase = partes[1] - 1 + meses;
+  const anoDestino = ano + Math.floor(mesBase / 12);
+  const mesDestino = ((mesBase % 12) + 12) % 12;
+  const ultimoDia = new Date(anoDestino, mesDestino + 1, 0).getDate();
+  const diaDestino = Math.min(partes[2], ultimoDia);
+  return `${anoDestino}-${String(mesDestino + 1).padStart(2, '0')}-${String(diaDestino).padStart(2, '0')}`;
+}
+
+function _valoresParcelasEmCentavos(total, quantidade) {
+  const totalCentavos = Math.round(Number(total || 0) * 100);
+  const base = Math.floor(totalCentavos / quantidade);
+  const resto = totalCentavos % quantidade;
+  return Array.from({ length: quantidade }, (_, indice) => (base + (indice < resto ? 1 : 0)) / 100);
+}
+
+function renderizarParcelasNovaOS() {
+  const lista = $('novaListaParcelasOS');
+  const resumo = $('novaParcelasResumo');
+  if (!lista || !resumo) return;
+  if (!novosLembretesCobranca.length) {
+    lista.innerHTML = '';
+    resumo.textContent = 'Informe o valor da OS, escolha a quantidade e a primeira data.';
+    return;
+  }
+  const total = novosLembretesCobranca.reduce((soma, item) => soma + Number(item.valor || 0), 0);
+  resumo.textContent = `${novosLembretesCobranca.length} parcelas · total ${fmtMoeda(total)}. Você pode ajustar cada vencimento.`;
+  lista.innerHTML = novosLembretesCobranca.map((item, indice) => `
+    <div class="lembrete-cobranca-item parcela-os-item">
+      <div><small>Parcela ${indice + 1} de ${novosLembretesCobranca.length}</small><strong>${fmtMoeda(item.valor)}</strong></div>
+      <div class="campo"><label for="novaParcelaData-${indice}">Vencimento</label><input id="novaParcelaData-${indice}" type="date" value="${item.data || ''}" data-parcela-data="${indice}" /></div>
+    </div>`).join('');
+  lista.querySelectorAll('[data-parcela-data]').forEach(input => {
+    input.addEventListener('change', () => {
+      const indice = Number(input.dataset.parcelaData);
+      if (novosLembretesCobranca[indice]) novosLembretesCobranca[indice].data = input.value;
+    });
+  });
+}
+
+function gerarParcelasNovaOS() {
+  const valorOS = Number($('diagValorEstimado')?.value || 0);
+  const quantidade = Number($('novaQuantidadeParcelas')?.value || 0);
+  const primeiraData = $('novaPrimeiraParcelaData')?.value || '';
+  if (valorOS <= 0) {
+    toast('Informe primeiro o valor do orçamento da OS.', 'erro');
+    $('diagValorEstimado')?.focus();
+    return;
+  }
+  if (!Number.isInteger(quantidade) || quantidade < 2 || quantidade > 12) {
+    toast('Escolha uma quantidade válida de parcelas.', 'erro');
+    $('novaQuantidadeParcelas')?.focus();
+    return;
+  }
+  if (!primeiraData) {
+    toast('Escolha a data do primeiro vencimento.', 'erro');
+    $('novaPrimeiraParcelaData')?.focus();
+    return;
+  }
+  const agora = new Date().toISOString();
+  const valores = _valoresParcelasEmCentavos(valorOS, quantidade);
+  novosLembretesCobranca = valores.map((valor, indice) => ({
+    id: `cob-${Date.now()}-${indice}-${Math.random().toString(36).slice(2, 6)}`,
+    data: _dataParcelaMes(primeiraData, indice), valor, criadoEm: agora,
+    status: 'pendente', avisarAntesDias: 0, confirmadoEm: '', valorRecebido: 0
+  }));
+  renderizarParcelasNovaOS();
+}
+
+$('btnGerarParcelasNovaOS')?.addEventListener('click', gerarParcelasNovaOS);
+$('diagValorEstimado')?.addEventListener('input', () => {
+  if (!novosLembretesCobranca.length) return;
+  const valorOS = Number($('diagValorEstimado')?.value || 0);
+  if (valorOS <= 0) return;
+  const valores = _valoresParcelasEmCentavos(valorOS, novosLembretesCobranca.length);
+  novosLembretesCobranca = novosLembretesCobranca.map((item, indice) => ({ ...item, valor: valores[indice] }));
+  renderizarParcelasNovaOS();
+});
 
 function calcularPrecoSugeridoOS() {
   const investido = parseFloat($('valorInvestido').value) || 0;
@@ -1823,6 +1906,11 @@ $('btnSalvarOS').addEventListener('click', async () => {
   if (cpf && !validarCPF(cpf)) { marcarErro('cpf', 'CPF inválido.'); valido = false; }
   // Validação de formato: IMEI (apenas se preenchido)
   if (imei && !validarIMEI(imei)) { marcarErro('imei', 'IMEI inválido (deve ter 15 dígitos).'); valido = false; }
+  if (novosLembretesCobranca.some(item => !item.data)) {
+    mostrarMsg('mensagemFormulario', 'Informe a data de vencimento de todas as parcelas.', 'erro');
+    [...($('novaListaParcelasOS')?.querySelectorAll('input[type="date"]') || [])].find(input => !input.value)?.focus();
+    return;
+  }
   if (!valido) { mostrarMsg('mensagemFormulario', 'Corrija os campos destacados em vermelho.', 'erro'); return; }
 
   $('btnSalvarOS').disabled = true;
@@ -1872,7 +1960,8 @@ $('btnSalvarOS').addEventListener('click', async () => {
       checklistEntrada: [...novoChecklistEntrada],
       observacoesEntrada: $('obsEntrada').value.trim(),
       checklistSaida: [...novoChecklistSaida],
-      observacoesSaida: $('obsSaida').value.trim()
+      observacoesSaida: $('obsSaida').value.trim(),
+      lembretesCobranca: novosLembretesCobranca.map(item => ({ ...item }))
     };
     const os = await window.api.oscriar(dadosOS, usuarioAtual?.id);
     mostrarMsg('mensagemFormulario', `OS ${os.numero} criada! PDF gerado.`, '');
@@ -1929,6 +2018,10 @@ function limparFormOS() {
   if ($('dataPrevista')) $('dataPrevista').value = '';
   if ($('horaPrevista')) $('horaPrevista').value = '';
   if ($('semPrazoOS')) $('semPrazoOS').checked = false;
+  novosLembretesCobranca = [];
+  if ($('novaQuantidadeParcelas')) $('novaQuantidadeParcelas').value = '2';
+  if ($('novaPrimeiraParcelaData')) $('novaPrimeiraParcelaData').value = '';
+  renderizarParcelasNovaOS();
   aplicarEstadoSemPrazo('semPrazoOS', 'dataPrevista', 'horaPrevista');
   aplicarTermosPadraoNoCampo('os', 'termos', true);
   // ETAPA 8.6.1 — reseta checklists técnicos e diagnóstico

@@ -38,6 +38,8 @@ const testes = [
   'teste-equipe-suporte-organizada.js',
   'teste-etiqueta-qr.js',
   'teste-desbloqueios-autorizacao.js',
+  'teste-assinatura-retorno-rapido.js',
+  'teste-parcelas-nova-os.js',
   'teste-edicao-os-entrega-sem-assinatura.js',
   'teste-renderer-estoque-dashboard.js',
   'teste-cpf-opcional-estoque.js',

@@ -72,16 +72,16 @@
     grade.firstElementChild.append(nota);
     // Parcelas são parte do financeiro essencial da OS. A simplificação anterior
     // deixava este editor no card antigo de Status, que acabava dentro dos extras.
-    if (edicao) {
-      const cobrancas = raiz.querySelector('.lembretes-cobranca-editor');
-      if (cobrancas) {
-        const tituloCobranca = cobrancas.querySelector('strong');
-        const ajudaCobranca = cobrancas.querySelector('span');
-        if (tituloCobranca) tituloCobranca.textContent = 'Parcelas e lembretes de cobrança';
-        if (ajudaCobranca) ajudaCobranca.textContent = 'Informe a data e o valor de cada cobrança. A agenda e a situação aparecem também no celular.';
-        cobrancas.dataset.formEssencial = 'true';
-        atendimento.append(cobrancas);
-      }
+    const cobrancas = raiz.querySelector(edicao ? '.lembretes-cobranca-editor' : '#novaParcelasOS');
+    if (cobrancas) {
+      const tituloCobranca = cobrancas.querySelector('strong');
+      const ajudaCobranca = cobrancas.querySelector('span');
+      if (tituloCobranca) tituloCobranca.textContent = edicao ? 'Parcelas e lembretes de cobrança' : 'Parcelas da OS';
+      if (ajudaCobranca) ajudaCobranca.textContent = edicao
+        ? 'Informe a data e o valor de cada cobrança. A agenda e a situação aparecem também no celular.'
+        : 'Divida o valor do orçamento e informe as datas. As cobranças aparecerão também no celular.';
+      cobrancas.dataset.formEssencial = 'true';
+      atendimento.append(cobrancas);
     }
     // Uma única previsão e um checklist de recebimento, sem solicitar os mesmos testes duas vezes.
     [id('checklistEntradaNovo','checklistEntradaEdit'), id('checklistSaidaNovo','checklistSaidaEdit')].forEach(cid => {

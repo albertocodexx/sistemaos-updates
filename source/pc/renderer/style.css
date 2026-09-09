@@ -3684,10 +3684,15 @@ html.modo-segundo-plano *::after { animation-play-state: paused !important; }
 .lembrete-cobranca-item[data-estado="paga"] strong { color: var(--sucesso); }
 .lembrete-cobranca-acoes { display: flex !important; grid-template-columns: none !important; flex-direction: row; align-items: center; justify-content: flex-end; gap: 7px !important; }
 .lembrete-cobranca-status { min-height: 34px; width: auto; min-width: 118px; padding: 5px 30px 5px 9px; border: 1px solid var(--borda); border-radius: 7px; background: var(--bg-card); color: var(--texto); font: inherit; font-size: 12px; }
+.parcela-os-item { display: grid; grid-template-columns: minmax(0, 1fr) minmax(145px, .7fr); align-items: end; gap: 12px; }
+.parcela-os-item .campo { margin: 0; }
+.parcela-os-item strong { font-variant-numeric: tabular-nums; }
+.parcela-os-item small { color: var(--texto-sec); }
 
 @media (max-width: 760px) {
   .lembrete-cobranca-campos { grid-template-columns: minmax(0, 1fr); }
   .lembrete-cobranca-item { align-items: flex-start; flex-direction: column; }
   .lembrete-cobranca-acoes { width: 100%; justify-content: space-between; }
+  .parcela-os-item { grid-template-columns: minmax(0, 1fr); }
 }
 .cliente-historico-item{background:var(--bg);border:1px solid var(--borda);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:12px}.cliente-historico-meta{color:var(--texto-sec);margin-top:3px;line-height:1.45}

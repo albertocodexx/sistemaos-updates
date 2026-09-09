@@ -5,6 +5,7 @@
 
   var painel = document.getElementById('painel-desbloqueios');
   if (!painel) return;
+  var painelConsulta = document.getElementById('painel-consulta');
 
   var form = document.getElementById('form-desbloqueio-mobile');
   var lista = document.getElementById('desbloqueio-lista');
@@ -247,7 +248,10 @@
       card.className = 'desbloqueio-card';
       card.innerHTML = '<div class="desbloqueio-card-topo"><div><strong>' + escapar(item.numero) + '</strong><span>Cliente ' + escapar(item.cliente_numero_snapshot || '00000') + '</span></div><span class="desbloqueio-status desbloqueio-status-' + escapar(item.assinatura_estado) + '">' + escapar(estadoRotulo(item)) + '</span></div><h3>' + escapar(item.cliente_nome_snapshot) + '</h3><p>' + escapar([item.marca, item.modelo].filter(Boolean).join(' ')) + ' · ' + escapar(item.tipo_bloqueio) + '</p>' + (Number(item.valor || 0) ? '<b>' + moeda(item.valor) + '</b>' : '') + '<div class="desbloqueio-card-acoes"><button type="button" class="btn-secundario" data-abrir>Abrir</button><button type="button" class="btn-secundario" data-editar>Editar</button></div>';
       card.querySelector('[data-abrir]').addEventListener('click', function () { abrirDocumento(item.id, false); });
-      card.querySelector('[data-editar]').addEventListener('click', function () { abrirDocumento(item.id, true); });
+      card.querySelector('[data-editar]').addEventListener('click', function () {
+        document.getElementById('btn-ir-desbloqueios')?.click();
+        abrirDocumento(item.id, true);
+      });
       lista.appendChild(card);
     });
   }
@@ -286,7 +290,7 @@
   function iniciarTempoReal(client) {
     if (canal || !client.channel) return;
     canal = client.channel('desbloqueios-mobile').on('postgres_changes', { event: '*', schema: 'public', table: 'desbloqueios' }, function () {
-      if (!painel.hidden) carregarLista().catch(function () {});
+      if (!painel.hidden || (painelConsulta && !painelConsulta.hidden)) carregarLista().catch(function () {});
     }).subscribe();
   }
 
@@ -315,7 +319,7 @@
   btnExcluir.addEventListener('click', excluirAtual);
   btnNovo.addEventListener('click', limparFormulario);
   busca.addEventListener('input', renderizarLista);
-  document.addEventListener('sistema-os:tela-desbloqueios-aberta', carregarLista);
+  document.addEventListener('sistema-os:tela-consulta-aberta', carregarLista);
   document.addEventListener('sistema-os:sessao-alterada', function (evento) {
     var nova = JSON.stringify([evento.detail?.contexto?.empresa_id || '', evento.detail?.contexto?.usuario_id || evento.detail?.usuario?.id || '', evento.detail?.autenticado === true]);
     if (nova === empresaAtual) return;

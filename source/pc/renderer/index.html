@@ -276,7 +276,7 @@
           <img src="assets/logo-os-white.png" alt="" width="58" height="58">
           <div>
             <h1 id="loginTitulo">Sistema OS</h1>
-            <span class="login-brand-versao">v30.5.128</span>
+            <span class="login-brand-versao">v30.5.129</span>
           </div>
         </header>
 
@@ -670,6 +670,25 @@
                   <option>Urgente</option>
                 </select>
               </div>
+            </div>
+            <div id="novaParcelasOS" class="lembretes-cobranca-editor parcelamento-os-editor">
+              <div>
+                <strong>Parcelas da OS</strong>
+                <span>O valor de cada parcela será calculado automaticamente a partir do valor do orçamento.</span>
+              </div>
+              <div class="lembrete-cobranca-campos parcela-os-configuracao">
+                <div class="campo">
+                  <label for="novaQuantidadeParcelas">Quantidade</label>
+                  <select id="novaQuantidadeParcelas">
+                    <option value="2">2 parcelas</option><option value="3">3 parcelas</option><option value="4">4 parcelas</option>
+                    <option value="5">5 parcelas</option><option value="6">6 parcelas</option><option value="10">10 parcelas</option><option value="12">12 parcelas</option>
+                  </select>
+                </div>
+                <div class="campo"><label for="novaPrimeiraParcelaData">Primeiro vencimento</label><input id="novaPrimeiraParcelaData" type="date" /></div>
+                <button type="button" id="btnGerarParcelasNovaOS" class="botao botao-secundario">Dividir valor</button>
+              </div>
+              <p id="novaParcelasResumo" class="dica-campo" aria-live="polite">Informe o valor da OS, escolha a quantidade e a primeira data.</p>
+              <div id="novaListaParcelasOS" class="lembretes-cobranca-lista"></div>
             </div>
           </div>
 

@@ -208,10 +208,13 @@ class DesktopSupabaseRuntime {
     this.janela = null;
     this.timerHeartbeat = null;
     this.timerSync = null;
+    this.timerAssinaturas = null;
     this.timerSyncSolicitado = null;
     this.processadorOSRemota = null;
     this.processadorDocumentoComercialRemoto = null;
     this.syncEmAndamento = null;
+    this.assinaturasEmAndamento = null;
+    this.verificacaoAssinaturaEmAndamento = null;
     this.syncFalhasConsecutivas = 0;
     this.syncSuspensoAte = 0;
     this.inicializado = false;
@@ -994,16 +997,23 @@ class DesktopSupabaseRuntime {
     // Electron fica minimizado na bandeja.
     this.timerHeartbeat = setInterval(() => this.enviarHeartbeat().catch(() => {}), 60000);
     this.timerSync = setInterval(() => this.solicitarSincronizacao(0), 180000);
+    // Assinatura é uma interação urgente e muito menor que uma sincronização
+    // completa. Consulta somente a fila de respostas para o PC recebê-la em
+    // poucos segundos sem aumentar o custo de CPU do restante do sistema.
+    this.timerAssinaturas = setInterval(() => this.verificarRespostasAssinatura().catch(() => {}), 12000);
     this.timerHeartbeat.unref?.();
     this.timerSync.unref?.();
+    this.timerAssinaturas.unref?.();
   }
 
   parar() {
     if (this.timerHeartbeat) clearInterval(this.timerHeartbeat);
     if (this.timerSync) clearInterval(this.timerSync);
+    if (this.timerAssinaturas) clearInterval(this.timerAssinaturas);
     if (this.timerSyncSolicitado) clearTimeout(this.timerSyncSolicitado);
     this.timerHeartbeat = null;
     this.timerSync = null;
+    this.timerAssinaturas = null;
     this.timerSyncSolicitado = null;
   }
 
@@ -1662,6 +1672,34 @@ class DesktopSupabaseRuntime {
     return aplicadas;
   }
 
+  async _baixarRespostasAssinaturaUmaVez() {
+    if (this.assinaturasEmAndamento) return this.assinaturasEmAndamento;
+    this.assinaturasEmAndamento = this._baixarRespostasAssinatura()
+      .finally(() => { this.assinaturasEmAndamento = null; });
+    return this.assinaturasEmAndamento;
+  }
+
+  async verificarRespostasAssinatura() {
+    if (!this.client || !this.contexto || this.contexto.administrador_global === true) return 0;
+    // O ciclo completo já consulta a mesma fila; não faça uma segunda chamada.
+    if (this.syncEmAndamento) return 0;
+    if (this.verificacaoAssinaturaEmAndamento) return this.verificacaoAssinaturaEmAndamento;
+    this.verificacaoAssinaturaEmAndamento = (async () => {
+      const assinaturas = await this._baixarRespostasAssinaturaUmaVez();
+      if (assinaturas > 0) {
+        const em = new Date().toISOString();
+        this.janela?.()?.webContents?.send?.('supabase:sincronizado', {
+          enviados: 0, recebidos: 0, arquivos: 0, assinaturas, em
+        });
+        // O documento e o PDF já foram atualizados localmente. Publica a nova
+        // versão logo depois, usando o lock e o agrupamento normais do runtime.
+        this.solicitarSincronizacao(0);
+      }
+      return assinaturas;
+    })().finally(() => { this.verificacaoAssinaturaEmAndamento = null; });
+    return this.verificacaoAssinaturaEmAndamento;
+  }
+
   async sincronizarAgora() {
     if (this.syncEmAndamento) return this.syncEmAndamento;
     if (this.contexto?.administrador_global === true) {
@@ -1714,7 +1752,7 @@ class DesktopSupabaseRuntime {
           return { enviados: 0, recebidos: 0 };
         });
         enviados += (entregasPublicadas?.enviados || 0) + (garantiasSincronizadas?.enviados || 0) + (desbloqueiosSincronizados?.enviados || 0);
-        const assinaturas = await this._baixarRespostasAssinatura();
+        const assinaturas = await this._baixarRespostasAssinaturaUmaVez();
         // A importação da assinatura regenera o PDF e enfileira a nova versão
         // durante este ciclo. Publica agora para o celular não abrir a anterior.
         if (assinaturas > 0) enviados += await this._processarFila();
@@ -1754,6 +1792,7 @@ class DesktopSupabaseRuntime {
           enviados, recebidos: recebidosTotais,
           estoqueEnviados: estoque.enviados, estoqueRecebidos: estoque.recebidos,
           arquivos: arquivos.respondidas + arquivosRemotos.aplicados,
+          assinaturas,
           avisos,
           em: agora
         });

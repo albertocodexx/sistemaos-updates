@@ -49,5 +49,11 @@ assert.match(migracaoMobile, /numero_cliente bigint/);
 assert.match(migracaoMobile, /buscar_cliente_documentos/);
 assert.match(migracaoMobile, /set search_path\s*=\s*''/);
 assert.doesNotMatch(migracaoMobile, /grant\s+(insert|update|delete)\s+on\s+table\s+public\.desbloqueios/i);
+const trechoCriacaoMobile = mobileHtml.slice(mobileHtml.indexOf('id="painel-desbloqueios"'), mobileHtml.indexOf('id="painel-qr"'));
+const trechoConsultaMobile = mobileHtml.slice(mobileHtml.indexOf('id="painel-consulta"'), mobileHtml.indexOf('id="painel-cobrancas"'));
+assert.doesNotMatch(trechoCriacaoMobile, /id="desbloqueio-busca"/);
+assert.match(trechoConsultaMobile, /Autorizações de desbloqueio/);
+assert.match(trechoConsultaMobile, /id="desbloqueio-busca"/);
+assert.match(mobileTela, /sistema-os:tela-consulta-aberta/);
 
 console.log('OK: Desbloqueios possui termo profissional, PDF, assinatura móvel e exclusão remota persistente.');

@@ -40,13 +40,19 @@ app.whenReady().then(async () => {
   const pc = await janela(path.join(raiz, 'renderer/index.html'), ['form-layout.js','form-organizer.js'].map(f => path.join(raiz,'renderer/core',f)), 1366,1000);
   console.log(await pc.webContents.executeJavaScript(`
     exigir(controlesAntes.every(el=>el.isConnected), 'Nenhum controle ou valor legado pode ser perdido');
-    const ids = ['diagValorEstimado','statusOS','dataPrevista','prioridadeOS','nome','telefone','defeitoRelatado'];
+    const ids = ['diagValorEstimado','statusOS','dataPrevista','prioridadeOS','nome','telefone','defeitoRelatado',
+      'novaQuantidadeParcelas','novaPrimeiraParcelaData','btnGerarParcelasNovaOS'];
     ids.forEach(id=>exigir(visivel(document.getElementById(id)), 'Essencial oculto: '+id));
     document.querySelector('[data-form-todas]').click();
     ['codigoInterno','etiquetaInterna','tagBancada','numeroPatrimonio','tecnicoAuxiliar','diagPrazoEstimado','diagPecas','obsSaida']
       .forEach(id=>exigir(!visivel(document.getElementById(id)), 'Campo aposentado reapareceu: '+id));
     document.querySelector('[data-form-essenciais]').click();
     ids.forEach(id=>exigir(visivel(document.getElementById(id)), 'Essencial recolhido: '+id));
+    ['novaQuantidadeParcelas','novaPrimeiraParcelaData','btnGerarParcelasNovaOS'].forEach(id => {
+      const el = document.getElementById(id);
+      exigir(!!el.closest('.form-atendimento'), 'Parcelamento fora de Valor, prazo e status: '+id);
+      exigir(!el.closest('details'), 'Parcelamento escondido: '+id);
+    });
     exigir(document.getElementById('codigoInterno').value==='ANTIGO-123','Valor antigo alterado');
     const c = document.getElementById('diagSolucao'); c.value='Troca de tela';
     exigir(c.value==='Troca de tela' && visivel(c), 'Serviço deve permanecer editável');
