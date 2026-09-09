@@ -70,6 +70,19 @@
     const nota = document.createElement('p'); nota.className = 'dica-campo';
     nota.textContent = 'Valor previsto para cobrar do cliente. Informar o orçamento não registra um pagamento.';
     grade.firstElementChild.append(nota);
+    // Parcelas são parte do financeiro essencial da OS. A simplificação anterior
+    // deixava este editor no card antigo de Status, que acabava dentro dos extras.
+    if (edicao) {
+      const cobrancas = raiz.querySelector('.lembretes-cobranca-editor');
+      if (cobrancas) {
+        const tituloCobranca = cobrancas.querySelector('strong');
+        const ajudaCobranca = cobrancas.querySelector('span');
+        if (tituloCobranca) tituloCobranca.textContent = 'Parcelas e lembretes de cobrança';
+        if (ajudaCobranca) ajudaCobranca.textContent = 'Informe a data e o valor de cada cobrança. A agenda e a situação aparecem também no celular.';
+        cobrancas.dataset.formEssencial = 'true';
+        atendimento.append(cobrancas);
+      }
+    }
     // Uma única previsão e um checklist de recebimento, sem solicitar os mesmos testes duas vezes.
     [id('checklistEntradaNovo','checklistEntradaEdit'), id('checklistSaidaNovo','checklistSaidaEdit')].forEach(cid => {
       const c = $(cid)?.closest('.card'); if (c) { c.hidden = true; c.classList.add('form-retirado'); }

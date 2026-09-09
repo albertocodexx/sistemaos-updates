@@ -9,12 +9,12 @@ Atualizações oficiais do Sistema OS para Windows e Android.
 
 Os dois links apontam sempre para os arquivos da atualização marcada como mais recente.
 
-## Atualização 30.5.126 / Android 1.0.86
+## Atualização 30.5.127 / Android 1.0.86
 
-Esta versão reduz campos repetitivos nos formulários de PC e celular e mantém valor, prazo e status visíveis. Retira do preenchimento 11 campos da OS e 17 da compra no PC, além de redundâncias no Android, preservando os dados já cadastrados. Inclui testes de interação e mantém as correções anteriores de assinatura, sincronização e alinhamento dos PDFs.
+Esta versão devolve as parcelas e os lembretes de cobrança à área principal da edição da OS: data, valor e situação continuam sincronizados e aparecem na agenda do celular. Também remove o relógio decorativo da seção Datas e horários. A redução dos campos repetitivos da versão anterior foi preservada sem apagar dados.
 
-- [Novidades e instaladores](https://github.com/albertocodexx/sistemaos-updates/releases/tag/v30.5.126)
-- [Código-fonte do PC](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.126/SistemaOS-PC-Codigo-Fonte-v30.5.126.zip)
-- [Código-fonte do Android](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.126/SistemaOS-Android-Codigo-Fonte-v1.0.86.zip)
+- [Novidades e instaladores](https://github.com/albertocodexx/sistemaos-updates/releases/tag/v30.5.127)
+- [Código-fonte do PC](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.127/SistemaOS-PC-Codigo-Fonte-v30.5.127.zip)
+- [Código-fonte do Android](https://github.com/albertocodexx/sistemaos-updates/releases/download/v30.5.127/SistemaOS-Android-Codigo-Fonte-v1.0.86.zip)
 
 Os pacotes de código-fonte não incluem dados de clientes, senhas, certificados privados, dependências instaladas ou caches de compilação.

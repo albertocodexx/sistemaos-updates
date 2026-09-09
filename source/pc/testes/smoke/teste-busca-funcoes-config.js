@@ -7,6 +7,7 @@ const path = require('path');
 const raiz = path.resolve(__dirname, '..', '..');
 const organizador = fs.readFileSync(path.join(raiz, 'renderer', 'core', 'form-organizer.js'), 'utf8');
 const css = fs.readFileSync(path.join(raiz, 'renderer', 'style.css'), 'utf8');
+const html = fs.readFileSync(path.join(raiz, 'renderer', 'index.html'), 'utf8');
 
 assert.match(organizador, /function pontuarSecao\(secao, consulta\)/, 'busca deve ordenar resultados por relevancia');
 assert.match(organizador, /function distanciaEdicao\(a, b\)/, 'busca deve tolerar pequenos erros de digitacao');
@@ -26,5 +27,8 @@ assert.doesNotMatch(organizador, /data-config-recolher>Recolher seções/, 'acao
 assert.match(css, /\.config-busca-atalhos/);
 assert.match(css, /\.config-secao\.config-corresponde/);
 assert.match(css, /\.config-sem-resultado \.config-busca-status/);
+const secaoDatas = html.match(/<div class="config-secao-titulo">Datas e Horários<\/div>[\s\S]*?<\/div>\s*<\/div>/)?.[0] || '';
+assert.ok(secaoDatas, 'configuração de datas e horários deve continuar disponível');
+assert.doesNotMatch(secaoDatas, /#icone-relogio/, 'datas e horários não deve voltar a exibir relógio decorativo');
 
 console.log('OK: busca de funcoes por intencao, sinonimos, erros e atalhos rapidos.');

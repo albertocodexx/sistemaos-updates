@@ -14,6 +14,8 @@
 .form-atendimento .grade-2 { gap:14px; }
 .form-atendimento input[type=number] { font-size:21px; font-weight:700; font-variant-numeric:tabular-nums; }
 .form-atendimento .campo:first-child { grid-column:1/-1; }
+.form-atendimento > .lembretes-cobranca-editor { margin-top:18px; padding-top:16px; }
+.form-atendimento > .lembretes-cobranca-editor strong { font-size:14px; }
 .form-detalhes { grid-column:1/-1; min-width:0; border-top:1px solid var(--borda); margin:12px 0 0; }
 .form-detalhes > summary { cursor:pointer; padding:12px 2px; font-size:13px; font-weight:600; color:var(--texto); }
 .form-detalhes > summary:focus-visible { outline:2px solid var(--texto); outline-offset:3px; }

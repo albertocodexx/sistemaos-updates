@@ -55,8 +55,14 @@ app.whenReady().then(async () => {
     exigir(visivel(test), 'Validação precisa abrir a seção do campo');
     document.querySelector('[data-form-essenciais]').click();
     document.getElementById('modalEditarOS').classList.remove('escondido');
-    ['editDiagValorEstimado','editStatusOS','editStatusPagamento','editStatusAprovacao','editDataPrevista']
+    ['editDiagValorEstimado','editStatusOS','editStatusPagamento','editStatusAprovacao','editDataPrevista',
+      'editLembreteCobrancaData','editLembreteCobrancaValor','btnAdicionarLembreteCobranca']
       .forEach(id=>exigir(visivel(document.getElementById(id)), 'Essencial de edição oculto: '+id));
+    ['editLembreteCobrancaData','editLembreteCobrancaValor'].forEach(id => {
+      const el = document.getElementById(id);
+      exigir(!!el.closest('.form-atendimento'), 'Cobrança fora do resumo financeiro: '+id);
+      exigir(!el.closest('details'), 'Cobrança indevidamente escondida: '+id);
+    });
     document.getElementById('modalEditarOS').classList.add('escondido');
     const forms=['#aba-nova-os','#modalEditarOS','#modalFormCompra'];
     JSON.stringify(forms.map(s=>({form:s,camposRetirados:document.querySelector(s).querySelectorAll('.form-retirado input,.form-retirado textarea,.form-retirado select').length})));

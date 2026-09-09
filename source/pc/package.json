@@ -1,6 +1,6 @@
 {
   "name": "sistema-os-at",
-  "version": "30.5.126",
+  "version": "30.5.127",
   "packageManager": "pnpm@11.16.0",
   "description": "Sistema de Ordens de Serviço para Assistências Técnicas",
   "main": "main.js",
