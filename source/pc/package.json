@@ -1,6 +1,6 @@
 {
   "name": "sistema-os-at",
-  "version": "30.5.129",
+  "version": "30.5.130",
   "packageManager": "pnpm@11.16.0",
   "description": "Sistema de Ordens de Serviço para Assistências Técnicas",
   "main": "main.js",
@@ -29,11 +29,11 @@
   "license": "UNLICENSED",
   "devDependencies": {
     "electron": "43.4.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "26.16.0"
   },
   "overrides": {
     "builder-util-runtime": "9.7.0",
-    "js-yaml": "4.3.1"
+    "js-yaml": "4.3.2"
   },
   "build": {
     "appId": "com.sistemaos.assistencia",
