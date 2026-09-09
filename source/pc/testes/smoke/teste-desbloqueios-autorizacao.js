@@ -18,6 +18,7 @@ const migracao = ler('supabase/migrations/20260904000100_desbloqueios_assinatura
 const migracaoMobile = ler('supabase/migrations/20260904000200_desbloqueios_clientes_mobile.sql');
 
 assert.match(html, /data-aba="desbloqueios"/);
+assert.doesNotMatch(html, /desbloqueio-card-titulo"><span>0[12]<\/span>/);
 assert.match(html, /id="desbloqueioTitularidade"/);
 assert.match(html, /Gerar PDF como não assinado/);
 assert.match(html, /Enviar para assinatura no celular/);

@@ -4,8 +4,7 @@
 .desbloqueios-cabecalho p{margin:0;color:var(--texto-sec);max-width:700px}
 .desbloqueio-form{display:grid;gap:12px}
 .desbloqueio-card{border:1px solid var(--borda);background:var(--bg-card);padding:20px;border-radius:12px}
-.desbloqueio-card-titulo{display:flex;align-items:center;gap:12px;margin-bottom:18px;padding-bottom:13px;border-bottom:1px solid var(--borda)}
-.desbloqueio-card-titulo>span{width:30px;height:30px;display:grid;place-items:center;border:1px solid var(--texto);border-radius:50%;font-size:11px;font-weight:800}
+.desbloqueio-card-titulo{margin-bottom:18px;padding-bottom:13px;border-bottom:1px solid var(--borda)}
 .desbloqueio-card-titulo strong,.desbloqueio-card-titulo small{display:block}.desbloqueio-card-titulo strong{font-size:16px}.desbloqueio-card-titulo small{margin-top:2px;color:var(--texto-sec);font-size:12px;font-weight:400}
 .desbloqueio-textos{margin-top:12px}.desbloqueio-ciencia{border:2px solid var(--texto);background:var(--bg-card);padding:18px 20px;border-radius:12px}
 .desbloqueio-ciencia-topo{display:flex;justify-content:space-between;gap:12px;margin-bottom:9px}.desbloqueio-ciencia-topo strong{font-size:16px}.desbloqueio-ciencia-topo span{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--texto-sec)}
