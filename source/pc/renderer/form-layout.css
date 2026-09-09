@@ -1,0 +1,35 @@
+/* Formulários de atendimento: cadastro e decisão lado a lado; extras sob demanda. */
+.form-retirado { display:none !important; }
+#aba-nova-os .formulario-cabecalho-pagina { display:block; padding:0; margin:0 0 12px; background:none; border:0; box-shadow:none; }
+#aba-nova-os .formulario-cabecalho-pagina p,
+#aba-nova-os .formulario-etapa,
+#aba-nova-os .formulario-fluxo,
+.form-organizador-texto { display:none; }
+.form-organizador { justify-content:flex-end; padding:0; border:0; background:none; box-shadow:none; margin-bottom:12px; }
+#modalEditarOS .modal-caixa > .form-organizador { padding:0 !important; }
+.formulario-layout[data-layout-enxuto] { grid-template-columns: minmax(0,1.2fr) minmax(320px,.9fr); align-items:start; }
+#modalEditarOS .formulario-layout[data-layout-enxuto] { grid-template-columns: minmax(0,1.2fr) minmax(320px,.9fr) !important; }
+.formulario-layout[data-layout-enxuto] .coluna-form { min-width:0; position:static !important; }
+.formulario-layout[data-layout-enxuto] .card { padding:18px; margin-bottom:14px; }
+.form-atendimento .grade-2 { gap:14px; }
+.form-atendimento input[type=number] { font-size:21px; font-weight:700; font-variant-numeric:tabular-nums; }
+.form-atendimento .campo:first-child { grid-column:1/-1; }
+.form-detalhes { grid-column:1/-1; min-width:0; border-top:1px solid var(--borda); margin:12px 0 0; }
+.form-detalhes > summary { cursor:pointer; padding:12px 2px; font-size:13px; font-weight:600; color:var(--texto); }
+.form-detalhes > summary:focus-visible { outline:2px solid var(--texto); outline-offset:3px; }
+.form-detalhes-conteudo { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; padding:6px 0 14px; }
+.form-detalhes-conteudo > :not(.campo) { grid-column:1/-1; }
+.form-detalhes-conteudo .campo { margin:0; min-width:0; }
+.form-complementos { margin:0; border:1px solid var(--borda); border-radius:6px; padding:0 16px; }
+.form-complementos > summary { padding:16px 0; }
+.form-complementos-grade { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:start; }
+.form-complementos-grade .card { margin:0 0 14px; }
+.formulario-layout[data-layout-enxuto] [data-form-termos] textarea { min-height:160px; height:auto; max-height:340px; }
+.card[data-form-essencial=true] > .card-titulo { cursor:default; padding-right:0; }
+.card[data-form-essencial=true] > .card-titulo::after { display:none; }
+#sub-dados > .card { margin-top:16px; }
+@media(max-width:1000px) {
+  .formulario-layout[data-layout-enxuto], #modalEditarOS .formulario-layout[data-layout-enxuto] { grid-template-columns:minmax(0,1fr) !important; }
+  .form-complementos-grade { grid-template-columns:minmax(0,1fr); }
+}
+@media(max-width:600px) { .form-detalhes-conteudo { grid-template-columns:minmax(0,1fr); } }

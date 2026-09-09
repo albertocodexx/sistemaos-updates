@@ -1,0 +1,14 @@
+/* Opcionais compactos; os campos de decisão e assinatura permanecem visíveis. */
+.form-retirado { display:none !important; }
+.form-detalhes { min-width:0; margin:14px 0; border-top:1px solid var(--cor-borda); grid-column:1/-1; }
+.form-detalhes > summary { padding:14px 0; min-height:44px; box-sizing:border-box; cursor:pointer; color:var(--cor-texto); font-size:14px; font-weight:600; }
+.form-detalhes > summary:focus-visible { outline:2px solid var(--cor-texto); outline-offset:2px; }
+.form-detalhes-conteudo { padding:0 0 10px; }
+.form-detalhes-conteudo > fieldset { margin:0; }
+.form-campo { min-width:0; margin-bottom:14px; }
+.form-campo > input,.form-campo > select,.form-campo > textarea { width:100%; }
+.form-os fieldset { padding:18px 16px; }
+.form-os legend { font-size:17px; text-transform:none; letter-spacing:0; }
+#os-valor,#entrega-valor-reparo,#compra-valor,#venda-valor { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; min-height:50px; }
+.form-os .form-detalhes .form-detalhes { margin:8px 0; }
+.form-os .dica-campo { color:var(--cor-texto-fraco); font-size:12px; line-height:1.5; }

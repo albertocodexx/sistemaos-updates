@@ -6,15 +6,15 @@
   const formularios = [
     {
       raiz: '#aba-nova-os .formulario-layout',
-      titulo: 'Preencha uma seção por vez',
-      dica: 'Comece por cliente e aparelho. Abra as opções extras somente quando precisar.',
-      essenciais: ['dados do cliente', 'dados do aparelho', 'orcamento e lucro', 'salvar ordem']
+      titulo: 'Dados principais sempre à vista',
+      dica: 'Cliente, aparelho, valor e prazo. Sem campos repetidos de controle interno.',
+      essenciais: ['dados do cliente', 'dados do aparelho', 'valor prazo e status', 'salvar ordem']
     },
     {
       raiz: '#modalEditarOS .formulario-layout',
       titulo: 'Edição organizada por seções',
-      dica: 'Cliente, aparelho e status ficam abertos; os dados técnicos continuam disponíveis abaixo.',
-      essenciais: ['cliente', 'aparelho', 'status']
+      dica: 'Confira cadastro, orçamento, prazo e situação. O histórico técnico permanece disponível.',
+      essenciais: ['cliente', 'aparelho', 'valor prazo e status']
     },
     {
       raiz: '#modalFormCompra .modal-compra-conteudo',
@@ -253,12 +253,14 @@
   function recolher(card, recolhido) {
     const titulo = tituloDireto(card);
     if (!titulo) return;
+    if (card.dataset.formEssencial === 'true') recolhido = false;
     card.dataset.recolhido = recolhido ? 'true' : 'false';
     titulo.setAttribute('aria-expanded', recolhido ? 'false' : 'true');
   }
 
   function cardsDaRaiz(raiz) {
     return Array.from(raiz.querySelectorAll('.card')).filter((card) => {
+      if (card.classList.contains('form-retirado')) return false;
       if (card.dataset.formRecolhivel === 'false') return false;
       return !!tituloDireto(card);
     });
@@ -267,7 +269,7 @@
   function atualizarResumo(toolbar, cards) {
     const status = toolbar.querySelector('[data-form-status]');
     const abertas = cards.filter((card) => card.dataset.recolhido !== 'true').length;
-    if (status) status.textContent = `${abertas} de ${cards.length} seções abertas`;
+    if (status) status.textContent = '';
   }
 
   function criarToolbar(config, cards) {
@@ -284,19 +286,23 @@
       </div>`;
 
     const essenciais = () => {
+      document.querySelector(config.raiz)?.querySelectorAll('details.form-detalhes').forEach(d => { d.open = false; });
       cards.forEach((card) => {
         const texto = normalizar(tituloDireto(card)?.textContent);
         const deveAbrir = config.essenciais.some((item) => texto.includes(normalizar(item)));
         recolher(card, !deveAbrir);
       });
+      barra.querySelector('[data-form-todas]').textContent = 'Expandir tudo';
       atualizarResumo(barra, cards);
     };
 
     barra.querySelector('[data-form-essenciais]').addEventListener('click', essenciais);
     barra.querySelector('[data-form-todas]').addEventListener('click', () => {
       const todasAbertas = cards.every((card) => card.dataset.recolhido !== 'true');
-      cards.forEach((card) => recolher(card, todasAbertas));
-      barra.querySelector('[data-form-todas]').textContent = todasAbertas ? 'Expandir tudo' : 'Recolher tudo';
+      if (todasAbertas) { essenciais(); return; }
+      document.querySelector(config.raiz)?.querySelectorAll('details.form-detalhes').forEach(d => { d.open = true; });
+      cards.forEach((card) => recolher(card, false));
+      barra.querySelector('[data-form-todas]').textContent = 'Recolher opcionais';
       atualizarResumo(barra, cards);
     });
     barra._mostrarEssenciais = essenciais;
@@ -316,6 +322,7 @@
   function prepararCard(card, toolbar, cards) {
     const titulo = tituloDireto(card);
     if (!titulo || card.classList.contains('card-recolhivel')) return;
+    if (card.dataset.formEssencial === 'true') { recolher(card, false); return; }
     card.classList.add('card-recolhivel');
     titulo.setAttribute('role', 'button');
     titulo.setAttribute('tabindex', '0');
@@ -553,6 +560,7 @@
   }
 
   function abrirCardDoCampo(campo) {
+    window.SistemaOSFormLayout?.revelar(campo);
     const card = campo?.closest?.('.card.card-recolhivel');
     if (!card) return;
     recolher(card, false);

@@ -69,6 +69,9 @@
     if (!defeito) erros.defeitoRelatado = 'Defeito relatado é obrigatório.';
     if (cpf && !validarCPF(cpf)) erros.cpf = 'CPF inválido.';
     if (imei && !validarIMEI(imei)) erros.imei = 'IMEI inválido (deve ter 15 dígitos).';
+    if (dadosOS.valor !== '' && dadosOS.valor != null && (!Number.isFinite(Number(dadosOS.valor)) || Number(dadosOS.valor) < 0)) {
+      erros.valor = 'Informe um valor de orçamento igual ou maior que zero.';
+    }
 
     return Object.keys(erros).length === 0 ? null : erros;
   }

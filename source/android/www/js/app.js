@@ -500,7 +500,7 @@
       campos: campos,
       fotos: window.SistemaOSFotos ? window.SistemaOSFotos.obterFotos('os') : [],
       acessoriosChecklist: checkboxesMarcados('.os-acessorio-check'),
-      testesEntrada: checkboxesMarcados('.os-teste-entrada-check')
+      testesEntrada: checkboxesMarcados('.os-teste-entrada')
     };
   }
 
@@ -580,7 +580,7 @@
       });
       if (window.SistemaOSFotos) window.SistemaOSFotos.definirFotos('os', rascunho.fotos || []);
       marcarCheckboxes('.os-acessorio-check', rascunho.acessoriosChecklist);
-      marcarCheckboxes('.os-teste-entrada-check', rascunho.testesEntrada);
+      marcarCheckboxes('.os-teste-entrada', rascunho.testesEntrada);
       restaurandoRascunhoOS = false;
       mostrarFeedback('Rascunho da Nova OS recuperado.', false);
     }).catch(function () {
@@ -635,7 +635,9 @@
       // no momento da importação.
       numero: 'PRÉVIA — sem número',
       data: new Date().toISOString(),
-      status: 'Aguardando análise',
+      status: texto('os-status') || 'Aguardando análise',
+      valor: texto('os-valor'),
+      diagnosticoTecnico: Object.assign({}, emEdicaoHistorico && osAtual ? osAtual.diagnosticoTecnico : {}, { valorEstimado: texto('os-valor') }),
       cliente: {
         nome: texto('cliente-nome'),
         cpf: texto('cliente-cpf'),
@@ -2897,6 +2899,8 @@
           setarValor('aparelho-senha', dados.aparelho && dados.aparelho.senhaAparelho);
           setarValor('os-observacoes', dados.observacoes);
           setarValor('os-prioridade', dados.prioridade);
+          setarValor('os-status', dados.status || 'Aguardando análise');
+          setarValor('os-valor', dados.diagnosticoTecnico?.valorEstimado ?? dados.valor ?? '');
           if (campoSemPrazoOS) campoSemPrazoOS.checked = dados.semPrazo === true || (!dados.dataPrevista && !dados.horaPrevista);
           setarValor('os-data-prevista', dados.dataPrevista);
           setarValor('os-hora-prevista', dados.horaPrevista);

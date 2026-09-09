@@ -1,12 +1,13 @@
 {
   "name": "sistema-os-at",
-  "version": "30.5.125",
+  "version": "30.5.126",
   "packageManager": "pnpm@11.16.0",
   "description": "Sistema de Ordens de Serviço para Assistências Técnicas",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "test:smoke": "node testes/smoke/executar-todos.js",
+    "test:forms": "electron testes/visual/formularios-simplificados.cjs",
     "migrate:supabase": "node ferramentas/migracao-supabase/index.js",
     "build:win": "node --require ./scripts/prepare-windows-build.cjs ./node_modules/electron-builder/out/cli/cli.js --win",
     "release:win": "electron-builder --win --publish always",
