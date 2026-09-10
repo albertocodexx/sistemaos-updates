@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { contextoUsuarioAtivo, temPermissao } from '../_shared/access.ts';
 import {
-  carregarIntegracaoPlataforma, cifrarJson, cors, mensagemErro, resposta, texto
+  carregarIntegracaoPlataforma, cifrarJson, cors, resposta, texto
 } from './saas.ts';
 
 const emailValido = (valor: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valor);
@@ -41,7 +42,9 @@ Deno.serve(async (req) => {
 
     const { data: contextoConsulta, error: contextoErro } = await cliente.rpc('obter_contexto_comercial');
     const contexto = Array.isArray(contextoConsulta) ? contextoConsulta[0] : contextoConsulta;
-    if (contextoErro || !contexto) return resposta(403, { erro: 'Conta sem empresa vinculada.' });
+    if (contextoErro || !contexto || !contextoUsuarioAtivo(contexto)) {
+      return resposta(403, { erro: 'Conta inativa ou sem empresa vinculada.' });
+    }
 
     const corpo = await req.json().catch(() => ({}));
     const acao = texto(corpo.acao);
@@ -75,8 +78,7 @@ Deno.serve(async (req) => {
 
     if (acao === 'salvar_contato') {
       if (!contexto.empresa_id || contexto.administrador_global) return resposta(403, { erro: 'Entre na empresa cliente.' });
-      const cargo = texto(contexto.cargo).toLowerCase();
-      const pode = /administrador|propriet/.test(cargo) || Boolean(contexto.permissoes?.configuracoes);
+      const pode = temPermissao(contexto, 'configuracoes', 'editar');
       if (!pode) return resposta(403, { erro: 'Somente o administrador da empresa pode alterar o contato de cobranca.' });
       const telefone = telefoneLimpo(dados.whatsapp);
       const email = texto(dados.email).toLowerCase().slice(0, 254);
@@ -98,8 +100,7 @@ Deno.serve(async (req) => {
 
     if (acao === 'criar_checkout') {
       if (!contexto.empresa_id || contexto.administrador_global) return resposta(403, { erro: 'Entre na empresa cliente para assinar.' });
-      const cargo = texto(contexto.cargo).toLowerCase();
-      const pode = /administrador|propriet/.test(cargo) || Boolean(contexto.permissoes?.configuracoes);
+      const pode = temPermissao(contexto, 'configuracoes', 'editar');
       if (!pode) return resposta(403, { erro: 'Somente o administrador da empresa pode alterar a assinatura.' });
       const planoId = texto(dados.planoId);
       const { data: plano, error: planoErro } = await admin.from('planos')
@@ -347,6 +348,6 @@ Deno.serve(async (req) => {
     return resposta(400, { erro: 'Acao nao reconhecida.' });
   } catch (erro) {
     console.error('[assinaturas-saas]', erro);
-    return resposta(500, { erro: mensagemErro(erro) });
+    return resposta(500, { erro: 'Nao foi possivel concluir a operacao da assinatura agora.' });
   }
 });

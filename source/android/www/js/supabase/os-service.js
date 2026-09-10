@@ -370,8 +370,8 @@
       return root.SistemaOSSessao.ehErroRede(erro);
     }
     var mensagem = String(erro && erro.message ? erro.message : erro || '').toLowerCase();
-    return !!(erro && (erro.status === 0 || erro.name === 'TypeError')) ||
-      /failed to fetch|network|internet|offline|fetch failed|networkerror|timeout/.test(mensagem);
+    return !!(erro && (erro.status === 0 || erro.name === 'TypeError' || erro.name === 'FunctionsFetchError')) ||
+      /failed to fetch|failed to send|network|internet|offline|fetch failed|networkerror|timeout/.test(mensagem);
   }
 
   function classificarErro(erro) {

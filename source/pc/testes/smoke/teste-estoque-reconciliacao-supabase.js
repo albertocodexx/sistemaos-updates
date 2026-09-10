@@ -29,9 +29,11 @@ const cliente = {
     assert.strictEqual(tabela, 'estoque_itens');
     return {
       select() {
-        return {
-          limit: async () => ({ data: [], error: null })
+        const consulta = {
+          order() { return consulta; },
+          range: async () => ({ data: [], error: null })
         };
+        return consulta;
       }
     };
   },

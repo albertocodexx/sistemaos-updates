@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { contextoUsuarioAtivo, ehAdministradorEmpresa, licencaPermiteOperacao } from '../_shared/access.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -167,13 +168,16 @@ Deno.serve(async (req) => {
     const admin = createClient(url, serviceRole, { auth: { persistSession: false } });
     const { data: contexto, error: contextoErro } = await cliente.rpc('obter_contexto_comercial');
     const contextoAtual = Array.isArray(contexto) ? contexto[0] : contexto;
-    if (contextoErro || !contextoAtual) return resposta(401, { erro: 'Sua sessão não está vinculada a uma empresa ativa.' });
+    if (contextoErro || !contextoAtual || !contextoUsuarioAtivo(contextoAtual)) {
+      return resposta(401, { erro: 'Sua sessão não está vinculada a uma empresa ativa.' });
+    }
     const corpo = await req.json();
     const acao = texto(corpo.acao);
     const dados = corpo.dados || {};
-    const cargoEmpresa = texto(contextoAtual.cargo).toLowerCase();
-    const administradorEmpresa = !contextoAtual.administrador_global &&
-      ['administrador', 'proprietario', 'proprietário'].includes(cargoEmpresa);
+    const administradorEmpresa = ehAdministradorEmpresa(contextoAtual);
+    if (!contextoAtual.administrador_global && !licencaPermiteOperacao(contextoAtual)) {
+      return resposta(403, { erro: 'A assinatura da empresa não permite esta operação.' });
+    }
     const acoesAdministradorEmpresa = new Set([
       'listar_usuarios_empresa', 'criar_usuario_empresa', 'atualizar_usuario_empresa',
       'resetar_senha', 'excluir_usuario_empresa', 'definir_senha_exclusao_usuario'
@@ -221,7 +225,7 @@ Deno.serve(async (req) => {
       const { data: perfil, error: perfilErro } = await admin.from('perfis')
         .select('id,nome,cargo,ativo').eq('empresa_id', contextoAtual.empresa_id).eq('id', identidade.usuario_id).maybeSingle();
       if (perfilErro) throw perfilErro;
-      if (!perfil?.ativo || !/administrador|propriet/i.test(texto(perfil.cargo))) {
+      if (!perfil?.ativo || !['administrador', 'admin', 'proprietario', 'proprietário'].includes(texto(perfil.cargo).toLowerCase())) {
         return resposta(403, { erro: 'A conta informada não é administradora desta empresa.' });
       }
       const verificador = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });

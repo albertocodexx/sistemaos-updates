@@ -8,11 +8,6 @@ const cors = {
 const resposta = (status: number, corpo: Record<string, unknown>) =>
   new Response(JSON.stringify(corpo), { status, headers: cors });
 const texto = (valor: unknown) => String(valor ?? '').trim();
-const mensagemErro = (erro: unknown) => {
-  const mensagem = erro instanceof Error ? erro.message : texto(erro);
-  if (/token|secret|authorization|apikey|service.role/i.test(mensagem)) return 'O servidor recusou a operacao por seguranca.';
-  return mensagem || 'Nao foi possivel concluir a operacao.';
-};
 
 const compararSeguro = (a: string, b: string) => {
   const esquerda = new TextEncoder().encode(a);
@@ -134,6 +129,6 @@ Deno.serve(async (req) => {
     });
   } catch (erro) {
     console.error('[fiscal-documentos-provedor]', erro);
-    return resposta(500, { erro: mensagemErro(erro) });
+    return resposta(500, { erro: 'Nao foi possivel consultar o provedor fiscal agora.' });
   }
 });

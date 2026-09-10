@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { contextoUsuarioAtivo, licencaPermiteOperacao, temPermissao } from '../_shared/access.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -8,11 +9,6 @@ const cors = {
 const resposta = (status: number, corpo: Record<string, unknown>) =>
   new Response(JSON.stringify(corpo), { status, headers: cors });
 const texto = (valor: unknown) => String(valor ?? '').trim();
-const mensagemErro = (erro: unknown) => {
-  const mensagem = erro instanceof Error ? erro.message : texto(erro);
-  if (/token|secret|authorization|apikey|service.role/i.test(mensagem)) return 'O servidor recusou a operacao por seguranca.';
-  return mensagem || 'Nao foi possivel concluir a operacao.';
-};
 
 const digitos = (valor: unknown, limite = 20) => texto(valor).replace(/\D/g, '').slice(0, limite);
 const cnpjNormalizado = (valor: unknown) => texto(valor).toUpperCase().replace(/[^0-9A-Z]/g, '');
@@ -61,7 +57,8 @@ Deno.serve(async (req) => {
     if (!autenticacao.user) return resposta(401, { erro: 'Sessao invalida.' });
     const { data: contextoConsulta, error: contextoErro } = await cliente.rpc('obter_contexto_comercial');
     const contexto = Array.isArray(contextoConsulta) ? contextoConsulta[0] : contextoConsulta;
-    if (contextoErro || !contexto?.empresa_id || contexto.administrador_global) {
+    if (contextoErro || !contexto?.empresa_id || contexto.administrador_global ||
+        !contextoUsuarioAtivo(contexto) || !licencaPermiteOperacao(contexto)) {
       return resposta(403, { erro: 'Entre em uma empresa para usar a NFS-e.' });
     }
 
@@ -72,10 +69,14 @@ Deno.serve(async (req) => {
     if (contexto.recursos_habilitados?.fiscal_habilitado !== true) {
       return resposta(403, { erro: 'A emissão de NFS-e ainda não está liberada para esta empresa.' });
     }
-    const cargo = texto(contexto.cargo).toLowerCase();
-    const podeConfigurar = /administrador|propriet/.test(cargo) || Boolean(contexto.permissoes?.configuracoes);
+    const podeConfigurar = temPermissao(contexto, 'configuracoes', 'editar');
+    const podeLerFinanceiro = temPermissao(contexto, 'financeiro', 'ler');
+    const podeEmitir = temPermissao(contexto, 'financeiro', 'criar') ||
+      temPermissao(contexto, 'financeiro', 'editar');
+    const podeCancelar = temPermissao(contexto, 'financeiro', 'editar');
 
     if (acao === 'resumo' || acao === 'listar') {
+      if (!podeLerFinanceiro) return resposta(403, { erro: 'Seu usuário não pode consultar documentos fiscais.' });
       const [configConsulta, notasConsulta] = await Promise.all([
         admin.from('configuracoes_fiscais').select('empresa_id,provedor,ambiente,status,emissao_automatica_os,emissao_automatica_venda,emissao_automatica_assinatura,metadados,ultimo_erro,updated_at').eq('empresa_id', empresaId).maybeSingle(),
         admin.from('notas_fiscais').select('id,origem_tipo,origem_id,valor,descricao,status,numero,codigo_verificacao,chave_acesso,url_consulta,pdf_url,danfse_url,danfse_storage_path,danfse_gerado_em,emitida_em,ultimo_erro,created_at').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(50)
@@ -252,6 +253,7 @@ Deno.serve(async (req) => {
     }
 
     if (acao === 'solicitar_emissao') {
+      if (!podeEmitir) return resposta(403, { erro: 'Seu usuário não pode emitir documentos fiscais.' });
       const origemTipo = texto(dados.origemTipo);
       const origemId = texto(dados.origemId).slice(0, 120);
       const valor = Number(dados.valor || 0);
@@ -289,6 +291,7 @@ Deno.serve(async (req) => {
     }
 
     if (acao === 'obter_danfse') {
+      if (!podeLerFinanceiro) return resposta(403, { erro: 'Seu usuário não pode consultar documentos fiscais.' });
       const id = texto(dados.id);
       if (!id) return resposta(400, { erro: 'Informe a NFS-e.' });
       const { data: nota, error } = await admin.from('notas_fiscais')
@@ -324,6 +327,7 @@ Deno.serve(async (req) => {
     }
 
     if (acao === 'cancelar_solicitacao') {
+      if (!podeCancelar) return resposta(403, { erro: 'Seu usuário não pode cancelar documentos fiscais.' });
       const id = texto(dados.id);
       const { data: nota, error } = await admin.from('notas_fiscais').update({
         status: 'cancelada', updated_at: new Date().toISOString()
@@ -338,6 +342,6 @@ Deno.serve(async (req) => {
     return resposta(400, { erro: 'Acao nao reconhecida.' });
   } catch (erro) {
     console.error('[fiscal-documentos]', erro);
-    return resposta(500, { erro: mensagemErro(erro) });
+    return resposta(500, { erro: 'Nao foi possivel concluir a operacao fiscal agora.' });
   }
 });

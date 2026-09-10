@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
-  carregarIntegracaoPlataforma, cors, mapearStatusMercadoPago, mensagemErro, resposta, texto
+  carregarIntegracaoPlataforma, cors, mapearStatusMercadoPago, resposta, texto
 } from './saas.ts';
 
 const compararSeguro = (esperado: string, recebido: string) => {
@@ -178,6 +178,6 @@ Deno.serve(async (req) => {
     return resposta(200, { sucesso: true, alertas_gerados: Number(alertas || 0), mercado_pago: mercadoPago, whatsapp });
   } catch (erro) {
     console.error('[assinaturas-worker]', erro);
-    return resposta(500, { erro: mensagemErro(erro) });
+    return resposta(500, { erro: 'Nao foi possivel executar o processamento agendado agora.' });
   }
 });

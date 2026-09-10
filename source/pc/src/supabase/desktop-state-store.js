@@ -17,6 +17,7 @@ function estadoInicial() {
     ultimoPullComercialEm: '1970-01-01T00:00:00.000Z',
     ultimoPullArquivosEm: '1970-01-01T00:00:00.000Z',
     fila: [],
+    filaAssinaturas: [],
     mapeamentosOS: {},
     mapeamentosEstoque: {},
     documentosComerciais: {},
@@ -25,6 +26,7 @@ function estadoInicial() {
     arquivosLocais: {},
     limpezasStoragePendentes: [],
     conflitos: [],
+    auditoriaPostgresql: null,
     ultimaSincronizacaoEm: '',
     ultimoErro: ''
   };
@@ -59,6 +61,7 @@ class DesktopStateStore {
     this.state = Object.assign(base, lido || {}, {
       versao: VERSAO_ESTADO,
       fila: Array.isArray(lido?.fila) ? lido.fila : [],
+      filaAssinaturas: Array.isArray(lido?.filaAssinaturas) ? lido.filaAssinaturas : [],
       mapeamentosOS: lido?.mapeamentosOS && typeof lido.mapeamentosOS === 'object' ? lido.mapeamentosOS : {},
       mapeamentosEstoque: lido?.mapeamentosEstoque && typeof lido.mapeamentosEstoque === 'object' ? lido.mapeamentosEstoque : {},
       documentosComerciais: lido?.documentosComerciais && typeof lido.documentosComerciais === 'object' ? lido.documentosComerciais : {},
@@ -98,6 +101,7 @@ class DesktopStateStore {
         estado.ultimoPullComercialEm = '1970-01-01T00:00:00.000Z';
         estado.ultimoPullArquivosEm = '1970-01-01T00:00:00.000Z';
         estado.fila = [];
+        estado.filaAssinaturas = [];
         estado.mapeamentosOS = {};
         estado.mapeamentosEstoque = {};
         estado.documentosComerciais = {};
@@ -106,6 +110,7 @@ class DesktopStateStore {
         estado.arquivosLocais = {};
         estado.limpezasStoragePendentes = [];
         estado.conflitos = [];
+        estado.auditoriaPostgresql = null;
       }
       estado.empresaId = empresaId || '';
       estado.dispositivoId = '';
@@ -183,6 +188,44 @@ class DesktopStateStore {
       };
       estado.fila.push(item);
       return clonar(item);
+    });
+  }
+
+  enfileirarAssinatura(pacote) {
+    const idEnvio = String(pacote?.idEnvioAssinatura || '').trim();
+    if (!idEnvio) throw new Error('Identificador da assinatura obrigatório para enfileirar.');
+    return this.alterar((estado) => {
+      estado.filaAssinaturas = Array.isArray(estado.filaAssinaturas) ? estado.filaAssinaturas : [];
+      const existente = estado.filaAssinaturas.find((item) => item.idEnvioAssinatura === idEnvio);
+      if (existente) {
+        existente.pacote = pacote;
+        existente.proximaTentativaEm = '';
+        existente.ultimoErro = '';
+        existente.atualizadoEm = new Date().toISOString();
+        return clonar(existente);
+      }
+      const item = {
+        id: crypto.randomUUID(),
+        idEnvioAssinatura: idEnvio,
+        pacote,
+        tentativas: 0,
+        proximaTentativaEm: '',
+        ultimoErro: '',
+        criadoEm: new Date().toISOString(),
+        atualizadoEm: new Date().toISOString()
+      };
+      estado.filaAssinaturas.push(item);
+      return clonar(item);
+    });
+  }
+
+  confirmarAssinaturaEnviada(idEnvioAssinatura) {
+    const idEnvio = String(idEnvioAssinatura || '').trim();
+    if (!idEnvio) return;
+    this.alterar((estado) => {
+      estado.filaAssinaturas = (estado.filaAssinaturas || []).filter(
+        (item) => item.idEnvioAssinatura !== idEnvio
+      );
     });
   }
 

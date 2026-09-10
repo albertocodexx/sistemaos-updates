@@ -628,13 +628,15 @@
       if (!window.SistemaOSSincronizacaoManual) return;
       btnSincronizarAgora.disabled = true;
       resultadoSincronizarAgora.hidden = false;
-      resultadoSincronizarAgora.innerHTML = '<p class="historico-carregando">Sincronizando com o PC...</p>';
+      resultadoSincronizarAgora.className = 'historico-carregando';
+      resultadoSincronizarAgora.textContent = 'Sincronizando com o PC...';
 
       window.SistemaOSSincronizacaoManual.sincronizarAgora().then(function (resultado) {
         if (resultado && resultado.sucesso) {
           var enviados = resultado.reenvio && resultado.reenvio.enviados ? resultado.reenvio.enviados : 0;
-          resultadoSincronizarAgora.innerHTML = '<p class="historico-sucesso">Atualizado com o PC' +
-            (enviados ? ' - ' + enviados + ' documento(s) pendente(s) enviado(s).' : '.') + '</p>';
+          resultadoSincronizarAgora.className = 'historico-sucesso';
+          resultadoSincronizarAgora.textContent = 'Atualizado com o PC' +
+            (enviados ? ' - ' + enviados + ' documento(s) pendente(s) enviado(s).' : '.');
           return;
         }
         var motivo = (resultado && resultado.motivo) || 'erro desconhecido';
@@ -643,10 +645,12 @@
           : motivo === 'timeout'
             ? 'O PC nao respondeu. Deixe o Sistema OS aberto e conectado e tente novamente.'
             : 'Nao foi possivel sincronizar agora: ' + motivo;
-        resultadoSincronizarAgora.innerHTML = '<p class="historico-erro">' + texto + '</p>';
+        resultadoSincronizarAgora.className = 'historico-erro';
+        resultadoSincronizarAgora.textContent = texto;
       }).catch(function (erro) {
-        resultadoSincronizarAgora.innerHTML = '<p class="historico-erro">Falha ao sincronizar: ' +
-          ((erro && erro.message) || String(erro)) + '</p>';
+        resultadoSincronizarAgora.className = 'historico-erro';
+        resultadoSincronizarAgora.textContent = 'Falha ao sincronizar: ' +
+          ((erro && erro.message) || String(erro));
       }).then(function () {
         btnSincronizarAgora.disabled = false;
       });

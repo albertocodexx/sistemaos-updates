@@ -32,12 +32,23 @@ function texto(valor: unknown) {
   return String(valor ?? '').trim().toLowerCase();
 }
 
-async function chaveTentativa(req: Request, empresa: string, usuario: string) {
-  const ip = texto((req.headers.get('x-forwarded-for') || '').split(',')[0]
-    || req.headers.get('cf-connecting-ip') || req.headers.get('x-real-ip') || 'desconhecido');
-  const dados = new TextEncoder().encode(`${ip}|${empresa}|${usuario}`);
+async function hashChave(valor: string) {
+  const dados = new TextEncoder().encode(valor);
   const hash = await crypto.subtle.digest('SHA-256', dados);
   return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function chavesTentativa(req: Request, empresa: string, usuario: string) {
+  const encaminhados = String(req.headers.get('x-forwarded-for') || '').split(',').map((item) => item.trim()).filter(Boolean);
+  // Cabeçalhos definidos pela borda têm prioridade. Se só houver
+  // x-forwarded-for, usa o último salto em vez do primeiro valor controlável
+  // pelo cliente.
+  const ip = texto(req.headers.get('cf-connecting-ip') || req.headers.get('x-real-ip') ||
+    encaminhados[encaminhados.length - 1] || 'desconhecido');
+  return {
+    rede: await hashChave(`rede|${ip}|${empresa}|${usuario}`),
+    conta: await hashChave(`conta|${empresa}|${usuario}`)
+  };
 }
 
 function erroTransitorioBanco(erro: unknown) {
@@ -112,7 +123,9 @@ Deno.serve(async (req) => {
       return resposta(401, { erro: 'Credenciais inválidas.' });
     }
 
-    const chaveLimite = await chaveTentativa(req, empresa, usuario);
+    const chavesLimite = await chavesTentativa(req, empresa, usuario);
+    const chaveLimite = chavesLimite.rede;
+    const chaveConta = chavesLimite.conta;
     if (limiteLocalBloqueado(chaveLimite)) {
       return resposta(429, { erro: 'Muitas tentativas. Aguarde alguns instantes e tente novamente.' });
     }
@@ -122,13 +135,16 @@ Deno.serve(async (req) => {
         codigo: 'servico_auth_indisponivel'
       });
     }
-    const limite = await admin.rpc('verificar_limite_login', { p_chave: chaveLimite });
-    if (limite.error) {
+    const [limite, limiteConta] = await Promise.all([
+      admin.rpc('verificar_limite_login', { p_chave: chaveLimite }),
+      admin.rpc('verificar_limite_login', { p_chave: chaveConta })
+    ]);
+    if (limite.error || limiteConta.error) {
       abrirCircuitoBanco();
-      console.error('[auth-login] limite indisponivel:', limite.error.code || 'erro');
+      console.error('[auth-login] limite indisponivel:', limite.error?.code || limiteConta.error?.code || 'erro');
       return resposta(503, { erro: 'Servico de autenticacao temporariamente indisponivel.' });
     }
-    if (limite.data?.bloqueado === true) {
+    if (limite.data?.bloqueado === true || limiteConta.data?.bloqueado === true) {
       return resposta(429, { erro: 'Muitas tentativas. Aguarde 15 minutos e tente novamente.' });
     }
 
@@ -196,13 +212,19 @@ Deno.serve(async (req) => {
     }
     if (!identidade || !token.ok) {
       registrarFalhaLocal(chaveLimite);
-      const falha = await admin.rpc('registrar_falha_login', { p_chave: chaveLimite });
-      if (falha.error) {
+      const [falha, falhaConta] = await Promise.all([
+        admin.rpc('registrar_falha_login', { p_chave: chaveLimite }),
+        admin.rpc('registrar_falha_login_controlada', {
+          p_chave: chaveConta, p_limite: 20, p_bloqueio_minutos: 15
+        })
+      ]);
+      if (falha.error || falhaConta.error) {
         abrirCircuitoBanco();
         return resposta(503, { erro: 'Servico de autenticacao temporariamente indisponivel.' });
       }
-      return resposta(falha.data?.bloqueado === true ? 429 : 401, {
-        erro: falha.data?.bloqueado === true
+      const bloqueado = falha.data?.bloqueado === true || falhaConta.data?.bloqueado === true;
+      return resposta(bloqueado ? 429 : 401, {
+        erro: bloqueado
           ? 'Muitas tentativas. Aguarde 15 minutos e tente novamente.'
           : 'Credenciais inválidas.'
       });
@@ -213,6 +235,7 @@ Deno.serve(async (req) => {
     limparFalhaLocal(chaveLimite);
     const tarefasPosLogin = await Promise.allSettled([
       admin.rpc('limpar_falhas_login', { p_chave: chaveLimite }),
+      admin.rpc('limpar_falhas_login', { p_chave: chaveConta }),
       admin.from('auditoria_comercial').insert({
         empresa_id: identidade.empresa_id,
         autor_id: identidade.usuario_id,

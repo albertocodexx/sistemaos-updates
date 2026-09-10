@@ -3675,6 +3675,10 @@ window.exportarParaAssinaturaCelular = async function(tipoDocumento, identificad
     toast('Erro ao enviar para assinatura: ' + r.erro, 'erro');
     return;
   }
+  if (r.pendente) {
+    toast(`${ICONE_CELULAR} Servidor indisponível. O documento ficou salvo e será enviado automaticamente.`, 'aviso');
+    return;
+  }
   toast(`${ICONE_CELULAR} Enviado ao celular. Assim que for assinado, o documento volta automaticamente para este PC.`, 'sucesso');
 };
 

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { contextoUsuarioAtivo, ehAdministradorEmpresa } from '../_shared/access.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -27,7 +28,7 @@ async function contextoAutenticado(cliente: Cliente) {
   if (!sessao.user) return null;
   const { data: contexto, error } = await cliente.rpc('obter_contexto_comercial');
   const atual = Array.isArray(contexto) ? contexto[0] : contexto;
-  if (error || !atual) return null;
+  if (error || !atual || !contextoUsuarioAtivo(atual)) return null;
   return { usuario: sessao.user, contexto: atual };
 }
 
@@ -51,13 +52,6 @@ function telefoneNormalizado(valor: unknown) {
 
 function emailValido(valor: string) {
   return !valor || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valor);
-}
-
-function ehAdministradorEmpresa(contexto: Record<string, any> | null | undefined) {
-  const cargo = texto(contexto?.cargo, 80).toLowerCase();
-  const configuracoes = contexto?.permissoes?.configuracoes;
-  return ['administrador', 'admin', 'proprietario', 'proprietário'].includes(cargo)
-    || configuracoes === true;
 }
 
 function podeAcessarAutenticado(chamado: Record<string, any>, autenticado: Record<string, any> | null) {
@@ -475,6 +469,6 @@ Deno.serve(async (req) => {
     return responder(400, { erro: 'Ação inválida.' });
   } catch (erro) {
     console.error('[chamados-suporte]', erro instanceof Error ? erro.message : String(erro));
-    return responder(500, { erro: erro instanceof Error && erro.message ? erro.message : 'Não foi possível concluir o chamado agora.' });
+    return responder(500, { erro: 'Não foi possível concluir o chamado agora.' });
   }
 });

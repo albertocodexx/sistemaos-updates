@@ -458,10 +458,10 @@ function registerLegacyHandlers(deps) {
     if (tipoDocumento === 'os' && supabaseDesktop) {
       const sincronizacao = await supabaseDesktop.garantirOSPublicada(db.obterOSPorNumero(registro.numero));
       if (!sincronizacao?.sucesso) {
-        return {
-          sucesso: false,
-          erro: 'A OS ainda não foi publicada para o celular: ' + (sincronizacao?.erro || 'verifique a internet e tente novamente.')
-        };
+        // A OS e o pedido de assinatura possuem filas persistentes
+        // independentes. Continue: quando o servidor voltar, o ciclo envia a
+        // OS primeiro e depois entrega o documento ao celular.
+        console.warn('[Assinatura remota] OS aguardando PostgreSQL:', sincronizacao?.erro || 'servidor indisponível');
       }
     }
     const resultado = await supabaseDesktop?.solicitarAssinaturaRemota?.(pacote);

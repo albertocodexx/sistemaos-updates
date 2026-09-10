@@ -1,4 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  contextoUsuarioAtivo, licencaPermiteOperacao, podeAcessarTipoDocumento,
+  tiposDocumentoPermitidos
+} from '../_shared/access.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -16,10 +20,43 @@ function primeiro(valor: unknown): any {
 
 function pacoteValido(pacote: any) {
   const tipo = String(pacote?.tipoDocumento || '');
+  const idEnvio = String(pacote?.idEnvioAssinatura || '').trim();
   return pacote && typeof pacote === 'object' &&
+    pacote.tipoArquivo === 'sistema-os-pc-para-assinar' &&
     ['os', 'compra', 'venda', 'entrega', 'desbloqueio'].includes(tipo) &&
-    String(pacote.idEnvioAssinatura || '').trim() &&
-    pacote.dados && typeof pacote.dados === 'object';
+    idEnvio.length > 0 && idEnvio.length <= 200 &&
+    pacote.dados && typeof pacote.dados === 'object' &&
+    tamanhoJson(pacote) <= 8_000_000;
+}
+
+function tamanhoJson(valor: unknown) {
+  try {
+    return new TextEncoder().encode(JSON.stringify(valor)).byteLength;
+  } catch (_) {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function respostaAssinaturaValida(respostaRecebida: any, tipo: string, idEnvio: string) {
+  if (!respostaRecebida || typeof respostaRecebida !== 'object' ||
+      respostaRecebida.tipoArquivo !== 'sistema-os-pc-para-assinar-resposta' ||
+      String(respostaRecebida.tipoDocumento || '') !== tipo ||
+      String(respostaRecebida.idEnvioAssinatura || '').trim() !== idEnvio ||
+      respostaRecebida.assinaturaPendente === true || tamanhoJson(respostaRecebida) > 8_000_000) return false;
+  const campo = tipo === 'compra' ? 'assinaturaVendedorBase64'
+    : tipo === 'venda' ? 'assinaturaCompradorBase64'
+    : tipo === 'entrega' ? 'assinaturaRetirouBase64'
+    : 'assinaturaClienteBase64';
+  const assinatura = String(respostaRecebida[campo] || '');
+  if (respostaRecebida.naoAssinado === true) return assinatura.length === 0;
+  return /^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=\s]+$/i.test(assinatura) &&
+    assinatura.length <= 6_000_000;
+}
+
+function jsonCanonico(valor: any): string {
+  if (valor === null || typeof valor !== 'object') return JSON.stringify(valor) ?? 'null';
+  if (Array.isArray(valor)) return `[${valor.map(jsonCanonico).join(',')}]`;
+  return `{${Object.keys(valor).sort().map((chave) => `${JSON.stringify(chave)}:${jsonCanonico(valor[chave])}`).join(',')}}`;
 }
 
 Deno.serve(async (req) => {
@@ -36,7 +73,8 @@ Deno.serve(async (req) => {
     if (usuarioErro || !usuario.user) return resposta(401, { erro: 'Sessão inválida.' });
     const { data: contexto, error: contextoErro } = await cliente.rpc('obter_contexto_comercial');
     const atual = primeiro(contexto);
-    if (contextoErro || !atual?.empresa_id || atual?.administrador_global === true) {
+    if (contextoErro || !atual?.empresa_id || atual?.administrador_global === true ||
+        !contextoUsuarioAtivo(atual) || !licencaPermiteOperacao(atual)) {
       return resposta(403, { erro: 'Entre em uma empresa para usar assinatura remota.' });
     }
     const corpo = await req.json();
@@ -47,6 +85,10 @@ Deno.serve(async (req) => {
     if (acao === 'enviar') {
       const pacote = dados.pacote;
       if (!pacoteValido(pacote)) return resposta(400, { erro: 'Documento de assinatura inválido.' });
+      if (!podeAcessarTipoDocumento(atual, pacote.tipoDocumento, 'criar') &&
+          !podeAcessarTipoDocumento(atual, pacote.tipoDocumento, 'editar')) {
+        return resposta(403, { erro: 'Seu usuário não pode enviar este tipo de documento.' });
+      }
       const { data, error } = await admin.from('solicitacoes_assinatura_remota')
         .upsert({
           empresa_id: atual.empresa_id,
@@ -67,9 +109,12 @@ Deno.serve(async (req) => {
     }
 
     if (acao === 'buscar_pendentes') {
+      const tipos = tiposDocumentoPermitidos(atual, 'ler');
+      if (!tipos.length) return resposta(200, { solicitacoes: [] });
       const { data, error } = await admin.from('solicitacoes_assinatura_remota')
         .select('id,id_envio_assinatura,tipo_documento,pacote,created_at,updated_at')
         .eq('empresa_id', atual.empresa_id).eq('status', 'pendente')
+        .in('tipo_documento', tipos)
         .order('updated_at', { ascending: true }).limit(50);
       if (error) throw error;
       return resposta(200, { solicitacoes: data || [] });
@@ -78,22 +123,60 @@ Deno.serve(async (req) => {
     if (acao === 'responder') {
       const idEnvio = String(dados.idEnvioAssinatura || '').trim();
       const respostaAssinada = dados.resposta;
-      if (!idEnvio || !respostaAssinada || typeof respostaAssinada !== 'object') {
+      if (!idEnvio || idEnvio.length > 200 || !respostaAssinada || typeof respostaAssinada !== 'object') {
         return resposta(400, { erro: 'Resposta de assinatura inválida.' });
+      }
+      const tipos = tiposDocumentoPermitidos(atual, 'editar');
+      if (!tipos.length) return resposta(403, { erro: 'Seu usuário não pode responder documentos.' });
+      const { data: pendente, error: pendenteErro } = await admin.from('solicitacoes_assinatura_remota')
+        .select('id,tipo_documento,status,resposta').eq('empresa_id', atual.empresa_id)
+        .eq('id_envio_assinatura', idEnvio)
+        .in('tipo_documento', tipos).maybeSingle();
+      if (pendenteErro) throw pendenteErro;
+      if (!pendente) return resposta(409, { erro: 'Esta solicitação expirou ou não está acessível.' });
+      if (!respostaAssinaturaValida(respostaAssinada, pendente.tipo_documento, idEnvio)) {
+        return resposta(400, { erro: 'A resposta não corresponde ao documento enviado.' });
+      }
+      // O Android pode perder a confirmacao HTTP depois que o PostgreSQL ja
+      // gravou a assinatura. A repeticao do mesmo pacote precisa confirmar o
+      // envio, sem duplicar nem deixar a fila offline presa para sempre.
+      if (['respondida', 'concluida'].includes(String(pendente.status))) {
+        if (jsonCanonico(pendente.resposta) === jsonCanonico(respostaAssinada)) {
+          return resposta(200, {
+            solicitacao: { id: pendente.id, status: pendente.status },
+            repetida: true,
+            mensagem: 'Assinatura já confirmada no PC.'
+          });
+        }
+        return resposta(409, { erro: 'Esta solicitação já possui outra resposta confirmada.' });
+      }
+      if (pendente.status !== 'pendente') {
+        return resposta(409, { erro: 'Esta solicitação foi cancelada ou expirou.' });
       }
       const { data, error } = await admin.from('solicitacoes_assinatura_remota')
         .update({ resposta: respostaAssinada, status: 'respondida', respondido_por: usuario.user.id, respondido_em: new Date().toISOString(), updated_at: new Date().toISOString() })
-        .eq('empresa_id', atual.empresa_id).eq('id_envio_assinatura', idEnvio).eq('status', 'pendente')
+        .eq('empresa_id', atual.empresa_id).eq('id', pendente.id).eq('status', 'pendente')
         .select('id,status').maybeSingle();
       if (error) throw error;
-      if (!data) return resposta(409, { erro: 'Esta solicitação já foi respondida ou expirou.' });
+      if (!data) {
+        const { data: confirmada } = await admin.from('solicitacoes_assinatura_remota')
+          .select('id,status,resposta').eq('empresa_id', atual.empresa_id).eq('id', pendente.id).maybeSingle();
+        if (confirmada && ['respondida', 'concluida'].includes(String(confirmada.status)) &&
+            jsonCanonico(confirmada.resposta) === jsonCanonico(respostaAssinada)) {
+          return resposta(200, { solicitacao: { id: confirmada.id, status: confirmada.status }, repetida: true });
+        }
+        return resposta(409, { erro: 'Esta solicitação já foi respondida ou expirou.' });
+      }
       return resposta(200, { solicitacao: data, mensagem: 'Assinatura enviada automaticamente ao PC.' });
     }
 
     if (acao === 'buscar_respostas') {
+      const tipos = tiposDocumentoPermitidos(atual, 'ler');
+      if (!tipos.length) return resposta(200, { solicitacoes: [] });
       const { data, error } = await admin.from('solicitacoes_assinatura_remota')
         .select('id,resposta,id_envio_assinatura,tipo_documento,respondido_em')
         .eq('empresa_id', atual.empresa_id).eq('status', 'respondida')
+        .in('tipo_documento', tipos)
         .order('respondido_em', { ascending: true }).limit(50);
       if (error) throw error;
       return resposta(200, { solicitacoes: data || [] });
@@ -102,9 +185,12 @@ Deno.serve(async (req) => {
     if (acao === 'confirmar_resposta') {
       const id = String(dados.solicitacaoId || '').trim();
       if (!id) return resposta(400, { erro: 'Solicitação não informada.' });
+      const tipos = tiposDocumentoPermitidos(atual, 'editar');
+      if (!tipos.length) return resposta(403, { erro: 'Seu usuário não pode concluir documentos.' });
       const { error } = await admin.from('solicitacoes_assinatura_remota')
         .update({ status: 'concluida', concluido_em: new Date().toISOString(), updated_at: new Date().toISOString() })
-        .eq('empresa_id', atual.empresa_id).eq('id', id).eq('status', 'respondida');
+        .eq('empresa_id', atual.empresa_id).eq('id', id).eq('status', 'respondida')
+        .in('tipo_documento', tipos);
       if (error) throw error;
       return resposta(200, { sucesso: true });
     }
@@ -113,6 +199,6 @@ Deno.serve(async (req) => {
   } catch (erro) {
     const mensagem = erro instanceof Error ? erro.message : String(erro);
     console.error('[assinaturas-remotas]', mensagem);
-    return resposta(500, { erro: 'Não foi possível concluir a assinatura remota: ' + mensagem.slice(0, 180) });
+    return resposta(500, { erro: 'Não foi possível concluir a assinatura remota agora.' });
   }
 });

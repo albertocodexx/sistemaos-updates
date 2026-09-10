@@ -608,7 +608,8 @@
 
         // Documento recebido pela fila atual do Supabase: responde no
         // próprio app, sem gerar/compartilhar arquivo .json.
-        if (registro._origemSupabase && window.SupabaseClientApp) {
+        if (registro._origemSupabase && window.SistemaOSSupabaseSync &&
+            typeof window.SistemaOSSupabaseSync.enviarRespostaAssinatura === 'function') {
           var respostaAutomatica = {
             tipoArquivo: TIPO_ARQUIVO_RESPOSTA,
             versaoFormato: 1,
@@ -621,13 +622,22 @@
           respostaAutomatica.assinaturaPendente = false;
           respostaAutomatica.naoAssinado = registro.statusLocal === 'nao_assinado';
           if (tipo !== 'entrega' && tipo !== 'desbloqueio') respostaAutomatica.assinaturaAssistenciaBase64 = obterAssinaturaAssistenciaAtual();
-          return window.SupabaseClientApp.obterCliente().functions.invoke('assinaturas-remotas', {
-            body: { acao: 'responder', dados: { idEnvioAssinatura: registro.idEnvioAssinatura, resposta: respostaAutomatica } }
-          }).then(function (resposta) {
-            if (resposta.error) throw resposta.error;
-            if (resposta.data && resposta.data.erro) throw new Error(resposta.data.erro);
-            mostrarFeedback((resposta.data && resposta.data.mensagem) || 'Assinatura enviada automaticamente ao PC.');
+          return window.SistemaOSSupabaseSync.enviarRespostaAssinatura(
+            registro.idEnvioAssinatura,
+            respostaAutomatica,
+            registro.id
+          ).then(function (resultado) {
+            if (!resultado || (!resultado.enviado && !resultado.enfileirado)) {
+              throw (resultado && resultado.erro) || new Error('O servidor não confirmou nem guardou o envio.');
+            }
+            if (resultado.enfileirado) {
+              mostrarFeedback('Servidor indisponível. A assinatura ficou salva no aparelho e será enviada automaticamente.');
+              registro.envioPostgresqlPendente = true;
+              return window.SistemaOSHistorico.salvarDocumentoRecebido(registro);
+            }
+            mostrarFeedback('Assinatura confirmada no PostgreSQL e enviada ao PC.');
             registro.statusLocal = 'enviado';
+            registro.envioPostgresqlPendente = false;
             return window.SistemaOSHistorico.salvarDocumentoRecebido(registro).then(function () {
               btnExportarRespostaDoc.hidden = true;
             });

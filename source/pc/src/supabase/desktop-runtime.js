@@ -61,6 +61,16 @@ function mensagemErro(erro) {
     : 'Não foi possível concluir a operação. Tente novamente.';
 }
 
+function erroTransitorioDeRede(erro) {
+  const texto = mensagemErro(erro).toLowerCase();
+  const status = Number(erro?.status || erro?.context?.status || 0);
+  return /failed to fetch|failed to send|network|internet|offline|econn|timeout|tempo_limite|http 429|http 5\d\d|service unavailable|pgrst00[02]/i.test(texto)
+    || erro?.name === 'FunctionsFetchError'
+    || status === 0
+    || status === 429
+    || status >= 500;
+}
+
 function comTempoLimite(promessa, limiteMs = 20000, codigo = 'TEMPO_LIMITE_SERVIDOR') {
   let temporizador;
   return Promise.race([
@@ -217,6 +227,7 @@ class DesktopSupabaseRuntime {
     this.verificacaoAssinaturaEmAndamento = null;
     this.syncFalhasConsecutivas = 0;
     this.syncSuspensoAte = 0;
+    this.reconciliacaoPostgresqlNestaSessao = false;
     this.inicializado = false;
     // A restauração da sessão pode envolver rede, backup e sincronização da
     // empresa. Guardar a promessa evita duas restaurações concorrentes quando
@@ -353,6 +364,7 @@ class DesktopSupabaseRuntime {
     this.client = null;
     this.contexto = null;
     this.usuario = null;
+    this.reconciliacaoPostgresqlNestaSessao = false;
     try {
       const cfg = this._configValida();
       if (!cfg) {
@@ -1277,6 +1289,35 @@ class DesktopSupabaseRuntime {
     return enviados;
   }
 
+  async _processarFilaAssinaturas() {
+    const agora = Date.now();
+    const pendentes = (this.stateStore.obter().filaAssinaturas || []).filter((item) =>
+      !item.proximaTentativaEm || new Date(item.proximaTentativaEm).getTime() <= agora
+    );
+    let enviados = 0;
+    for (const item of pendentes.slice(0, 10)) {
+      try {
+        await this._enviarSolicitacaoAssinaturaAgora(item.pacote);
+        this.stateStore.confirmarAssinaturaEnviada(item.idEnvioAssinatura);
+        enviados += 1;
+      } catch (erro) {
+        const mensagem = mensagemErro(erro);
+        this.stateStore.alterar((estado) => {
+          const atual = (estado.filaAssinaturas || []).find((x) => x.id === item.id);
+          if (!atual) return;
+          atual.tentativas = Number(atual.tentativas || 0) + 1;
+          atual.ultimoErro = mensagem;
+          const atraso = Math.min(300000, 2000 * Math.pow(2, Math.min(atual.tentativas, 7)));
+          atual.proximaTentativaEm = new Date(Date.now() + atraso).toISOString();
+        });
+        // Preserva a ordem de criação dos documentos. O primeiro que ainda
+        // não foi confirmado permanece durável e será repetido depois.
+        break;
+      }
+    }
+    return enviados;
+  }
+
   _osRemotaJaAplicada(linha, estado) {
     if (!linha?.numero || linha.deleted_at) return false;
     const local = this.db.obterOSPorNumero?.(linha.numero);
@@ -1393,6 +1434,20 @@ class DesktopSupabaseRuntime {
     }
     this.stateStore.alterar((s) => { s.ultimaReconciliacaoOSCompletaEm = new Date().toISOString(); });
     return aplicadas;
+  }
+
+  async _auditarIntegridadePostgresql() {
+    const cargo = String(this.contexto?.cargo || '').trim().toLowerCase();
+    const administrador = ['administrador', 'admin', 'proprietario', 'proprietário'].includes(cargo);
+    if (!administrador || this.contexto?.administrador_global === true) return null;
+    const { data, error } = await this.client.rpc('auditar_integridade_postgresql');
+    if (error) throw error;
+    this.stateStore.alterar((estado) => {
+      estado.auditoriaPostgresql = data && typeof data === 'object' ? data : {
+        motor: 'PostgreSQL', verificadoEm: new Date().toISOString()
+      };
+    });
+    return data;
   }
 
   async _baixarExclusoesOS() {
@@ -1654,7 +1709,12 @@ class DesktopSupabaseRuntime {
     const { data, error } = await this.client.functions.invoke('assinaturas-remotas', {
       body: { acao: 'buscar_respostas', dados: {} }
     });
-    if (error) throw new Error(await erroDaEdgeFunction(error));
+    if (error) {
+      const falha = new Error(await erroDaEdgeFunction(error));
+      falha.name = error.name || falha.name;
+      falha.status = Number(error?.context?.status || error?.status || 0);
+      throw falha;
+    }
     if (data?.erro) throw new Error(data.erro);
     let aplicadas = 0;
     for (const solicitacao of (data?.solicitacoes || [])) {
@@ -1729,6 +1789,7 @@ class DesktopSupabaseRuntime {
           avisos.push(`Estoque: ${mensagemErro(erroEstoque)}`);
         }
         let enviados = await this._processarFila();
+        enviados += await this._processarFilaAssinaturas();
         // Tombstones usam checkpoint proprio. Assim, mesmo que o cursor de
         // atualizacoes normais avance, uma exclusao do celular sempre chega ao PC.
         const exclusoes = await this._baixarExclusoesOS();
@@ -1736,8 +1797,14 @@ class DesktopSupabaseRuntime {
         // repara automaticamente uma instalacao nova, backup antigo ou cursor
         // legado que tenha deixado alguma OS para tras em outro computador.
         const recebidos = (await this._baixarMudancas())
-          + (await this._reconciliarCatalogoOSCompleto())
+          + (await this._reconciliarCatalogoOSCompleto({
+            // O primeiro ciclo de cada abertura confere o catalogo inteiro no
+            // PostgreSQL em segundo plano. Isso repara cache antigo ou uma OS
+            // ausente em outro computador sem atrasar a tela de login.
+            forcar: !this.reconciliacaoPostgresqlNestaSessao
+          }))
           + exclusoes;
+        this.reconciliacaoPostgresqlNestaSessao = true;
         const entregasPublicadas = await (this.aftercareService?.sincronizar('entrega') || Promise.resolve({ enviados: 0, recebidos: 0 })).catch((erro) => {
           avisos.push(`Entregas: ${mensagemErro(erro)}`);
           return { enviados: 0, recebidos: 0 };
@@ -1778,6 +1845,11 @@ class DesktopSupabaseRuntime {
         }
         await this.fileService.limparTemporariosExpirados();
         await this.fileService.limparObjetosStoragePendentes();
+        await this._auditarIntegridadePostgresql().catch((erro) => {
+          // Uma versao antiga do servidor pode ainda nao ter a RPC. A
+          // sincronizacao operacional continua e a migracao sera reaplicada.
+          avisos.push(`PostgreSQL: ${mensagemErro(erro)}`);
+        });
         const agora = new Date().toISOString();
         this.stateStore.alterar((s) => {
           s.ultimaSincronizacaoEm = agora;
@@ -1827,6 +1899,8 @@ class DesktopSupabaseRuntime {
         const aindaPendente = this.stateStore.obter().fila.some((item) =>
           item.status === 'pendente' &&
           (!item.proximaTentativaEm || new Date(item.proximaTentativaEm).getTime() <= Date.now())
+        ) || (this.stateStore.obter().filaAssinaturas || []).some((item) =>
+          !item.proximaTentativaEm || new Date(item.proximaTentativaEm).getTime() <= Date.now()
         );
         if (aindaPendente) this.solicitarSincronizacao(15000);
       }
@@ -2017,27 +2091,42 @@ class DesktopSupabaseRuntime {
     };
   }
 
+  async _enviarSolicitacaoAssinaturaAgora(pacote) {
+    // O tipo desbloqueio foi introduzido depois da Edge Function original.
+    // A RPC autenticada mantém o mesmo isolamento por empresa e permite que
+    // instalações atualizadas funcionem antes de uma nova publicação da Edge.
+    if (pacote?.tipoDocumento === 'desbloqueio') {
+      const { data, error } = await this.client.rpc('enviar_solicitacao_assinatura_remota', { p_pacote: pacote });
+      if (error) throw error;
+      if (data?.erro) throw new Error(data.erro);
+      return { sucesso: true, solicitacao: data?.solicitacao || data || null, mensagem: 'Documento enviado ao celular.' };
+    }
+    const { data, error } = await this.client.functions.invoke('assinaturas-remotas', {
+      body: { acao: 'enviar', dados: { pacote } }
+    });
+    if (error) throw new Error(await erroDaEdgeFunction(error));
+    if (data?.erro) throw new Error(data.erro);
+    return { sucesso: true, solicitacao: data?.solicitacao || null, mensagem: String(data?.mensagem || '') };
+  }
+
   async solicitarAssinaturaRemota(pacote) {
     if (!this.client || !this.contexto || this.contexto.administrador_global) {
       return { sucesso: false, erro: 'Entre em uma empresa para enviar a assinatura ao celular.' };
     }
     try {
-      // O tipo desbloqueio foi introduzido depois da Edge Function original.
-      // A RPC autenticada mantém o mesmo isolamento por empresa e permite que
-      // instalações atualizadas funcionem antes de uma nova publicação da Edge.
-      if (pacote?.tipoDocumento === 'desbloqueio') {
-        const { data, error } = await this.client.rpc('enviar_solicitacao_assinatura_remota', { p_pacote: pacote });
-        if (error) throw error;
-        if (data?.erro) throw new Error(data.erro);
-        return { sucesso: true, solicitacao: data?.solicitacao || data || null, mensagem: 'Documento enviado ao celular.' };
-      }
-      const { data, error } = await this.client.functions.invoke('assinaturas-remotas', {
-        body: { acao: 'enviar', dados: { pacote } }
-      });
-      if (error) throw new Error(await erroDaEdgeFunction(error));
-      if (data?.erro) throw new Error(data.erro);
-      return { sucesso: true, solicitacao: data?.solicitacao || null, mensagem: String(data?.mensagem || '') };
+      const resultado = await this._enviarSolicitacaoAssinaturaAgora(pacote);
+      this.stateStore.confirmarAssinaturaEnviada(pacote?.idEnvioAssinatura);
+      return resultado;
     } catch (erro) {
+      if (erroTransitorioDeRede(erro)) {
+        this.stateStore.enfileirarAssinatura(pacote);
+        this.solicitarSincronizacao(5000);
+        return {
+          sucesso: true,
+          pendente: true,
+          mensagem: 'Servidor indisponível. O documento ficou salvo neste PC e será enviado automaticamente.'
+        };
+      }
       return { sucesso: false, erro: mensagemErro(erro) };
     }
   }
@@ -2204,6 +2293,9 @@ class DesktopSupabaseRuntime {
       fiscalHabilitado: this.contexto?.administrador_global !== true && this.contexto?.recursos_habilitados?.fiscal_habilitado === true,
       modoArmazenamento: this.contexto?.modo_armazenamento || '',
       filaPendente: (estado.fila || []).filter((i) => i.status === 'pendente').length,
+      assinaturasPendentesEnvio: (estado.filaAssinaturas || []).length,
+      bancoCompartilhado: 'PostgreSQL',
+      auditoriaPostgresql: estado.auditoriaPostgresql || null,
       conflitos: (estado.conflitos || []).length,
       ultimaSincronizacaoEm: estado.ultimaSincronizacaoEm || '',
       persistenciaCriptografada: !!this.sessionStore?.persistenciaCriptografadaDisponivel?.()

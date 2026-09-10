@@ -38,6 +38,17 @@ async function executar() {
   await teste('origem externa e rejeitada mesmo no canal publico', async () => {
     await assert.rejects(handlers.get('supabase:status')({ sender: webContents, senderFrame: { url: 'https://externo.invalid/' } }));
   });
+  await teste('alterar empresa na URL nao troca usuario nem contexto', async () => {
+    frame.url = url + '#empresa=00000000-0000-0000-0000-000000000002&usuario=outro';
+    const usuarioAntes = runtime.usuario;
+    assert.equal((await handlers.get('os:obter')(evento, 'OS-TESTE')).sucesso, true);
+    assert.equal(runtime.usuario, usuarioAntes, 'o contexto deve continuar vindo da sessao autenticada');
+    assert.equal(runtime.usuario.id, 'operador');
+    frame.url = url + '?empresa=00000000-0000-0000-0000-000000000002';
+    await assert.rejects(handlers.get('os:obter')(evento, 'OS-TESTE'), /Origem/,
+      'query string adulterada deve invalidar a origem do renderer');
+    frame.url = url;
+  });
   await teste('outra janela e rejeitada mesmo com a mesma URL', async () => {
     await assert.rejects(handlers.get('supabase:status')({ sender: { mainFrame: frame }, senderFrame: frame }));
   });
@@ -85,7 +96,7 @@ async function executar() {
     runtime.usuario = { id: 'editor', permissoes: { os: true } };
     assert.equal((await handlers.get('os:atualizar')(evento, 'OS-TESTE', {})).sucesso, true);
   });
-  assert.equal(chamadas, 3, 'somente tres operacoes autorizadas podem atingir handlers');
+  assert.equal(chamadas, 4, 'somente quatro operacoes autorizadas podem atingir handlers');
   await teste('troca de conta nao cruza operacoes em andamento', async () => {
     let liberar;
     ipc.handle('os:salvar', () => new Promise(resolve => { liberar = resolve; }));

@@ -192,6 +192,22 @@
     });
   }
 
+  function operacaoRespostaAssinatura(idEnvioAssinatura, resposta, registroLocalId) {
+    var idEnvio = String(idEnvioAssinatura || '').trim();
+    if (!idEnvio || !resposta || typeof resposta !== 'object') {
+      throw new Error('Resposta de assinatura incompleta.');
+    }
+    return baseOperacao('responder', {
+      id: 'assinatura-remota:responder:' + idEnvio,
+      entidade: 'assinatura_remota',
+      entidadeId: idEnvio,
+      idExportacao: idEnvio,
+      revisionEsperada: null,
+      dados: { idEnvioAssinatura: idEnvio, resposta: resposta },
+      registroLocalId: registroLocalId || null
+    });
+  }
+
   async function enfileirar(operacao, motivo) {
     var salvo = await historico().enfileirarOperacaoNuvem(operacao);
     emitir('sistema-os:operacao-nuvem-enfileirada', salvo);
@@ -205,6 +221,16 @@
   }
 
   async function confirmarLocal(operacao, dadosRemotos) {
+    if (operacao.entidade === 'assinatura_remota' && operacao.registroLocalId &&
+        historico().obterDocumentoRecebidoPorId && historico().salvarDocumentoRecebido) {
+      var documento = await historico().obterDocumentoRecebidoPorId(operacao.registroLocalId);
+      if (documento && ['assinado', 'nao_assinado', 'enviado'].indexOf(documento.statusLocal) !== -1) {
+        documento.statusLocal = 'enviado';
+        documento.enviadoAoPostgresqlEm = new Date().toISOString();
+        await historico().salvarDocumentoRecebido(documento);
+      }
+      return 0;
+    }
     if (['ordem_servico', 'compra', 'venda', 'entrega'].indexOf(operacao.entidade) === -1) return 0;
     if (operacao.registroLocalId && historico().gravarEstadoSupabase) {
       try { await historico().gravarEstadoSupabase(operacao.registroLocalId, dadosRemotos); } catch (_) {}
@@ -225,6 +251,16 @@
   }
 
   async function executar(operacao) {
+    if (operacao.entidade === 'assinatura_remota') {
+      var respostaAssinatura = await root.SupabaseClientApp.obterCliente().functions.invoke('assinaturas-remotas', {
+        body: { acao: 'responder', dados: operacao.dados }
+      });
+      if (respostaAssinatura.error) throw respostaAssinatura.error;
+      if (respostaAssinatura.data && respostaAssinatura.data.erro) {
+        throw new Error(respostaAssinatura.data.erro);
+      }
+      return respostaAssinatura.data || { sucesso: true };
+    }
     if (operacao.entidade === 'arquivo') {
       if (!root.SistemaOSSupabaseArquivo || !root.SistemaOSSupabaseArquivo.processarOperacao) {
         throw new Error('Servico de arquivos Supabase indisponivel.');
@@ -362,6 +398,12 @@
 
   function excluirOS(id, revision, numero) {
     return executarOuEnfileirar(operacaoExclusao(id, revision, numero));
+  }
+
+  function enviarRespostaAssinatura(idEnvioAssinatura, resposta, registroLocalId) {
+    return executarOuEnfileirar(operacaoRespostaAssinatura(
+      idEnvioAssinatura, resposta, registroLocalId
+    ));
   }
 
   function cancelarCriacaoOS(idExportacao) {
@@ -505,6 +547,7 @@
     criarDocumento: criarDocumento,
     atualizarDocumento: atualizarDocumento,
     excluirOS: excluirOS,
+    enviarRespostaAssinatura: enviarRespostaAssinatura,
     cancelarCriacaoOS: cancelarCriacaoOS,
     obterDispositivoId: registrarDispositivo,
     processarFila: processarFila,
@@ -513,6 +556,7 @@
     _operacaoExclusao: operacaoExclusao,
     _operacaoCriacaoDocumento: operacaoCriacaoDocumento,
     _operacaoAtualizacaoDocumento: operacaoAtualizacaoDocumento,
+    _operacaoRespostaAssinatura: operacaoRespostaAssinatura,
     _dadosDocumento: dadosDocumento,
     _atrasoMs: atrasoMs,
     _resetDispositivo: function () { dispositivoRegistrado = null; }

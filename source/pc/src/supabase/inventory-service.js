@@ -5,6 +5,7 @@ const CAMPOS = [
   'id', 'empresa_id', 'tipo', 'local_id', 'dados', 'revision',
   'origem_dispositivo_id', 'created_at', 'updated_at', 'deleted_at'
 ].join(',');
+const TAMANHO_PAGINA = 500;
 
 function ordenar(valor) {
   if (Array.isArray(valor)) return valor.map(ordenar);
@@ -51,13 +52,21 @@ class InventoryService {
   async baixar() {
     const cliente = this.getClient();
     const estado = this.stateStore.obter();
-    const { data, error } = await cliente.from('estoque_itens').select(CAMPOS)
-      .gt('updated_at', estado.ultimoPullEstoqueEm || '1970-01-01T00:00:00.000Z')
-      .order('updated_at', { ascending: true }).limit(1000);
-    if (error) throw error;
+    const data = [];
+    const desde = estado.ultimoPullEstoqueEm || '1970-01-01T00:00:00.000Z';
+    for (let inicio = 0; ; inicio += TAMANHO_PAGINA) {
+      const pagina = await cliente.from('estoque_itens').select(CAMPOS)
+        .gt('updated_at', desde)
+        .order('updated_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(inicio, inicio + TAMANHO_PAGINA - 1);
+      if (pagina.error) throw pagina.error;
+      data.push(...(pagina.data || []));
+      if ((pagina.data || []).length < TAMANHO_PAGINA) break;
+    }
     let recebidos = 0;
     let maiorData = estado.ultimoPullEstoqueEm;
-    for (const linha of (data || [])) {
+    for (const linha of data) {
       const chave = `${linha.tipo}:${linha.local_id}`;
       const mapeado = this.stateStore.obter().mapeamentosEstoque[chave] || null;
       const local = linha.tipo === 'peca'
@@ -81,7 +90,7 @@ class InventoryService {
       }
       if (linha.updated_at && linha.updated_at > maiorData) maiorData = linha.updated_at;
     }
-    if (data?.length) this.stateStore.alterar((s) => { s.ultimoPullEstoqueEm = maiorData; });
+    if (data.length) this.stateStore.alterar((s) => { s.ultimoPullEstoqueEm = maiorData; });
     return recebidos;
   }
 
@@ -94,10 +103,17 @@ class InventoryService {
     // pode continuar dizendo "já enviado" depois de uma limpeza manual ou
     // restauração do Supabase; nesse cenário o hash era igual e o aparelho
     // nunca era republicado, por isso não aparecia no Android.
-    const remotas = await cliente.from('estoque_itens')
-      .select('id,tipo,local_id,revision,deleted_at').limit(5000);
-    if (remotas.error) throw remotas.error;
-    const remotaPorChave = new Map((remotas.data || []).map((linha) => [`${linha.tipo}:${linha.local_id}`, linha]));
+    const linhasRemotas = [];
+    for (let inicio = 0; ; inicio += TAMANHO_PAGINA) {
+      const pagina = await cliente.from('estoque_itens')
+        .select('id,tipo,local_id,revision,deleted_at')
+        .order('id', { ascending: true })
+        .range(inicio, inicio + TAMANHO_PAGINA - 1);
+      if (pagina.error) throw pagina.error;
+      linhasRemotas.push(...(pagina.data || []));
+      if ((pagina.data || []).length < TAMANHO_PAGINA) break;
+    }
+    const remotaPorChave = new Map(linhasRemotas.map((linha) => [`${linha.tipo}:${linha.local_id}`, linha]));
     let enviados = 0;
 
     for (const item of locais) {

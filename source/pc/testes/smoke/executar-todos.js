@@ -7,6 +7,8 @@ const { spawnSync } = require('child_process');
 const raiz = path.resolve(__dirname, '..', '..');
 const testes = [
   'teste-autorizacao-runtime.js',
+  'teste-autorizacao-edge-functions.js',
+  'teste-postgresql-cache-offline.js',
   'teste-seguranca-intensiva-local.js',
   'teste-auth-webhook-isolados.js',
   'teste-pos-atendimento.js',

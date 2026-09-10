@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { contextoUsuarioAtivo, licencaPermiteOperacao, temPermissao } from '../_shared/access.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -122,18 +123,20 @@ Deno.serve(async (req) => {
     if (!usuario.user) return resposta(401, { erro: 'Sessão inválida.' });
     const { data: contexto, error: contextoErro } = await cliente.rpc('obter_contexto_comercial');
     const atual = Array.isArray(contexto) ? contexto[0] : contexto;
-    if (contextoErro || !atual?.empresa_id) return resposta(403, { erro: 'Acesso não autorizado.' });
+    if (contextoErro || !atual?.empresa_id || atual.administrador_global === true ||
+        !contextoUsuarioAtivo(atual) || !licencaPermiteOperacao(atual)) {
+      return resposta(403, { erro: 'Acesso não autorizado.' });
+    }
     const corpo = await req.json();
     const tipo = String(corpo.tipo || '');
     const acao = String(corpo.acao || '');
     if (!['mercado_pago', 'whatsapp', 'ia'].includes(tipo)) return resposta(400, { erro: 'Integração não suportada.' });
     const admin = createClient(url, serviceRole, { auth: { persistSession: false } });
-    const cargo = String(atual.cargo || '').toLowerCase();
-    const podeAdministrar = /administrador|propriet/.test(cargo) || Boolean(atual.permissoes?.configuracoes);
-    const permissaoFinanceiro = atual.permissoes?.financeiro;
-    const podeOperarFinanceiro = podeAdministrar || permissaoFinanceiro === true
-      || Boolean(permissaoFinanceiro && typeof permissaoFinanceiro === 'object'
-        && Object.values(permissaoFinanceiro).some(Boolean));
+    const podeAdministrar = temPermissao(atual, 'configuracoes', 'editar');
+    const podeConsultarFinanceiro = temPermissao(atual, 'financeiro', 'ler');
+    const podeOperarFinanceiro = temPermissao(atual, 'financeiro', 'criar') ||
+      temPermissao(atual, 'financeiro', 'editar');
+    const podeEnviarWhatsApp = temPermissao(atual, 'os', 'editar');
 
     if (tipo === 'ia') {
       const buscarIntegracao = async () => {
@@ -245,6 +248,7 @@ Deno.serve(async (req) => {
       if (acao === 'status') return resposta(200, { integracao: await buscarIntegracao() });
 
       if (acao === 'enviar') {
+        if (!podeEnviarWhatsApp) return resposta(403, { erro: 'Seu usuário não pode enviar mensagens da empresa.' });
         const integracao = await buscarIntegracao();
         if (!integracao || integracao.status !== 'conectada') return resposta(409, { erro: 'WhatsApp API não está conectado.' });
         const credencial = await carregarCredencial(integracao.id);
@@ -440,7 +444,7 @@ Deno.serve(async (req) => {
     // credencial continua exclusivamente no cofre: somente os campos mínimos
     // dos pagamentos voltam ao aplicativo, nunca o access token.
     if (acao === 'consultar_pagamentos') {
-      if (!podeOperarFinanceiro) return resposta(403, { erro: 'Seu usuário não pode consultar cobranças.' });
+      if (!podeConsultarFinanceiro) return resposta(403, { erro: 'Seu usuário não pode consultar cobranças.' });
       const dados = corpo.dados && typeof corpo.dados === 'object' ? corpo.dados : {};
       const numero = String(dados.numero || '').trim().slice(0, 80);
       if (!/^OS-[0-9]+$/i.test(numero)) return resposta(400, { erro: 'Informe uma OS válida.', codigo: 'os_invalida' });
@@ -593,6 +597,6 @@ Deno.serve(async (req) => {
   } catch (erro) {
     const mensagem = erro instanceof Error ? erro.message : String(erro);
     console.error('[integracoes-empresa]', mensagem);
-    return resposta(500, { erro: 'Não foi possível concluir a integração: ' + mensagem.slice(0, 180), codigo: 'integracao_indisponivel' });
+    return resposta(500, { erro: 'Não foi possível concluir a integração agora. Confira os dados e tente novamente.', codigo: 'integracao_indisponivel' });
   }
 });

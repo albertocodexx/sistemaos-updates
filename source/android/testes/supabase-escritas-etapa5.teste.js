@@ -295,6 +295,76 @@ async function executar() {
     dom.window.close();
   });
 
+  await teste('assinatura feita sem servidor permanece na fila duravel do Android', async () => {
+    const fila = [];
+    Object.defineProperty(global, 'navigator', { value: { onLine: false }, configurable: true });
+    global.SistemaOSSessao = {
+      obterEstado() {
+        return { tipo: 'offline_com_sessao', usuario: { id: 'usuario-a' }, contexto: { empresa_id: 'empresa-a', usuario_id: 'usuario-a' } };
+      },
+      ehErroRede() { return true; }
+    };
+    global.SistemaOSSupabaseOS = {
+      _classificarErro() { return 'rede'; }, _dadosParaCriacao(d) { return d; }, _patchParaServidor(p) { return p; }
+    };
+    global.SistemaOSHistorico = {
+      async enfileirarOperacaoNuvem(item) { fila.push(item); return item; },
+      async atualizarOperacaoNuvem() { return null; }
+    };
+    const sync = recarregar(caminhoSync);
+    const resultado = await sync.enviarRespostaAssinatura(
+      'envio-assinatura-offline',
+      { tipoArquivo: 'sistema-os-pc-para-assinar-resposta', tipoDocumento: 'os', assinaturaClienteBase64: 'data:image/png;base64,QQ==' },
+      'doc-local-1'
+    );
+    assert.equal(resultado.enfileirado, true);
+    assert.equal(fila.length, 1);
+    assert.equal(fila[0].entidade, 'assinatura_remota');
+    assert.equal(fila[0].registroLocalId, 'doc-local-1');
+  });
+
+  await teste('fila de assinatura so marca enviada depois da confirmacao do PostgreSQL', async () => {
+    const item = {
+      id: 'assinatura-remota:responder:envio-1', empresaId: 'empresa-a', usuarioId: 'usuario-a',
+      entidade: 'assinatura_remota', operacao: 'responder', entidadeId: 'envio-1',
+      registroLocalId: 'doc-local-1', dados: { idEnvioAssinatura: 'envio-1', resposta: { tipoDocumento: 'os' } },
+      status: 'pendente', tentativas: 0, criadoEm: '2026-09-09T10:00:00Z'
+    };
+    let estadoOperacao = Object.assign({}, item);
+    let documento = { id: 'doc-local-1', statusLocal: 'assinado' };
+    Object.defineProperty(global, 'navigator', { value: { onLine: true }, configurable: true });
+    global.SistemaOSSessao = {
+      obterEstado() { return { tipo: 'autenticado', usuario: { id: 'usuario-a' }, contexto: { empresa_id: 'empresa-a', usuario_id: 'usuario-a' } }; },
+      async revalidar() { return this.obterEstado(); },
+      ehErroRede() { return false; }
+    };
+    global.SistemaOSSupabaseOS = {
+      _classificarErro() { return 'servidor'; }, _dadosParaCriacao(d) { return d; }, _patchParaServidor(p) { return p; }
+    };
+    global.SupabaseClientApp = {
+      obterCliente() {
+        return { functions: { async invoke(nome, opcoes) {
+          assert.equal(nome, 'assinaturas-remotas');
+          assert.equal(opcoes.body.acao, 'responder');
+          return { data: { sucesso: true }, error: null };
+        } } };
+      }
+    };
+    global.SistemaOSHistorico = {
+      async enfileirarOperacaoNuvem(x) { return x; },
+      async listarOperacoesNuvemPendentes() { return estadoOperacao.status === 'pendente' ? [estadoOperacao] : []; },
+      async atualizarOperacaoNuvem(id, patch) { estadoOperacao = Object.assign({}, estadoOperacao, patch); return estadoOperacao; },
+      async obterDocumentoRecebidoPorId() { return Object.assign({}, documento); },
+      async salvarDocumentoRecebido(doc) { documento = Object.assign({}, doc); return documento; }
+    };
+    const sync = recarregar(caminhoSync);
+    const resultado = await sync.processarFila();
+    assert.equal(resultado.enviados, 1);
+    assert.equal(estadoOperacao.status, 'concluido');
+    assert.equal(documento.statusLocal, 'enviado');
+    assert.ok(documento.enviadoAoPostgresqlEm);
+  });
+
   await teste('CloudData atualiza apenas registros com referência válida no Supabase', async () => {
     let supabaseAtualizou = 0;
     global.SupabaseClientApp = { carregarConfiguracao() { return { ok: true, ativo: true }; } };
