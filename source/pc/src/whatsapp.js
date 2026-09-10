@@ -108,6 +108,7 @@ const STATUS_ACK_SERVIDOR = 2;
 const STATUS_ACK_ENTREGUE = 3;
 const STATUS_ERRO = 0;
 const TEMPO_MAXIMO_ACK_MS = 15_000;
+const TEMPO_MAXIMO_OPERACAO_MS = 20_000;
 const CONFIRMACOES_PENDENTES = new Map(); // id da mensagem -> { resolve, timer }
 const STATUS_MENSAGENS_ENVIADAS = new Map();
 let filaEnvio = Promise.resolve();
@@ -757,6 +758,17 @@ function _logAutomacao({ tipo, os, telefone, mensagem, sucesso, erro, statusEnvi
 // ─── Pequena pausa entre mensagens sequenciais (evita flood/fora de ordem) ────
 function _sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function _comTempoLimite(promessa, mensagem, limiteMs = TEMPO_MAXIMO_OPERACAO_MS) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(promessa),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(mensagem)), limiteMs);
+      timer.unref?.();
+    })
+  ]).finally(() => clearTimeout(timer));
 }
 
 // Uma única fila vale para texto e documento. Além de manter a ordem
@@ -1738,7 +1750,10 @@ async function resolverDestinoWhatsApp(tel, codigoPais = '55') {
     return { sucesso: false, erro: 'Não foi possível validar o número no WhatsApp. Reconecte o WhatsApp e tente novamente.' };
   }
 
-  const encontrados = await sock.onWhatsApp(destino.numero);
+  const encontrados = await _comTempoLimite(
+    sock.onWhatsApp(destino.numero),
+    'O WhatsApp demorou para validar o número. Tente novamente.'
+  );
   const encontrado = Array.isArray(encontrados)
     ? encontrados.find((item) => item && item.exists === true)
     : null;
@@ -1758,7 +1773,10 @@ async function resolverDestinoWhatsApp(tel, codigoPais = '55') {
 
 async function enviarAnexoConfirmado(jid, conteudo) {
   return _enfileirarEnvio(async function () {
-    const enviado = await sock.sendMessage(jid, conteudo);
+    const enviado = await _comTempoLimite(
+      sock.sendMessage(jid, conteudo),
+      'O WhatsApp demorou para aceitar o anexo. A fila foi liberada.'
+    );
     if (!enviado?.key?.id) {
       throw new Error('O WhatsApp não retornou o identificador do anexo enviado.');
     }
@@ -1783,7 +1801,10 @@ async function enviarMensagem(tel, msg, codigoPais = '55') {
       const destino = await resolverDestinoWhatsApp(tel, codigoPais);
       if (!destino.sucesso) return destino;
 
-      const enviada = await sock.sendMessage(destino.jid, { text: msg });
+      const enviada = await _comTempoLimite(
+        sock.sendMessage(destino.jid, { text: msg }),
+        'O WhatsApp demorou para aceitar a mensagem. A fila foi liberada.'
+      );
       if (!enviada?.key?.id) {
         throw new Error('O WhatsApp não retornou o identificador da mensagem enviada.');
       }

@@ -58,6 +58,7 @@ const testes = [
   'teste-atualizacao-suporte.js',
   'teste-seguranca-cyber.js',
   'teste-seguranca-baileys-cve.js',
+  'teste-rate-limit-ia-whatsapp.js',
   'teste-remocao-legado.js',
   'teste-supabase-desktop.js',
   'teste-sync-os-outra-maquina.js',

@@ -41,6 +41,7 @@
 
 const https = require('https');
 const db = require('./db');
+const { consumirLimiteIA } = require('./ia-rate-limit');
 
 const GROQ_HOST = 'api.groq.com';
 const GROQ_PATH = '/openai/v1/chat/completions';
@@ -124,6 +125,16 @@ function _chamarGroqAPI(apiKey, mensagens, opts = {}) {
     citationOptions = null,
     _tentativaRede = 0
   } = opts;
+  if (_tentativaRede === 0) {
+    let config = {};
+    try { config = db.loadDB().config || {}; } catch (_) {}
+    consumirLimiteIA({
+      provedor: 'groq',
+      chave: apiKey,
+      limiteMinuto: config.limiteIAMinuto,
+      limiteMes: config.limiteIAMes
+    });
+  }
   return new Promise((resolve, reject) => {
     const corpoRequisicao = {
       model,

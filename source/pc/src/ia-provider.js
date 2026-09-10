@@ -1,5 +1,6 @@
 const https = require('https');
 const { chamarGroqAPI } = require('./ia-groq');
+const { consumirLimiteIA } = require('./ia-rate-limit');
 
 const PROVEDORES = Object.freeze({
   groq: { host: 'api.groq.com', path: '/openai/v1/chat/completions', model: 'openai/gpt-oss-120b', key: 'groqChatApiKey' },
@@ -45,6 +46,13 @@ async function chamarIA(config, mensagens, opcoes = {}) {
   const apiKey = String(opcoes.apiKey || config?.[definicao.key] || '').trim();
   if (!apiKey) throw new Error(`A chave do provedor ${provedor} ainda não foi configurada.`);
   if (provedor === 'groq') return chamarGroqAPI(apiKey, mensagens, opcoes);
+
+  consumirLimiteIA({
+    provedor,
+    chave: apiKey,
+    limiteMinuto: config?.limiteIAMinuto,
+    limiteMes: config?.limiteIAMes
+  });
 
   const model = String(opcoes.model || config?.iaChatModel || definicao.model).trim();
   if (provedor === 'anthropic') {
