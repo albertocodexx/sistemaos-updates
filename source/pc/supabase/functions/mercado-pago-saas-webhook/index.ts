@@ -138,38 +138,47 @@ Deno.serve(async (req) => {
     let paymentId = dataId;
     if (topico === 'merchant_order') {
       const ordemResposta = await fetch(`https://api.mercadopago.com/merchant_orders/${encodeURIComponent(dataId)}`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
+        headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(15000)
       });
+      if (!ordemResposta.ok) return resposta(502, { erro: 'Ordem ainda não pode ser consultada.' });
       const ordem = await ordemResposta.json().catch(() => ({}));
       paymentId = texto((ordem.payments || []).find((item: any) => item.status === 'approved')?.id || ordem.payments?.[0]?.id);
       if (!paymentId) return resposta(200, { recebido: true, aguardando_pagamento: true });
     }
 
     const pagamentoResposta = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
+      headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(15000)
     });
     const pagamento = await pagamentoResposta.json().catch(() => ({}));
     if (!pagamentoResposta.ok) {
       console.error('[mercado-pago-saas-webhook] pagamento nao consultado', pagamentoResposta.status);
       return resposta(502, { erro: 'Pagamento ainda nao pode ser consultado.' });
     }
+    if (!/^\d+$/.test(texto(pagamento.id)) || texto(pagamento.id) !== paymentId || pagamento.live_mode === false) {
+      return resposta(200, { recebido: true, ignorado: true });
+    }
 
     const referencia = texto(pagamento.external_reference);
     if (!referencia.startsWith('SAAS-')) return resposta(200, { recebido: true, ignorado: true });
     const { data: cobranca, error: cobrancaErro } = await admin.from('cobrancas_assinatura')
-      .select('id,empresa_id,plano_id,valor,moeda,status,aplicado_em')
+      .select('id,empresa_id,plano_id,valor,moeda,status,aplicado_em,pagamento_provedor_id')
       .eq('referencia_externa', referencia).maybeSingle();
     if (cobrancaErro) throw cobrancaErro;
     if (!cobranca) return resposta(200, { recebido: true, referencia_desconhecida: true });
+    if (cobranca.aplicado_em && (texto(cobranca.pagamento_provedor_id) !== texto(pagamento.id)
+      || !['approved', 'refunded', 'charged_back'].includes(pagamento.status))) {
+      return resposta(200, { recebido: true, ignorado: true });
+    }
 
     const valorRecebido = Number(pagamento.transaction_amount || 0);
-    const moeda = texto(pagamento.currency_id || 'BRL');
-    if (moeda !== cobranca.moeda || Math.abs(valorRecebido - Number(cobranca.valor)) > 0.009) {
+    const moeda = texto(pagamento.currency_id);
+    if (!Number.isFinite(valorRecebido) || moeda !== cobranca.moeda || Math.abs(valorRecebido - Number(cobranca.valor)) > 0.009
+      || (pagamento.status === 'approved' && Number(pagamento.transaction_amount_refunded || 0) > 0)) {
       await admin.from('cobrancas_assinatura').update({
         status: 'rejeitada', pagamento_provedor_id: texto(pagamento.id),
         status_detalhe: 'Valor ou moeda divergente do checkout.',
         dados_provedor: { status: pagamento.status, status_detail: pagamento.status_detail }
-      }).eq('id', cobranca.id);
+      }).eq('id', cobranca.id).is('aplicado_em', null);
       console.error('[mercado-pago-saas-webhook] valor divergente', cobranca.id);
       return resposta(200, { recebido: true, divergencia: true });
     }
@@ -183,14 +192,19 @@ Deno.serve(async (req) => {
       payment_method_id: texto(pagamento.payment_method_id),
       date_approved: pagamento.date_approved || null
     };
-    const { error: atualizarErro } = await admin.from('cobrancas_assinatura').update({
+    let atualizacao = admin.from('cobrancas_assinatura').update({
       status,
       pagamento_provedor_id: texto(pagamento.id),
       pago_em: status === 'aprovada' ? pagoEm : null,
       status_detalhe: texto(pagamento.status_detail).slice(0, 300) || null,
       dados_provedor: dadosMinimos
     }).eq('id', cobranca.id);
+    atualizacao = cobranca.aplicado_em
+      ? atualizacao.eq('pagamento_provedor_id', texto(pagamento.id))
+      : atualizacao.is('aplicado_em', null);
+    const { data: cobrancaAtualizada, error: atualizarErro } = await atualizacao.select('id').maybeSingle();
     if (atualizarErro) throw atualizarErro;
+    if (!cobrancaAtualizada) return resposta(200, { recebido: true, ignorado: true });
 
     let aplicacao = null;
     if (status === 'aprovada' && !cobranca.aplicado_em) {

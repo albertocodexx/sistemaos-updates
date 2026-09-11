@@ -3,6 +3,7 @@ const fs   = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const db   = require('./db');
+const { pagamentoCorresponde, transacaoJaUtilizada, idMercadoPago } = require('./mercado-pago-validacao');
 
 let _publicadorNuvem = null;
 let _publicacaoNuvemEmAndamento = null;
@@ -427,6 +428,8 @@ async function _cicloMP() {
 
 async function _executarPollMP() {
   try {
+    const empresaConsulta = db.obterEscopoEmpresaAtivo();
+    const consultor = _consultorMercadoPago;
     const dados    = db.loadDB();
     const token    = dados.config?.mercadoPagoToken || '';
     // Instalações novas guardam o token exclusivamente no cofre Supabase.
@@ -444,6 +447,7 @@ async function _executarPollMP() {
 
     for (const cob of cobrancas) {
       try {
+        if (db.obterEscopoEmpresaAtivo() !== empresaConsulta || consultor !== _consultorMercadoPago) return;
         // Antes de chamar a API do MP, verificar se OS já está encerrada por outro canal
         const osPreCheck = db.obterOSPorNumero(cob.osNumero);
         if (!osPreCheck) {
@@ -455,7 +459,7 @@ async function _executarPollMP() {
         // Essa checagem sempre foi 'false' na prática (comparando com um valor
         // que status técnico nunca assume), então nunca encerrava a cobrança
         // órfã aqui — corrigido para checar o campo certo.
-        if (['Pago', 'Autorizado'].includes(osPreCheck.statusPagamento) || osPreCheck.status === 'Entregue') {
+        if (['Pago', 'Autorizado'].includes(osPreCheck.statusPagamento)) {
           // Uma opção alternativa não vira "paga" só porque outra cobrança
           // da mesma OS foi quitada.
           db.atualizarStatusCobranca(cob.id, { status: 'cancelado', pagamentoId: null });
@@ -465,8 +469,8 @@ async function _executarPollMP() {
 
         let resultado = consultasPorOS.get(cob.osNumero);
         if (!resultado) {
-          if (_consultorMercadoPago) {
-            const consultaSegura = await _consultorMercadoPago(cob.osNumero);
+          if (consultor) {
+            const consultaSegura = await consultor(cob.osNumero);
             if (!consultaSegura?.sucesso) {
               throw new Error(consultaSegura?.erro || 'Não foi possível consultar o Mercado Pago pelo cofre seguro.');
             }
@@ -476,30 +480,29 @@ async function _executarPollMP() {
           }
           consultasPorOS.set(cob.osNumero, resultado);
         }
+        // A resposta pode chegar depois de sair da conta/trocar a empresa.
+        if (db.obterEscopoEmpresaAtivo() !== empresaConsulta || consultor !== _consultorMercadoPago) return;
         // Bug fix (pagamento antigo confundido com o novo): external_reference é o número
         // da OS, então a busca sempre traz TODO o histórico de pagamentos daquela OS —
         // incluindo aprovações antigas de ciclos anteriores (ex: OS reaberta e cobrada de
         // novo com outro valor). Antes o código pegava o primeiro "approved" da lista sem
         // checar se pertencia à cobrança atual, confundindo um pagamento antigo (ex: R$ 100
         // de um teste anterior) com o pagamento novo (ex: R$ 1 pago agora nesta cobrança).
-        const valorCobAtual = parseFloat(cob.valor || 0);
-        const criadoEmCobMs = new Date(cob.criadoEm).getTime() - (5 * 60 * 1000); // margem 5 min
-        const aprovado = (resultado.results || []).find(p => {
-          if (p.status !== 'approved') return false;
-          const dataPagMs = new Date(p.date_approved || p.date_created).getTime();
-          if (dataPagMs < criadoEmCobMs) return false; // pagamento de ciclo anterior — ignora
-          if (valorCobAtual > 0 && Math.abs(p.transaction_amount - valorCobAtual) > 0.01) return false; // valor não bate com esta cobrança
-          return true;
-        });
+        const cobrancasAtuais = db.listarCobrancas();
+        const cobAtual = cobrancasAtuais.find(c => c.id === cob.id && c.osNumero === cob.osNumero);
+        const pagamentosAtuais = db.listarPagamentos();
+        const aprovado = (resultado.results || []).find(p =>
+          pagamentoCorresponde(p, cobAtual, empresaConsulta)
+          && !transacaoJaUtilizada(p, cobAtual, pagamentosAtuais, cobrancasAtuais));
         if (!aprovado) continue;
 
-        const valorPago = aprovado.transaction_amount;
+        const valorPago = Number(aprovado.transaction_amount);
         const os        = db.obterOSPorNumero(cob.osNumero);
         if (!os) continue;
 
         // Se OS ficou paga/entregue entre o pre-check e a resposta da API, fecha a cobrança órfã
         // (mesmo bugfix do pre-check acima: statusPagamento, não status técnico)
-        if (['Pago', 'Autorizado'].includes(os.statusPagamento) || os.status === 'Entregue') {
+        if (['Pago', 'Autorizado'].includes(os.statusPagamento)) {
           db.atualizarStatusCobranca(cob.id, { status: 'cancelado', pagamentoId: null });
           console.log(`[MP Poll] Cobrança alternativa encerrada — OS ${cob.osNumero} já está paga/entregue.`);
           continue;
@@ -520,7 +523,7 @@ async function _executarPollMP() {
           p.osNumero === cob.osNumero
           && p.origem === 'mercadopago'
           && idMp
-          && String(p.observacao || '').includes(`ID MP: ${idMp}`)
+          && idMercadoPago(p) === idMp
         );
         let pagamentoId = pagExistente?.id || null;
         if (!pagExistente) {
@@ -530,6 +533,8 @@ async function _executarPollMP() {
             valor:      valorPago,
             metodo,
             origem:     'mercadopago',
+            mercadoPagoId: idMp,
+            cobrancaId: cob.id,
             observacao: `[Auto-Poll] ID MP: ${aprovado.id} | ${new Date(aprovado.date_approved).toLocaleString('pt-BR')}`
           });
           pagamentoId = pag.id;
@@ -584,7 +589,7 @@ async function _executarPollMP() {
 
 function _consultarPagamentoMP(https, token, osNumero) {
   return new Promise((resolve, reject) => {
-    const qpath = `/v1/payments/search?external_reference=${encodeURIComponent(osNumero)}&sort=date_created&criteria=desc&limit=5`;
+    const qpath = `/v1/payments/search?external_reference=${encodeURIComponent(osNumero)}&status=approved&sort=date_created&criteria=desc&limit=100`;
     const req = https.request({
       hostname: 'api.mercadopago.com',
       path:     qpath,
@@ -594,10 +599,12 @@ function _consultarPagamentoMP(https, token, osNumero) {
       let data = '';
       res.on('data', c => data += c);
       res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error(`Consulta Mercado Pago recusada (HTTP ${res.statusCode}).`));
         try { resolve(JSON.parse(data)); }
-        catch (e) { reject(new Error('Resposta inválida MP: ' + data.slice(0, 100))); }
+        catch (e) { reject(new Error('Resposta inválida do Mercado Pago.')); }
       });
     });
+    req.setTimeout(20_000, () => req.destroy(new Error('Tempo limite ao consultar o Mercado Pago.')));
     req.on('error', reject);
     req.end();
   });

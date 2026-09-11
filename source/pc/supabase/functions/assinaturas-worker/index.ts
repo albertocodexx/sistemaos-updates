@@ -30,22 +30,32 @@ async function reconciliarMercadoPago(admin: any) {
   if (!integracao || !token) return { consultadas: 0, aplicadas: 0, indisponivel: true };
   const { data: cobrancas, error } = await admin.from('cobrancas_assinatura')
     .select('id,referencia_externa,valor,moeda,status,aplicado_em')
-    .in('status', ['pendente', 'em_processamento'])
-    .order('created_at', { ascending: true }).limit(25);
+    .is('aplicado_em', null)
+    .in('status', ['pendente', 'em_processamento', 'aprovada', 'rejeitada', 'cancelada', 'expirada'])
+    .order('updated_at', { ascending: true }).limit(25);
   if (error) throw error;
   let aplicadas = 0;
   for (const cobranca of cobrancas || []) {
+    // Faz a fila rodar: 25 cobranças antigas sem pagamento não podem impedir
+    // indefinidamente a consulta das próximas. Aprovada sem aplicado_em é retry.
+    await admin.from('cobrancas_assinatura').update({ updated_at: new Date().toISOString() }).eq('id', cobranca.id);
+    try {
     const consulta = await fetch(
-      `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(cobranca.referencia_externa)}&sort=date_created&criteria=desc&limit=10`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(cobranca.referencia_externa)}&status=approved&sort=date_created&criteria=desc&limit=100`,
+      { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) }
     );
     if (!consulta.ok) continue;
     const retorno = await consulta.json().catch(() => ({}));
     const pagamento = (Array.isArray(retorno.results) ? retorno.results : [])
-      .find((item: any) => texto(item.external_reference) === cobranca.referencia_externa);
+      .find((item: any) => texto(item.external_reference) === cobranca.referencia_externa
+        && item.status === 'approved' && /^\d+$/.test(texto(item.id))
+        && item.currency_id === cobranca.moeda && item.live_mode !== false
+        && Number(item.transaction_amount_refunded || 0) === 0
+        && Number.isFinite(Number(item.transaction_amount))
+        && Math.abs(Number(item.transaction_amount) - Number(cobranca.valor)) < 0.009);
     if (!pagamento) continue;
     const valor = Number(pagamento.transaction_amount || 0);
-    const moeda = texto(pagamento.currency_id || 'BRL');
+    const moeda = texto(pagamento.currency_id);
     if (moeda !== cobranca.moeda || Math.abs(valor - Number(cobranca.valor)) > 0.009) continue;
     const status = mapearStatusMercadoPago(pagamento.status);
     const dadosMinimos = {
@@ -53,12 +63,14 @@ async function reconciliarMercadoPago(admin: any) {
       payment_type_id: texto(pagamento.payment_type_id), payment_method_id: texto(pagamento.payment_method_id),
       date_approved: pagamento.date_approved || null, reconciliado: true
     };
-    await admin.from('cobrancas_assinatura').update({
+    const { data: atualizada, error: atualizacaoErro } = await admin.from('cobrancas_assinatura').update({
       status, pagamento_provedor_id: texto(pagamento.id),
       pago_em: status === 'aprovada' ? (pagamento.date_approved || new Date().toISOString()) : null,
       status_detalhe: texto(pagamento.status_detail).slice(0, 300) || null,
       dados_provedor: dadosMinimos
-    }).eq('id', cobranca.id);
+    }).eq('id', cobranca.id).is('aplicado_em', null).select('id').maybeSingle();
+    if (atualizacaoErro) throw atualizacaoErro;
+    if (!atualizada) continue;
     if (status === 'aprovada' && !cobranca.aplicado_em) {
       const { error: aplicarErro } = await admin.rpc('aplicar_pagamento_assinatura', {
         p_cobranca_id: cobranca.id,
@@ -69,6 +81,10 @@ async function reconciliarMercadoPago(admin: any) {
       });
       if (!aplicarErro) aplicadas += 1;
       else console.error('[assinaturas-worker] aplicar:', aplicarErro.message);
+    }
+    } catch (_) {
+      // Uma consulta indisponível não interrompe as outras cobranças/mensagens.
+      console.error('[assinaturas-worker] Consulta de pagamento adiada.');
     }
   }
   return { consultadas: (cobrancas || []).length, aplicadas, indisponivel: false };
@@ -83,6 +99,13 @@ const valoresTemplate = (parametros: Record<string, unknown>, alias: string) => 
 };
 
 async function processarWhatsApp(admin: any) {
+  // Após interrupção não sabemos se o provedor aceitou o envio. Mantenha o
+  // registro visível para conferência, sem reenviar automaticamente em dobro.
+  await admin.from('fila_whatsapp').update({
+    status: 'cancelada',
+    ultimo_erro: 'Envio interrompido sem confirmação. Confira o histórico do WhatsApp antes de reenviar.',
+    proxima_tentativa_em: null
+  }).eq('status', 'processando').lt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
   const { integracao, segredo } = await carregarIntegracaoPlataforma(admin, 'whatsapp');
   const hibrido = integracao?.provedor === 'hibrido_baileys_meta';
   if (!['meta_cloud_api', 'hibrido_baileys_meta'].includes(integracao?.provedor)) {
@@ -113,6 +136,7 @@ async function processarWhatsApp(admin: any) {
     const bloqueio = await admin.from('fila_whatsapp').update({ status: 'processando', tentativas })
       .eq('id', item.id).in('status', ['pendente', 'falhou']).select('id').maybeSingle();
     if (bloqueio.error || !bloqueio.data) continue;
+    try {
     const alias = item.template_nome === 'sistemaos_pagamento_confirmado' ? 'pagamento_confirmado'
       : item.template_nome === 'sistemaos_assinatura_vencida' ? 'vencida' : 'lembrete';
     const nomeTemplate = texto(templates[alias]);
@@ -142,6 +166,7 @@ async function processarWhatsApp(admin: any) {
     const envio = await fetch(`https://graph.facebook.com/${versao}/${phoneNumberId}/messages`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(20000),
       body: JSON.stringify(corpo)
     });
     const retorno = await envio.json().catch(() => ({}));
@@ -159,6 +184,13 @@ async function processarWhatsApp(admin: any) {
         ultimo_erro: texto(retorno?.error?.message || `HTTP ${envio.status}`).slice(0, 500),
         proxima_tentativa_em: new Date(Date.now() + minutos * 60000).toISOString()
       }).eq('id', item.id);
+    }
+    } catch (_) {
+      falhas += 1;
+      await admin.from('fila_whatsapp').update({
+        status: 'cancelada', proxima_tentativa_em: null,
+        ultimo_erro: 'O provedor não confirmou o envio. Confira o histórico antes de reenviar para evitar duplicidade.'
+      }).eq('id', item.id).eq('status', 'processando');
     }
   }
   return { selecionadas: (fila || []).length, enviadas, falhas, indisponivel: false };

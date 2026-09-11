@@ -67,6 +67,8 @@ const testes = [
   'teste-entrega-reconciliacao-supabase.js',
   'teste-pdf-atual-unico.js',
   'teste-fluxos-mp-cancelamento-assinatura.js',
+  'teste-mercado-pago-confirmacao-segura.js',
+  'teste-reconciliacao-saas-mensagens.js',
   'teste-fluxo-pagamento-percentual.js',
   'teste-pagamentos-entrada-50.js',
   'teste-jornada-usuario-completa.js',

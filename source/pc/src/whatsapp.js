@@ -774,9 +774,11 @@ function _comTempoLimite(promessa, mensagem, limiteMs = TEMPO_MAXIMO_OPERACAO_MS
 // Uma única fila vale para texto e documento. Além de manter a ordem
 // (texto antes do PDF), evita rajadas que o WhatsApp costuma deixar pendentes.
 function _enfileirarEnvio(tarefa) {
+  const empresaEnvio = db.obterEscopoEmpresaAtivo?.();
   const execucao = filaEnvio.then(async function () {
     const espera = Math.max(0, 1200 - (Date.now() - ultimoEnvioEm));
     if (espera) await _sleep(espera);
+    if (db.obterEscopoEmpresaAtivo?.() !== empresaEnvio) throw new Error('A empresa mudou. Envie novamente na conta correta.');
     const resultado = await tarefa();
     ultimoEnvioEm = Date.now();
     return resultado;
@@ -787,7 +789,9 @@ function _enfileirarEnvio(tarefa) {
 
 // ─── Envio auxiliar com log automático embutido ───────────────────────────────
 async function _enviarELogar({ tipo, os, telefone, codigoPais, msg }) {
+  const empresaEnvio = db.obterEscopoEmpresaAtivo?.();
   const resultado = await enviarMensagem(telefone, msg, codigoPais);
+  if (db.obterEscopoEmpresaAtivo?.() !== empresaEnvio) throw new Error('A empresa mudou durante o envio.');
   _logAutomacao({
     tipo, os, telefone, mensagem: msg,
     sucesso: resultado.sucesso,
@@ -1498,7 +1502,7 @@ function _aguardarConfirmacaoEnvio(idMensagem, statusInicial) {
         sucesso: false,
         pendente: true,
         statusEnvio: 'pendente',
-        erro: 'O WhatsApp não confirmou a mensagem em 15 segundos. Ela não será marcada como enviada; reconecte o WhatsApp e tente novamente.'
+        erro: 'O WhatsApp ainda não confirmou o envio. Confira o histórico antes de reenviar para evitar uma mensagem duplicada.'
       });
     }, TEMPO_MAXIMO_ACK_MS);
     CONFIRMACOES_PENDENTES.set(idMensagem, { resolve, timer });
@@ -1507,11 +1511,17 @@ function _aguardarConfirmacaoEnvio(idMensagem, statusInicial) {
 
 function registrarListenerStatusMensagem() {
   if (!sock) return;
+  const empresaConexao = db.obterEscopoEmpresaAtivo?.();
   sock.ev.on('messages.update', function (atualizacoes) {
+    if (db.obterEscopoEmpresaAtivo?.() !== empresaConexao) return;
     (atualizacoes || []).forEach(function (item) {
       const idMensagem = item?.key?.id;
       const status = item?.update?.status;
       if (!idMensagem || !Number.isFinite(status)) return;
+
+      if (status === STATUS_ERRO || status >= STATUS_ACK_SERVIDOR) {
+        try { db.atualizarConfirmacaoMensagem?.(idMensagem, _resultadoConfirmacao(status).statusEnvio); } catch (_) {}
+      }
 
       STATUS_MENSAGENS_ENVIADAS.set(idMensagem, status);
       if (STATUS_MENSAGENS_ENVIADAS.size > 500) {

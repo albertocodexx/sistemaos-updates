@@ -7,7 +7,10 @@ const { execFileSync } = require('child_process');
 const DONO = 'albertocodexx';
 const REPOSITORIO = 'sistemaos-updates';
 const VERSAO_PC = require('../package.json').version;
-const VERSAO_ANDROID = '1.0.88';
+const pacoteAndroid = [path.resolve(__dirname, '../../sistemaos-android/package.json'), path.resolve(__dirname, '../../android/package.json')]
+  .find(arquivo => fs.existsSync(arquivo));
+const VERSAO_ANDROID = process.env.SISTEMAOS_ANDROID_VERSION || (pacoteAndroid ? JSON.parse(fs.readFileSync(pacoteAndroid, 'utf8')).version : '');
+if (!/^\d+\.\d+\.\d+$/.test(VERSAO_ANDROID)) throw new Error('Informe SISTEMAOS_ANDROID_VERSION para publicar o APK correto.');
 const TAG = `v${VERSAO_PC}`;
 const raiz = path.resolve(__dirname, '..');
 const dist = path.join(raiz, 'dist');

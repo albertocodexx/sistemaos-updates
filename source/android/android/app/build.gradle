@@ -20,8 +20,8 @@ android {
         applicationId "com.assistencia.sistemaos"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 90
-        versionName "1.0.90"
+        versionCode 91
+        versionName "1.0.91"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -37,7 +37,11 @@ android {
                 throw new GradleException('Defina as variaveis SISTEMAOS_ANDROID_* para assinar o APK oficial.')
             }
             signingConfig signingConfigs.sistemaOsStable
-            minifyEnabled false
+            // R8 reduz e ofusca o código Java/Kotlin do APK. Os assets web
+            // continuam íntegros; regras dos plugins Capacitor são herdadas
+            // dos respectivos AARs.
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }

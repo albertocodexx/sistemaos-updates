@@ -6093,8 +6093,21 @@ function _initPagamentos(db) {
  * técnico. A exceção é o fluxo que exige entrada: confirmar 50% ou 100%
  * libera a OS de "Aguardando aprovação" para "Em reparo".
  */
-function registrarPagamento({ osNumero, valor, metodo, origem, observacao, caminhoComprovante }) {
+function registrarPagamento({ osNumero, valor, metodo, origem, observacao, caminhoComprovante, mercadoPagoId, cobrancaId }) {
   const db = _initPagamentos(loadDB());
+  const { idMercadoPago } = require('../mercado-pago-validacao');
+  const idMp = String(mercadoPagoId || '').trim();
+  if (idMp && (origem !== 'mercadopago' || !/^\d+$/.test(idMp))) throw new Error('Identificador Mercado Pago inválido.');
+  if (idMp) {
+    const anterior = db.pagamentos.find(p => p.origem === 'mercadopago' && idMercadoPago(p) === idMp);
+    if (anterior) {
+      if (anterior.osNumero !== osNumero || Number(anterior.valor) !== Number(valor)
+          || (anterior.cobrancaId && anterior.cobrancaId !== cobrancaId)) {
+        throw new Error('Esta transação do Mercado Pago já está vinculada a outra cobrança.');
+      }
+      return anterior;
+    }
+  }
   const os = db.ordens.find(o => o.numero === osNumero);
   if (!os) throw new Error('OS não encontrada: ' + osNumero);
 
@@ -6107,7 +6120,7 @@ function registrarPagamento({ osNumero, valor, metodo, origem, observacao, camin
   }
 
   const valorNum = parseFloat(valor);
-  if (!valorNum || valorNum <= 0) throw new Error('Valor do pagamento deve ser maior que zero.');
+  if (!Number.isFinite(valorNum) || valorNum <= 0) throw new Error('Valor do pagamento deve ser maior que zero.');
   const metodoPagamento = metodo || 'Não informado';
   const origemPagamento = origem || 'manual';
 
@@ -6119,6 +6132,8 @@ function registrarPagamento({ osNumero, valor, metodo, origem, observacao, camin
   const agora = Date.now();
   const CINCO_MINUTOS = 5 * 60 * 1000;
   const pagamentoDuplicado = (db.pagamentos || []).find(p => {
+    // Dois IDs distintos são duas transações reais, inclusive parcelas iguais.
+    if (idMp) return false;
     if (p.osNumero !== osNumero) return false;
     if ((p.origem || 'manual') !== origemPagamento) return false;
     if (p.metodo !== metodoPagamento) return false;
@@ -6143,6 +6158,7 @@ function registrarPagamento({ osNumero, valor, metodo, origem, observacao, camin
     valor: valorNum,
     metodo: metodoPagamento,
     origem: origemPagamento,   // 'mercadopago' | 'manual' | 'pix' | 'presencial'
+    ...(idMp ? { mercadoPagoId: idMp, cobrancaId: String(cobrancaId || '') } : {}),
     observacao: observacao || '',
     caminhoComprovante: caminhoComprovante || null,
     dataPagamento: dataPagamento,
@@ -6694,6 +6710,25 @@ function listarLogMensagens({ limite = 500 } = {}) {
     .sort((a, b) => new Date(b.data) - new Date(a.data))
     .slice(0, limite);
 }
+
+function atualizarConfirmacaoMensagem(idMensagem, statusEnvio) {
+  if (!idMensagem || !['erro', 'aceito-servidor', 'entregue'].includes(statusEnvio)) return false;
+  const database = _initLogMensagens(loadDB());
+  const ordem = { erro: 0, pendente: 1, 'aceito-servidor': 2, entregue: 3 };
+  let mudou = false;
+  for (const registro of database.logMensagensWapp) {
+    if (registro.idMensagem !== idMensagem) continue;
+    if ((ordem[registro.statusEnvio] ?? -1) > ordem[statusEnvio]) continue;
+    if (registro.statusEnvio === statusEnvio) continue;
+    registro.statusEnvio = statusEnvio;
+    registro.sucesso = statusEnvio !== 'erro';
+    registro.erro = registro.sucesso ? null : 'O WhatsApp recusou o envio.';
+    mudou = true;
+  }
+  if (mudou) saveDB(database);
+  return mudou;
+}
+module.exports.atualizarConfirmacaoMensagem = atualizarConfirmacaoMensagem;
 
 function buscarLogMensagens(query) {
   const t = (query || '').toLowerCase().trim();

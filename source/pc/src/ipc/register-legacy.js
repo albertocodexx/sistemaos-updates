@@ -1,5 +1,6 @@
 // Registro dos canais IPC já existentes. Dependências são injetadas pelo
 // processo principal; este módulo não cria BrowserWindow nem toca no boot.
+const { pagamentoCorresponde, transacaoJaUtilizada, idMercadoPago } = require('../mercado-pago-validacao');
 function registerLegacyHandlers(deps) {
   const {
     ipcMain, dialog, shell, app, BrowserWindow, path, fs,
@@ -1832,6 +1833,10 @@ function registerLegacyHandlers(deps) {
   
   // ── v20: Verificar pagamento Mercado Pago por OS ───────────────
   ipcMain.handle('mp:verificarPagamento', async (_e, solicitacao) => {
+    const empresaConsulta = db.obterEscopoEmpresaAtivo();
+    const usuarioConsulta = String(getUsuarioAutenticado?.()?.id || '');
+    const contextoValido = () => db.obterEscopoEmpresaAtivo() === empresaConsulta
+      && String(getUsuarioAutenticado?.()?.id || '') === usuarioConsulta;
     const numero = typeof solicitacao === 'object'
       ? String(solicitacao?.numero || solicitacao?.osNumero || '')
       : String(solicitacao || '');
@@ -1868,7 +1873,7 @@ function registerLegacyHandlers(deps) {
     // encerra o poll imediatamente sem precisar consultar a API do Mercado Pago.
     // Isso evita polling infinito quando o pagamento foi registrado por outro meio (ex: dinheiro).
     // v31: Autorizado está em statusPagamento (campo separado do status técnico)
-    if (['Pago', 'Autorizado'].includes(os.statusPagamento) || os.status === 'Entregue') {
+    if (['Pago', 'Autorizado'].includes(os.statusPagamento)) {
       // Uma OS com entrada de 50% pode ter mais de um pagamento. Deduplica
       // somente a mesma confirmação do Mercado Pago, não qualquer lançamento
       // anterior da OS.
@@ -1905,6 +1910,7 @@ function registerLegacyHandlers(deps) {
       let resultado = null;
       if (supabaseDesktop?.consultarPagamentosMercadoPago) {
         const consultaSegura = await supabaseDesktop.consultarPagamentosMercadoPago(numero);
+        if (!contextoValido()) return { sucesso: false, erro: 'A conta mudou durante a consulta. Consulte novamente.' };
         if (consultaSegura?.sucesso) {
           resultado = { results: Array.isArray(consultaSegura.pagamentos) ? consultaSegura.pagamentos : [] };
         } else if (!db.loadDB().config?.mercadoPagoToken) {
@@ -1915,7 +1921,7 @@ function registerLegacyHandlers(deps) {
         const token = db.loadDB().config?.mercadoPagoToken || '';
         if (!token) return { sucesso: false, erro: 'A conta Mercado Pago não está conectada para esta empresa.' };
         resultado = await new Promise((resolve, reject) => {
-          const path = `/v1/payments/search?external_reference=${encodeURIComponent(numero)}&sort=date_created&criteria=desc&limit=20`;
+          const path = `/v1/payments/search?external_reference=${encodeURIComponent(numero)}&status=approved&sort=date_created&criteria=desc&limit=100`;
           const req = https.request({
             hostname: 'api.mercadopago.com',
             path,
@@ -1925,15 +1931,18 @@ function registerLegacyHandlers(deps) {
             let data = '';
             res.on('data', c => data += c);
             res.on('end', () => {
+              if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error(`Consulta Mercado Pago recusada (HTTP ${res.statusCode}).`));
               try { resolve(JSON.parse(data)); }
-              catch(e) { reject(new Error('Resposta inválida: ' + data.slice(0, 100))); }
+              catch(e) { reject(new Error('Resposta inválida do Mercado Pago.')); }
             });
           });
+          req.setTimeout(20_000, () => req.destroy(new Error('Tempo limite ao consultar o Mercado Pago.')));
           req.on('error', reject);
           req.end();
         });
       }
   
+      if (!contextoValido()) return { sucesso: false, erro: 'A conta mudou durante a consulta. Consulte novamente.' };
       const pagamentos = resultado.results || [];
   
       // Referência primária: a cobrança 'aguardando' mais recente da OS (a atual).
@@ -1944,23 +1953,14 @@ function registerLegacyHandlers(deps) {
       // Antes, o código pegava o primeiro "approved" da lista sem checar se ele pertencia
       // à cobrança atual, então um pagamento antigo (ex: R$ 100 de um teste anterior)
       // podia ser confundido com o pagamento novo (ex: R$ 1 pago agora).
-      const cobs = cobrancaSolicitada
-        ? [cobrancaSolicitada]
-        : cobrancasDaOS.filter(c => c.status === 'aguardando');
+      const cobrancasAtuais = db.listarCobrancas().filter(c => c.osNumero === numero);
+      const cobs = cobrancasAtuais.filter(c => c.status === 'aguardando' && (!cobIdSolicitado || c.id === cobIdSolicitado));
+      const pagamentosAtuais = db.listarPagamentos();
       let cobReferencia = null;
       const aprovado = pagamentos.find(p => {
-        if (p.status !== 'approved') return false;
-        if (cobs.length) {
-          const dataPagMs = new Date(p.date_approved || p.date_created).getTime();
-          const correspondente = cobs.find(c => {
-            const criadoEmCobMs = new Date(c.criadoEm).getTime() - (5 * 60 * 1000);
-            return dataPagMs >= criadoEmCobMs
-              && Math.abs(Number(p.transaction_amount || 0) - Number(c.valor || 0)) <= 0.01;
-          });
-          if (!correspondente) return false;
-          cobReferencia = correspondente;
-        }
-        return true;
+        cobReferencia = cobs.find(c => pagamentoCorresponde(p, c, empresaConsulta)
+          && !transacaoJaUtilizada(p, c, pagamentosAtuais, cobrancasAtuais));
+        return !!cobReferencia;
       });
       const valorEsperadoRaw = cobReferencia?.valor
         ?? os.diagnosticoTecnico?.valorEstimado
@@ -1979,7 +1979,7 @@ function registerLegacyHandlers(deps) {
         };
       }
   
-      const valorPago = aprovado.transaction_amount;
+      const valorPago = Number(aprovado.transaction_amount);
   
       // Bug fix (autorização indevida): se não há NENHUM valor de referência confiável
       // (nem cobrança registrada nem valorInvestido preenchido), o sistema antes pulava
@@ -2019,10 +2019,7 @@ function registerLegacyHandlers(deps) {
       const pagExistente = db.listarPagamentos().find(p =>
         p.osNumero === numero
         && p.origem === 'mercadopago'
-        && (
-          (idMp && String(p.observacao || '').includes(`ID MP: ${idMp}`))
-          || (!idMp && Math.abs(Number(p.valor || 0) - valorPago) < 0.01)
-        )
+        && idMercadoPago(p) === idMp
       );
       let pagamentoId = pagExistente?.id || null;
       let jaConfirmado = !!pagExistente;
@@ -2032,6 +2029,8 @@ function registerLegacyHandlers(deps) {
           valor: valorPago,
           metodo: metodoPag,
           origem: 'mercadopago',
+          mercadoPagoId: idMp,
+          cobrancaId: cobReferencia.id,
           observacao: `ID MP: ${aprovado.id} | Data: ${new Date(dataPag).toLocaleString('pt-BR')}`
         });
         pagamentoId = pag.id;

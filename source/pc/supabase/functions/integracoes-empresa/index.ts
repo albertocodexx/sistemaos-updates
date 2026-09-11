@@ -397,6 +397,7 @@ Deno.serve(async (req) => {
           payment_methods: { excluded_payment_types: [], installments: 12 },
           ...(Object.keys(pagador).length ? { payer: pagador } : {}),
           external_reference: numero,
+          metadata: { empresa_id: atual.empresa_id, numero_os: numero },
           expires: true,
           expiration_date_to: expiracao
         })
@@ -448,6 +449,10 @@ Deno.serve(async (req) => {
       const dados = corpo.dados && typeof corpo.dados === 'object' ? corpo.dados : {};
       const numero = String(dados.numero || '').trim().slice(0, 80);
       if (!/^OS-[0-9]+$/i.test(numero)) return resposta(400, { erro: 'Informe uma OS válida.', codigo: 'os_invalida' });
+      const { data: ordemConsulta, error: erroOrdemConsulta } = await admin.from('ordens_servico')
+        .select('id').eq('empresa_id', atual.empresa_id).eq('numero', numero).is('deleted_at', null).maybeSingle();
+      if (erroOrdemConsulta) throw erroOrdemConsulta;
+      if (!ordemConsulta) return resposta(404, { erro: 'A OS não pertence a esta empresa.', codigo: 'os_nao_encontrada' });
 
       const { data: existente, error: buscaErro } = await admin.from('integracoes_empresa')
         .select('id,status')
@@ -476,8 +481,8 @@ Deno.serve(async (req) => {
 
       const token = await decifrar(segredo.iv_base64, segredo.segredo_cifrado_base64);
       const busca = await fetch(
-        `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(numero)}&sort=date_created&criteria=desc&limit=20`,
-        { headers: { Authorization: 'Bearer ' + token } }
+        `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(numero)}&status=approved&sort=date_created&criteria=desc&limit=100`,
+        { headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(20000) }
       );
       const retorno = await busca.json().catch(() => ({}));
       if (!busca.ok) {
@@ -486,10 +491,17 @@ Deno.serve(async (req) => {
         return resposta(502, { erro: 'O Mercado Pago recusou a consulta: ' + detalhe, codigo: 'consulta_recusada' });
       }
 
-      const pagamentos = (Array.isArray(retorno.results) ? retorno.results : []).map((pagamento: any) => ({
+      const pagamentos = (Array.isArray(retorno.results) ? retorno.results : [])
+        .filter((p: any) => String(p?.external_reference || '') === numero
+          && (!p.metadata?.empresa_id || String(p.metadata.empresa_id) === atual.empresa_id))
+        .map((pagamento: any) => ({
         id: String(pagamento?.id || ''),
         status: String(pagamento?.status || ''),
         transaction_amount: Number(pagamento?.transaction_amount || 0),
+        transaction_amount_refunded: Number(pagamento?.transaction_amount_refunded || 0),
+        currency_id: String(pagamento?.currency_id || ''),
+        live_mode: pagamento?.live_mode,
+        empresa_id: atual.empresa_id,
         date_approved: pagamento?.date_approved || null,
         date_created: pagamento?.date_created || null,
         payment_type_id: String(pagamento?.payment_type_id || ''),

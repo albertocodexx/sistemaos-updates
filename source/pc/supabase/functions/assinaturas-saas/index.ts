@@ -244,6 +244,10 @@ Deno.serve(async (req) => {
       const { integracao } = await carregarIntegracaoPlataforma(admin, 'whatsapp');
       if (!['baileys_pc', 'hibrido_baileys_meta'].includes(integracao?.provedor)) return resposta(409, { erro: 'O Baileys não está selecionado.' });
       const agora = new Date().toISOString();
+      await admin.from('fila_whatsapp').update({
+        status: 'cancelada', proxima_tentativa_em: null,
+        ultimo_erro: 'Envio interrompido sem confirmação. Confira o histórico antes de reenviar.'
+      }).eq('status', 'processando').lt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
       const { data: pendentes, error } = await admin.from('fila_whatsapp')
         .select('id,destinatario,mensagem_fallback,tentativas,max_tentativas')
         .in('status', ['pendente', 'falhou']).lte('agendada_para', agora)
@@ -268,7 +272,7 @@ Deno.serve(async (req) => {
         .select('id,tentativas,max_tentativas,status').eq('id', texto(dados.filaId)).maybeSingle();
       if (itemErro) throw itemErro;
       if (!item || item.status !== 'processando') return resposta(200, { sucesso: true, ignorado: true });
-      const enviado = dados.sucesso === true;
+      const enviado = dados.sucesso === true && !!texto(dados.mensagemId);
       const tentativas = Number(item.tentativas || 0);
       const maximo = Number(item.max_tentativas || 5);
       const minutos = Math.min(360, 2 ** Math.min(tentativas, 8));

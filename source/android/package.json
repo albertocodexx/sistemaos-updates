@@ -1,6 +1,6 @@
 {
   "name": "celular",
-  "version": "1.0.90",
+  "version": "1.0.91",
   "description": "App web (sem instalação, sem APK) pra técnico preencher uma OS no celular do cliente, mostrar a prévia com o mesmo template do PC, coletar a assinatura do cliente na tela, guardar num histórico local do aparelho e exportar um `.json` pra importar depois no sistema do PC.",
   "main": "index.js",
   "scripts": {
