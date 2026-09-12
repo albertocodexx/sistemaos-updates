@@ -10,6 +10,7 @@ const ipc = fs.readFileSync(path.join(raiz, 'src', 'ipc', 'register-legacy.js'),
 const modulo = fs.readFileSync(path.join(raiz, 'src', 'atualizador-github.js'), 'utf8');
 const tela = fs.readFileSync(path.join(raiz, 'renderer', 'index.html'), 'utf8');
 const renderer = fs.readFileSync(path.join(raiz, 'renderer', 'core', 'legacy-runtime.js'), 'utf8');
+const publicador = fs.readFileSync(path.join(raiz, 'scripts', 'publicar-release-github.js'), 'utf8');
 
 assert.match(String(pacote.dependencies['electron-updater']), /^6\.8\.9$/);
 assert.equal(fs.existsSync(path.join(raiz, 'src', 'atualizador.js')), false);
@@ -27,6 +28,8 @@ assert.match(instaladorNsis, /\$\{If\}\s+\$\{isUpdated\}[\s\S]*?Goto\s+sistema_o
 assert(instaladorNsis.indexOf('${If} ${isUpdated}') < instaladorNsis.indexOf('RMDir /r "${APP_ELECTRON_DIR}"'),
   'guarda de atualizacao precisa executar antes de qualquer limpeza de dados');
 assert.match(modulo, /autoUpdater\.checkForUpdates/);
+assert.match(publicador, /SistemaOS-Android-\$\{VERSAO_ANDROID\}\.apk/,
+  'a release deve publicar um APK versionado reconhecido pelo atualizador Android');
 assert.match(modulo, /atualizacaoObrigatoriaDetectada/);
 assert.match(modulo, /setTimeout\(\(\) => verificar\(\)\.catch\(\(\) => \{\}\), 15000\)/,
   'download obrigatório deve tentar novamente após queda temporária');

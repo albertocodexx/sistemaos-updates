@@ -111,7 +111,10 @@ async function publicarArquivo(token, release, arquivo, nome, tipo) {
   const installer = path.join(dist, `SistemaOS-${VERSAO_PC}-Setup.exe`);
   const blockmap = `${installer}.blockmap`;
   const latest = path.join(dist, 'latest.yml');
-  const apk = path.join(dist, `SistemaOS-${VERSAO_ANDROID}.apk`);
+  // O nome versionado identifica sem ambiguidade a linha Android. O alias
+  // permanente continua existindo para downloads manuais, mas o atualizador
+  // seleciona este asset exato ao comparar versões.
+  const apk = path.join(dist, `SistemaOS-Android-${VERSAO_ANDROID}.apk`);
   const apkHash = `${apk}.sha256`;
   const fontePc = path.join(dist, `SistemaOS-PC-Codigo-Fonte-v${VERSAO_PC}.zip`);
   const fonteAndroid = path.join(dist, `SistemaOS-Android-Codigo-Fonte-v${VERSAO_ANDROID}.zip`);
