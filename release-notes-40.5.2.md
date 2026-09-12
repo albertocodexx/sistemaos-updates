@@ -1,9 +1,16 @@
-# Sistema OS — PC 40.5.2 / Android 20.5.3
+# Sistema OS — PC 40.5.2 / Android 20.5.4
 
 ## Versões
 
 - Windows: `40.5.2`.
-- Android: `20.5.3` (`versionCode 95`).
+- Android: `20.5.4` (`versionCode 96`).
+
+## Assinaturas e planos no Android
+
+- O selo **Não assinado** agora permanece alinhado e separado das ações, inclusive em celulares estreitos.
+- A tela de assinatura deixa de ficar presa indefinidamente em **Carregando planos**.
+- A consulta possui limite de espera, nova tentativa e fallback autenticado no catálogo protegido por RLS.
+- Falhas temporárias exibem uma mensagem objetiva e o botão **Tentar novamente**, sem bloquear a conta.
 
 ## Consultas e documentos no Android
 

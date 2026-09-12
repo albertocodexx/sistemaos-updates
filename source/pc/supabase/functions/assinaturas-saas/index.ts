@@ -49,15 +49,27 @@ Deno.serve(async (req) => {
     const corpo = await req.json().catch(() => ({}));
     const acao = texto(corpo.acao);
     const dados = corpo.dados && typeof corpo.dados === 'object' ? corpo.dados : {};
-    const eAdminGeral = await administradorGeral(admin, autenticacao.user.id);
-
     if (acao === 'catalogo' || acao === 'resumo') {
-      const { data: planos, error: planosErro } = await admin.from('planos')
+      let { data: planos, error: planosErro } = await admin.from('planos')
         .select('id,nome,descricao,preco_referencia,periodo,duracao_dias,ordem,destaque,limites,plano_recursos(habilitado,limite,recurso:recursos(chave,nome,descricao))')
         .eq('ativo', true).is('excluido_em', null).order('ordem').order('preco_referencia');
+      if (planosErro) {
+        const consultaBasica = await admin.from('planos')
+          .select('id,nome,descricao,preco_referencia,periodo,duracao_dias,ordem,destaque,limites')
+          .eq('ativo', true).is('excluido_em', null).order('ordem').order('preco_referencia');
+        planos = consultaBasica.data;
+        planosErro = consultaBasica.error;
+      }
       if (planosErro) throw planosErro;
       const empresaId = contexto.empresa_id;
-      let empresa = null;
+      let empresa: any = empresaId ? {
+        id: empresaId,
+        plano_id: contexto.plano_id || null,
+        licenca_status: contexto.licenca_status || null,
+        data_vencimento: contexto.data_vencimento || null,
+        fim_trial: contexto.fim_trial || null,
+        plano: contexto.plano_nome ? { id: contexto.plano_id || null, nome: contexto.plano_nome } : null
+      } : null;
       let cobrancas: any[] = [];
       let alertas: any[] = [];
       if (empresaId && !contexto.administrador_global) {
@@ -66,15 +78,18 @@ Deno.serve(async (req) => {
           admin.from('cobrancas_assinatura').select('id,plano_id,tipo_alteracao,valor,status,checkout_url,expira_em,pago_em,aplicado_em,created_at,plano:planos(nome)').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(10),
           admin.from('alertas_assinatura').select('id,tipo,titulo,mensagem,lido_em,created_at').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(20)
         ]);
-        if (empresaConsulta.error) throw empresaConsulta.error;
-        if (cobrancasConsulta.error) throw cobrancasConsulta.error;
-        if (alertasConsulta.error) throw alertasConsulta.error;
-        empresa = empresaConsulta.data;
-        cobrancas = cobrancasConsulta.data || [];
-        alertas = alertasConsulta.data || [];
+        // O catálogo e o pagamento não podem desaparecer porque uma tabela
+        // complementar ainda está migrando ou ficou temporariamente lenta.
+        // Cada consulta continua isolada por empresa; em falha usamos apenas
+        // o contexto autenticado e listas vazias.
+        if (!empresaConsulta.error && empresaConsulta.data) empresa = empresaConsulta.data;
+        if (!cobrancasConsulta.error) cobrancas = cobrancasConsulta.data || [];
+        if (!alertasConsulta.error) alertas = alertasConsulta.data || [];
       }
       return resposta(200, { planos: planos || [], empresa, cobrancas, alertas });
     }
+
+    const eAdminGeral = await administradorGeral(admin, autenticacao.user.id);
 
     if (acao === 'salvar_contato') {
       if (!contexto.empresa_id || contexto.administrador_global) return resposta(403, { erro: 'Entre na empresa cliente.' });

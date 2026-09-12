@@ -2641,7 +2641,8 @@
       var info = document.createElement('div');
       info.className = 'item-historico-info';
       info.innerHTML =
-        '<p class="item-historico-tipo">' + escaparHtml((RESUMO_TIPO_DOCUMENTO[tipo] || tipo) + rotuloCicloEntrega) + ' ' + seloSincronizacao + '</p>' +
+        '<p class="item-historico-tipo"><span class="item-historico-tipo-texto">' + escaparHtml((RESUMO_TIPO_DOCUMENTO[tipo] || tipo) + rotuloCicloEntrega) + '</span>' +
+          '<span class="item-historico-selos">' + seloSincronizacao + '</span></p>' +
         '<p class="item-historico-cliente">' + escaparHtml(nomeOutraParte || '(sem nome)') + '</p>' +
         '<p class="item-historico-aparelho">' + escaparHtml(linhaObjeto) + '</p>' +
         linhaGarantia +

@@ -5,6 +5,8 @@
   var bloqueioAtivo = false;
   var contextoBloqueio = null;
   var verificacao = null;
+  var carregamentoAtual = 0;
+  var TEMPO_LIMITE_REQUISICAO_MS = 18000;
 
   function escapar(valor) {
     return String(valor == null ? '' : valor).replace(/[&<>"']/g, function (c) {
@@ -28,15 +30,64 @@
     }
   }
 
+  function comTempoLimite(promessa) {
+    var temporizador;
+    var limite = new Promise(function (_, rejeitar) {
+      temporizador = window.setTimeout(function () {
+        rejeitar(new Error('A consulta demorou mais que o esperado. Confira a internet e tente novamente.'));
+      }, TEMPO_LIMITE_REQUISICAO_MS);
+    });
+    return Promise.race([Promise.resolve(promessa), limite]).finally(function () {
+      window.clearTimeout(temporizador);
+    });
+  }
+
   async function chamar(acao, dados) {
     var cliente = window.SupabaseClientApp.obterCliente();
-    var resposta = await cliente.functions.invoke('assinaturas-saas', { body: { acao: acao, dados: dados || {} } });
+    var chamada = cliente.functions.invoke('assinaturas-saas', { body: { acao: acao, dados: dados || {} } });
+    var resposta = await comTempoLimite(chamada);
     if (resposta.error && window.SistemaOSEdgeError) {
       await window.SistemaOSEdgeError.lancar(resposta.error, 'Não foi possível consultar a assinatura.');
     }
     if (resposta.error) throw resposta.error;
     if (resposta.data && resposta.data.erro) throw new Error(resposta.data.erro);
     return resposta.data || {};
+  }
+
+  async function carregarCatalogoDireto() {
+    var cliente = window.SupabaseClientApp.obterCliente();
+    var camposComRecursos = 'id,nome,descricao,preco_referencia,periodo,duracao_dias,ordem,destaque,limites,plano_recursos(habilitado,limite,recurso:recursos(chave,nome,descricao))';
+    var consulta = await comTempoLimite(cliente.from('planos').select(camposComRecursos)
+      .eq('ativo', true).is('excluido_em', null).order('ordem').order('preco_referencia'));
+    // Bancos que ainda estejam concluindo a migração dos recursos podem
+    // responder sem a relação aninhada. O catálogo básico continua útil e
+    // o checkout sempre revalida plano e preço no servidor.
+    if (consulta.error) {
+      consulta = await comTempoLimite(cliente.from('planos')
+        .select('id,nome,descricao,preco_referencia,periodo,duracao_dias,ordem,destaque,limites')
+        .eq('ativo', true).is('excluido_em', null).order('ordem').order('preco_referencia'));
+    }
+    if (consulta.error) throw consulta.error;
+    if (!Array.isArray(consulta.data) || !consulta.data.length) {
+      throw new Error('O catálogo de planos está temporariamente indisponível.');
+    }
+    var estado = window.SistemaOSSessao && window.SistemaOSSessao.obterEstado
+      ? window.SistemaOSSessao.obterEstado() : {};
+    var contexto = estado.contexto || {};
+    var empresaAnterior = resumoAtual && resumoAtual.empresa ? resumoAtual.empresa : {};
+    return {
+      planos: consulta.data,
+      empresa: Object.assign({}, empresaAnterior, {
+        id: empresaAnterior.id || contexto.empresa_id || contexto.empresaId || '',
+        plano_id: empresaAnterior.plano_id || contexto.plano_id || contexto.planoId || '',
+        licenca_status: empresaAnterior.licenca_status || contexto.licenca_status || '',
+        data_vencimento: empresaAnterior.data_vencimento || contexto.data_vencimento || '',
+        fim_trial: empresaAnterior.fim_trial || contexto.fim_trial || ''
+      }),
+      cobrancas: resumoAtual && Array.isArray(resumoAtual.cobrancas) ? resumoAtual.cobrancas : [],
+      alertas: resumoAtual && Array.isArray(resumoAtual.alertas) ? resumoAtual.alertas : [],
+      catalogoDireto: true
+    };
   }
 
   function recursos(plano) {
@@ -50,6 +101,26 @@
 
   function planoAtualId() {
     return resumoAtual && resumoAtual.empresa ? resumoAtual.empresa.plano_id : '';
+  }
+
+  function renderizarCarregando() {
+    var conteudo = document.getElementById('assinatura-mobile-conteudo');
+    if (!conteudo) return;
+    conteudo.innerHTML = '<div class="assinatura-mobile-estado carregando" role="status" aria-live="polite">' +
+      '<span class="assinatura-mobile-spinner" aria-hidden="true"></span>' +
+      '<strong>Buscando planos</strong><small>Aguarde alguns segundos.</small></div>';
+  }
+
+  function renderizarErro(erro) {
+    var conteudo = document.getElementById('assinatura-mobile-conteudo');
+    if (!conteudo) return;
+    conteudo.innerHTML = '<div class="assinatura-mobile-estado erro" role="alert">' +
+      '<strong>Não foi possível carregar os planos</strong>' +
+      '<small>' + escapar(erro && erro.message ? erro.message : 'Confira sua conexão e tente novamente.') + '</small>' +
+      '<button type="button" class="btn-primario" id="btn-recarregar-planos-mobile">Tentar novamente</button></div>';
+    document.getElementById('btn-recarregar-planos-mobile').addEventListener('click', function () {
+      carregar(false).catch(function () {});
+    });
   }
 
   function renderizar() {
@@ -69,13 +140,8 @@
     var cobranca = (resumoAtual.cobrancas || []).find(function (item) {
       return ['pendente', 'em_processamento'].indexOf(String(item.status)) !== -1;
     });
-    conteudo.innerHTML =
-      '<div class="assinatura-mobile-resumo">' +
-        '<span>Plano atual</span><strong>' + escapar((planoAtual && planoAtual.nome) || (empresa.plano && empresa.plano.nome) || 'Sem plano') + '</strong>' +
-        '<small>Vencimento: ' + escapar(data(empresa.data_vencimento || empresa.fim_trial)) + '</small>' +
-      '</div>' +
-      (cobranca ? '<div class="assinatura-mobile-aviso">Pagamento aguardando confirmação. Se você já pagou, esta tela será liberada automaticamente.</div>' : '') +
-      '<div class="assinatura-mobile-planos">' + planosPagos.map(function (plano) {
+    var listaPlanos = planosPagos.length
+      ? '<div class="assinatura-mobile-planos">' + planosPagos.map(function (plano) {
         var atual = plano.id === atualId;
         var periodo = Number(plano.duracao_dias || 30) + ' dias';
         return '<article class="assinatura-mobile-plano' + (plano.destaque ? ' destaque' : '') + '">' +
@@ -86,7 +152,22 @@
           '<button type="button" class="btn-primario" data-assinar-plano="' + escapar(plano.id) + '">' +
             (atual ? 'Renovar este plano' : 'Escolher este plano') + '</button>' +
         '</article>';
-      }).join('') + '</div>';
+      }).join('') + '</div>'
+      : '<div class="assinatura-mobile-estado vazio"><strong>Nenhum plano disponível agora</strong>' +
+        '<small>Tente novamente ou fale com o suporte para renovar sua assinatura.</small>' +
+        '<button type="button" class="btn-secundario" id="btn-recarregar-planos-mobile">Atualizar planos</button></div>';
+    conteudo.innerHTML =
+      '<div class="assinatura-mobile-resumo">' +
+        '<span>Plano atual</span><strong>' + escapar((planoAtual && planoAtual.nome) || (empresa.plano && empresa.plano.nome) || 'Sem plano') + '</strong>' +
+        '<small>Vencimento: ' + escapar(data(empresa.data_vencimento || empresa.fim_trial)) + '</small>' +
+      '</div>' +
+      (cobranca ? '<div class="assinatura-mobile-aviso">Pagamento aguardando confirmação. Se você já pagou, esta tela será liberada automaticamente.</div>' : '') +
+      listaPlanos;
+
+    var botaoRecarregar = document.getElementById('btn-recarregar-planos-mobile');
+    if (botaoRecarregar) {
+      botaoRecarregar.addEventListener('click', function () { carregar(false).catch(function () {}); });
+    }
 
     conteudo.querySelectorAll('[data-assinar-plano]').forEach(function (botao) {
       botao.addEventListener('click', function () { iniciarPagamento(botao.dataset.assinarPlano, botao); });
@@ -94,11 +175,24 @@
   }
 
   async function carregar(silencioso) {
+    var identificador = ++carregamentoAtual;
+    if (!silencioso) renderizarCarregando();
     try {
-      resumoAtual = await chamar('resumo');
+      var resumo;
+      try {
+        resumo = await chamar('resumo');
+      } catch (erroResumo) {
+        // A listagem dos planos não deve ficar indisponível porque uma
+        // consulta complementar (cobranças/alertas) falhou na Edge Function.
+        // A leitura direta continua protegida pela sessão e pelo RLS.
+        resumo = await carregarCatalogoDireto();
+      }
+      if (identificador !== carregamentoAtual) return resumoAtual;
+      resumoAtual = resumo;
       renderizar();
       return resumoAtual;
     } catch (erro) {
+      if (identificador === carregamentoAtual && !silencioso) renderizarErro(erro);
       if (!silencioso) toast(erro.message || 'Não foi possível consultar a assinatura.', true);
       throw erro;
     }
@@ -188,6 +282,7 @@
     if (document.getElementById('assinatura-mobile-modal')) return;
     var estilo = document.createElement('style');
     estilo.textContent = '.assinatura-mobile-aberta{overflow:hidden}.assinatura-mobile-modal{position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.86);padding:12px;display:flex;align-items:flex-end}.assinatura-mobile-modal[hidden]{display:none}.assinatura-mobile-caixa{width:100%;max-height:94vh;overflow:auto;border:1px solid var(--cor-borda-forte);border-radius:9px;background:var(--cor-card);color:var(--cor-texto);padding:18px}.assinatura-mobile-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.assinatura-mobile-topo h2{margin:0}.assinatura-mobile-topo p{margin:5px 0 0;color:var(--cor-texto-fraco)}.assinatura-mobile-fechar{border:0;background:transparent;color:inherit;font-size:28px}.assinatura-mobile-resumo,.assinatura-mobile-aviso{margin:16px 0;padding:14px;border:1px solid var(--cor-borda);border-radius:6px;background:var(--cor-card-alto);display:grid;gap:4px}.assinatura-mobile-resumo strong{font-size:22px}.assinatura-mobile-resumo small{color:var(--cor-texto-fraco)}.assinatura-mobile-aviso{border-color:var(--acento-aviso);background:var(--acento-aviso-fundo)}.assinatura-mobile-planos{display:grid;gap:10px}.assinatura-mobile-plano{padding:16px;border:1px solid var(--cor-borda);border-radius:7px;background:var(--cor-fundo)}.assinatura-mobile-plano.destaque{border-color:var(--cor-texto);box-shadow:0 0 0 1px var(--cor-texto)}.assinatura-mobile-plano h3{margin:0 0 5px}.assinatura-mobile-plano h3 span{font-size:11px;border-radius:999px;padding:3px 8px;background:var(--cor-texto);color:var(--cor-fundo)}.assinatura-mobile-plano p{margin:0;color:var(--cor-texto-fraco)}.assinatura-mobile-preco{display:block;margin:14px 0;font-size:30px;line-height:1;color:var(--cor-texto);font-variant-numeric:tabular-nums}.assinatura-mobile-preco small{font-size:12px;color:var(--cor-texto-fraco)}.assinatura-mobile-plano ul{list-style:none;padding:0;margin:0 0 14px;display:grid;gap:6px;font-size:13px}.assinatura-mobile-acoes{display:flex;gap:8px;margin-top:16px}.assinatura-mobile-acoes button{flex:1;min-height:48px}.assinatura-mobile-bloqueio{padding:10px;border:1px solid var(--acento-erro);border-radius:6px;background:var(--acento-erro-fundo);color:var(--acento-erro);margin-top:12px}';
+    estilo.textContent += '.assinatura-mobile-estado{margin:16px 0;padding:18px 14px;border:1px solid var(--cor-borda);border-radius:7px;background:var(--cor-card-alto);display:grid;justify-items:start;gap:7px}.assinatura-mobile-estado strong{font-size:17px}.assinatura-mobile-estado small{color:var(--cor-texto-fraco);line-height:1.45}.assinatura-mobile-estado button{width:100%;margin-top:8px}.assinatura-mobile-estado.erro{border-color:var(--acento-erro);background:var(--acento-erro-fundo)}.assinatura-mobile-estado.erro strong{color:var(--acento-erro)}.assinatura-mobile-spinner{width:22px;height:22px;border:2px solid var(--cor-borda-forte);border-top-color:var(--cor-texto);border-radius:50%;animation:assinatura-mobile-girar .8s linear infinite}@keyframes assinatura-mobile-girar{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.assinatura-mobile-spinner{animation:none;border-top-color:var(--cor-borda-forte);background:var(--cor-texto)}}';
     document.head.appendChild(estilo);
 
     var modal = document.createElement('div');

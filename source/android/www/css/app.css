@@ -222,12 +222,15 @@ body {
 .os-assinar-depois small { color: var(--cor-texto-fraco); line-height: 1.45; font-weight: 400; }
 .selo-assinatura-pendente {
   display: inline-flex;
+  align-items: center;
   padding: 3px 7px;
   border-radius: var(--raio-pill);
   color: var(--acento-aviso);
   background: var(--acento-aviso-fundo);
   font-size: .72rem;
   font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 /* ── Cabeçalho ─────────────────────────────────────────────────── */
@@ -985,7 +988,18 @@ legend {
   color: var(--cor-texto-mais-fraco-aa);
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
+}
+.item-historico-tipo-texto {
+  flex: 0 0 auto;
+}
+.item-historico-selos {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 .selo-sincronizado,
 .selo-pendente,
@@ -1076,6 +1090,29 @@ legend {
   gap: 6px;
   flex: 0 0 auto;
   align-items: stretch;
+}
+
+@media (max-width: 520px) {
+  .item-historico {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    align-items: start;
+  }
+  .item-historico-info {
+    align-self: center;
+  }
+  .item-historico-acoes {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+  .item-historico-acoes > button {
+    width: 100%;
+    min-width: 0;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
 }
 
 /* =========================================================
