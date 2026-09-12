@@ -106,13 +106,13 @@
           try {
             const cliente = String(linha.cliente_nome_snapshot || '').trim();
             const saudacao = cliente ? 'Olá, ' + cliente + '. ' : 'Olá! ';
-            await root.SistemaOSCompartilhar.compartilharPdfHtml(
+            const resultado = await root.SistemaOSCompartilhar.compartilharPdfHtml(
               html,
               'garantia-' + numero + '.pdf',
               'Compartilhar garantia',
               saudacao + 'Segue o comprovante de garantia da ' + numero + ', emitido pela ' + nomeEmpresa() + '.'
             );
-            root.SistemaOSToast.mostrar('PDF e mensagem preparados para compartilhar.', 'sucesso');
+            root.SistemaOSToast.mostrar(root.SistemaOSCompartilhar.mensagemResultado(resultado), 'sucesso');
           } catch (e) {
             root.SistemaOSToast.mostrar('Não foi possível compartilhar: ' + (e.message || e), 'erro');
           } finally {

@@ -169,13 +169,13 @@
       try {
         var cliente = String(row.cliente_nome_snapshot || '').trim();
         var saudacao = cliente ? 'Olá, ' + cliente + '. ' : 'Olá! ';
-        await window.SistemaOSCompartilhar.compartilharPdfHtml(
+        var resultado = await window.SistemaOSCompartilhar.compartilharPdfHtml(
           gerarHtml(row, ''),
           'autorizacao-desbloqueio-' + row.numero + '.pdf',
           'Compartilhar autorização de desbloqueio',
           saudacao + 'Segue a autorização de desbloqueio ' + row.numero + ', emitida pela ' + nomeEmpresa() + '.'
         );
-        avisar('PDF e mensagem preparados para compartilhar.');
+        avisar(window.SistemaOSCompartilhar.mensagemResultado(resultado));
       } catch (erro) {
         avisar(mensagemErro(erro), true);
       } finally {

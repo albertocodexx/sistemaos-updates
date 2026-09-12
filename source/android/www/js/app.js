@@ -438,8 +438,8 @@
           documentoAtualTipo === 'entrega' ? 'Compartilhar comprovante de entrega' : 'Compartilhar Ordem de Serviço',
           mensagemCompartilhamentoAtual()
         );
-      }).then(function () {
-        mostrarFeedback('PDF e mensagem preparados para compartilhar.', false);
+      }).then(function (resultado) {
+        mostrarFeedback(window.SistemaOSCompartilhar.mensagemResultado(resultado), false);
       }).catch(function (erro) {
         mostrarFeedback('Não foi possível compartilhar: ' + (erro.message || erro), true);
       }).then(function () {

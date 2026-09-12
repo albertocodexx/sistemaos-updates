@@ -29,6 +29,7 @@
         '<div class="comprovante-frame"><iframe title="Prévia do comprovante"></iframe></div>' +
         '<footer>' +
           '<button type="button" data-acao="fechar" class="btn-secundario">Voltar</button>' +
+          '<button type="button" data-acao="compartilhar" class="btn-secundario">Compartilhar PDF</button>' +
           '<button type="button" data-acao="imprimir" class="btn-primario">Imprimir / salvar PDF</button>' +
         '</footer>' +
       '</div>';
@@ -62,6 +63,7 @@
         return;
       }
       if (botao.dataset.acao === 'imprimir') imprimir();
+      if (botao.dataset.acao === 'compartilhar') compartilhar(botao);
     });
   }
 
@@ -149,6 +151,40 @@
       } else {
         window.alert('Não foi possível imprimir: ' + mensagem);
       }
+    }
+  }
+
+  async function compartilhar(botao) {
+    var dados = estado && estado.dados ? estado.dados : {};
+    var numero = String(dados.numeroOSAtribuido || dados.numeroOS || dados.numero || 'OS').trim();
+    var cliente = ehEntrega()
+      ? String(dados.nomeRetirou || dados.recebidoPor || dados.entrega?.nomeRetirou || '').trim()
+      : String(dados.cliente?.nome || '').trim();
+    var empresa = estado && estado.config ? estado.config : {};
+    var nomeEmpresa = String(empresa.nomeFantasia || empresa.nomeEmpresa || empresa.razaoSocial || 'assistência técnica').trim();
+    var saudacao = cliente ? 'Olá, ' + cliente + '. ' : 'Olá! ';
+    var descricao = ehEntrega()
+      ? 'Segue o comprovante de entrega da ' + numero
+      : 'Segue a Ordem de Serviço ' + numero;
+    var html = estado && typeof estado.gerarHtml === 'function'
+      ? estado.gerarHtml(dados, estado.config, { formato: 'a4' })
+      : '';
+    if (!html) return;
+    botao.disabled = true;
+    botao.textContent = 'Preparando PDF…';
+    try {
+      var resultado = await root.SistemaOSCompartilhar.compartilharPdfHtml(
+        html,
+        (ehEntrega() ? 'entrega-' : 'ordem-de-servico-') + numero + '.pdf',
+        ehEntrega() ? 'Compartilhar comprovante de entrega' : 'Compartilhar Ordem de Serviço',
+        saudacao + descricao + ', ' + (ehEntrega() ? 'emitido' : 'emitida') + ' pela ' + nomeEmpresa + '.'
+      );
+      root.SistemaOSToast?.mostrar(root.SistemaOSCompartilhar.mensagemResultado(resultado), 'sucesso');
+    } catch (erro) {
+      root.SistemaOSToast?.mostrar('Não foi possível compartilhar: ' + (erro.message || erro), 'erro');
+    } finally {
+      botao.disabled = false;
+      botao.textContent = 'Compartilhar PDF';
     }
   }
 

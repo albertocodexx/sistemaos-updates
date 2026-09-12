@@ -147,7 +147,7 @@ assert.match(filePaths, /external-files-path[^>]+Download\//);
 (async function testarLinhaAndroidSeparadaDoPc() {
   const dom = new JSDOM('', { runScripts: 'outside-only', url: 'https://localhost/' });
   const hashAndroid = 'b'.repeat(64);
-  dom.window.SistemaOSVersaoAPK = '20.5.0';
+  dom.window.SistemaOSVersaoAPK = '20.5.1';
   dom.window.fetch = async () => ({
     ok: true,
     status: 200,
@@ -159,8 +159,8 @@ assert.match(filePaths, /external-files-path[^>]+Download\//);
           digest: 'sha256:' + 'c'.repeat(64)
         },
         {
-          name: 'SistemaOS-Android-20.5.1.apk',
-          browser_download_url: 'https://github.com/exemplo/SistemaOS-Android-20.5.1.apk',
+          name: 'SistemaOS-Android-20.5.2.apk',
+          browser_download_url: 'https://github.com/exemplo/SistemaOS-Android-20.5.2.apk',
           digest: 'sha256:' + hashAndroid
         }
       ]
@@ -169,8 +169,8 @@ assert.match(filePaths, /external-files-path[^>]+Download\//);
   dom.window.eval(script);
   const resultado = await dom.window.SistemaOSAtualizacao.verificar(true);
   assert.equal(resultado.fase, 'disponivel');
-  assert.equal(resultado.versaoNova, '20.5.1');
-  assert.equal(resultado.nomeArquivo, 'SistemaOS-Android-20.5.1.apk');
+  assert.equal(resultado.versaoNova, '20.5.2');
+  assert.equal(resultado.nomeArquivo, 'SistemaOS-Android-20.5.2.apk');
   assert.equal(resultado.sha256, hashAndroid);
   dom.window.close();
   console.log('OK: Android usa sua própria linha de versão sem confundir a versão do PC.');

@@ -609,8 +609,8 @@
           tipo + '-' + numeroDocumento + '.pdf',
           'Compartilhar ' + (tipo === 'garantia' ? 'garantia' : tipo === 'entrega' ? 'comprovante de entrega' : 'Ordem de Serviço'),
           mensagemCompartilhamento(tipo, dados, numeroConsultado)
-        ).then(function () {
-          if (window.SistemaOSToast) window.SistemaOSToast.mostrar('PDF e mensagem preparados para compartilhar.', 'sucesso');
+          ).then(function (resultado) {
+          if (window.SistemaOSToast) window.SistemaOSToast.mostrar(window.SistemaOSCompartilhar.mensagemResultado(resultado), 'sucesso');
         }).catch(function (erro) {
           if (window.SistemaOSToast) window.SistemaOSToast.mostrar('Não foi possível compartilhar: ' + (erro.message || erro), 'erro');
         }).then(function () {

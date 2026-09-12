@@ -1,20 +1,21 @@
 package com.assistencia.sistemaos;
 
 import android.content.ClipData;
+import android.content.ClipDescription;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Canvas;
-import android.graphics.Rect;
-import android.graphics.pdf.PdfDocument;
+import android.graphics.Color;
 import android.net.Uri;
-import android.print.PrintAttributes;
+import android.os.Build;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
-import android.print.pdf.PrintedPdfDocument;
+import android.view.View;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import androidx.core.app.ShareCompat;
 import androidx.core.content.FileProvider;
 
 import com.getcapacitor.JSObject;
@@ -24,12 +25,11 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 @CapacitorPlugin(name = "Impressao")
 public class ImpressaoPlugin extends Plugin {
     private WebView webViewImpressao;
+    private boolean gerandoPdf;
 
     private WebView prepararWebView(String html, WebViewClient cliente) {
         WebView webView = new WebView(getContext());
@@ -37,10 +37,26 @@ public class ImpressaoPlugin extends Plugin {
         settings.setJavaScriptEnabled(false);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
+        settings.setOffscreenPreRaster(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            settings.setAlgorithmicDarkeningAllowed(false);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            settings.setForceDark(WebSettings.FORCE_DARK_OFF);
+            webView.setForceDarkAllowed(false);
+        }
+        webView.setBackgroundColor(Color.WHITE);
+        webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
         webView.setWebViewClient(cliente);
+        String regrasDocumentoClaro =
+            "<meta name=\"color-scheme\" content=\"light only\">" +
+            "<style>html,body{background:#fff!important;color-scheme:light only!important;" +
+            "-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}</style>";
+        String htmlClaro = html.contains("</head>")
+            ? html.replace("</head>", regrasDocumentoClaro + "</head>")
+            : regrasDocumentoClaro + html;
         webView.loadDataWithBaseURL(
             "https://sistemaos.local/",
-            html,
+            htmlClaro,
             "text/html",
             "UTF-8",
             null
@@ -64,7 +80,6 @@ public class ImpressaoPlugin extends Plugin {
     }
 
     private void compartilharArquivoPdf(
-        WebView view,
         File pdf,
         String nomeArquivo,
         String titulo,
@@ -77,81 +92,39 @@ public class ImpressaoPlugin extends Plugin {
                 getContext().getPackageName() + ".fileprovider",
                 pdf
             );
-            Intent envio = new Intent(Intent.ACTION_SEND);
-            envio.setType("application/pdf");
+            Intent envio = new ShareCompat.IntentBuilder(getActivity())
+                .setType("application/pdf")
+                .setStream(uri)
+                .setSubject(titulo)
+                .setText(mensagem)
+                .getIntent();
+            envio.putExtra(Intent.EXTRA_TEXT, mensagem);
             envio.putExtra(Intent.EXTRA_STREAM, uri);
-            if (!mensagem.trim().isEmpty()) envio.putExtra(Intent.EXTRA_TEXT, mensagem);
-            envio.setClipData(ClipData.newRawUri("PDF Sistema OS", uri));
+            envio.putExtra(Intent.EXTRA_TITLE, titulo);
+            ClipData.Item item = new ClipData.Item(mensagem, null, null, uri);
+            envio.setClipData(new ClipData(
+                new ClipDescription("PDF Sistema OS", new String[]{"application/pdf", "text/plain"}),
+                item
+            ));
             envio.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            boolean mensagemCopiada = false;
+            try { if (!mensagem.trim().isEmpty()) {
+                ClipboardManager clipboard = (ClipboardManager) getContext()
+                    .getSystemService(Context.CLIPBOARD_SERVICE);
+                if (clipboard != null) {
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Mensagem do Sistema OS", mensagem));
+                    mensagemCopiada = true;
+                }
+            } } catch (RuntimeException ignorado) { /* O PDF ainda pode ser compartilhado. */ }
             getActivity().startActivity(Intent.createChooser(envio, titulo));
             JSObject resultado = new JSObject();
             resultado.put("sucesso", true);
             resultado.put("nomeArquivo", nomeArquivo);
+            resultado.put("mensagemCopiada", mensagemCopiada);
             call.resolve(resultado);
         } catch (Exception erro) {
             call.reject("Não foi possível compartilhar o PDF: " + erro.getMessage(), erro);
-        } finally {
-            encerrarWebView(view);
         }
-    }
-
-    private void gerarECompartilharPdf(
-        WebView view,
-        File pdf,
-        String nomeArquivo,
-        String titulo,
-        String mensagem,
-        PluginCall call
-    ) {
-        PrintAttributes atributos = new PrintAttributes.Builder()
-            .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-            .setResolution(new PrintAttributes.Resolution("pdf", "PDF", 144, 144))
-            .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
-            .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
-            .build();
-        PrintedPdfDocument documento = new PrintedPdfDocument(getContext(), atributos);
-        try {
-            Rect area = documento.getPageContentRect();
-            int largura = Math.max(1, area.width());
-            view.measure(
-                android.view.View.MeasureSpec.makeMeasureSpec(largura, android.view.View.MeasureSpec.EXACTLY),
-                android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
-            );
-            int alturaConteudo = Math.max(
-                view.getMeasuredHeight(),
-                Math.round(view.getContentHeight() * view.getScale())
-            );
-            alturaConteudo = Math.max(1, alturaConteudo);
-            view.layout(0, 0, largura, alturaConteudo);
-            int alturaPagina = Math.max(1, area.height());
-            int totalPaginas = Math.max(1, (int) Math.ceil(alturaConteudo / (double) alturaPagina));
-
-            for (int indice = 0; indice < totalPaginas; indice++) {
-                PdfDocument.Page pagina = documento.startPage(indice);
-                Canvas canvas = pagina.getCanvas();
-                canvas.save();
-                canvas.clipRect(area);
-                canvas.translate(area.left, area.top - (indice * alturaPagina));
-                view.draw(canvas);
-                canvas.restore();
-                documento.finishPage(pagina);
-            }
-
-            if (pdf.exists() && !pdf.delete()) {
-                throw new IllegalStateException("O arquivo temporário anterior está em uso.");
-            }
-            try (FileOutputStream saida = new FileOutputStream(pdf)) {
-                documento.writeTo(saida);
-                saida.flush();
-            }
-        } catch (Exception erro) {
-            encerrarWebView(view);
-            call.reject("Não foi possível gerar o PDF: " + erro.getMessage(), erro);
-            return;
-        } finally {
-            documento.close();
-        }
-        compartilharArquivoPdf(view, pdf, nomeArquivo, titulo, mensagem, call);
     }
 
     @PluginMethod
@@ -204,23 +177,27 @@ public class ImpressaoPlugin extends Plugin {
         }
 
         getActivity().runOnUiThread(() -> {
+            if (gerandoPdf) { call.reject("Aguarde o documento atual terminar de ser gerado."); return; }
+            gerandoPdf = true;
             try {
-                AtomicBoolean paginaCarregada = new AtomicBoolean(false);
-                prepararWebView(html, new WebViewClient() {
-                    @Override
-                    public void onPageFinished(WebView view, String url) {
-                        if (!paginaCarregada.compareAndSet(false, true)) return;
-                        File pasta = new File(getContext().getCacheDir(), "documentos-compartilhados");
-                        if (!pasta.exists() && !pasta.mkdirs()) {
-                            encerrarWebView(view);
-                            call.reject("Não foi possível preparar a pasta temporária do PDF.");
-                            return;
-                        }
-                        File pdf = new File(pasta, nomeArquivo);
-                        gerarECompartilharPdf(view, pdf, nomeArquivo, titulo, mensagem, call);
+                File pasta = new File(getContext().getCacheDir(), "documentos-compartilhados");
+                if (!pasta.exists() && !pasta.mkdirs()) throw new IllegalStateException("Pasta temporária indisponível.");
+                // Cada envio conserva seu arquivo, mesmo se o mesmo documento for gerado novamente.
+                File lote = new File(pasta, "envio-" + java.util.UUID.randomUUID());
+                if (!lote.mkdir()) throw new IllegalStateException("Pasta de envio indisponível.");
+                File pdf = new File(lote, nomeArquivo);
+                new PdfCompartilhavel(getActivity(), html, pdf, new PdfCompartilhavel.Resultado() {
+                    @Override public void pronto(File arquivo) {
+                        gerandoPdf = false;
+                        compartilharArquivoPdf(arquivo, nomeArquivo, titulo, mensagem, call);
                     }
-                });
+                    @Override public void falhou(String mensagemErro) {
+                        gerandoPdf = false;
+                        call.reject(mensagemErro);
+                    }
+                }).gerar(html);
             } catch (Exception erro) {
+                gerandoPdf = false;
                 call.reject("Não foi possível preparar o PDF: " + erro.getMessage(), erro);
             }
         });

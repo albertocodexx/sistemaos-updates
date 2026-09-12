@@ -183,6 +183,10 @@
   }
 
   function compartilharPdfPorUrl(url, nomeArquivo, titulo, textoCompartilhar) {
+    var mensagemCopiada = false;
+    var copiar = navigator.clipboard && typeof navigator.clipboard.writeText === 'function'
+      ? navigator.clipboard.writeText(String(textoCompartilhar || '')).then(function () { mensagemCopiada = true; }).catch(function () {})
+      : Promise.resolve();
     return fetch(String(url || '')).then(function (resposta) {
       if (!resposta.ok) throw new Error('O PDF não pôde ser baixado agora.');
       return resposta.blob();
@@ -190,7 +194,12 @@
       var pdf = blob.type === 'application/pdf'
         ? blob
         : new Blob([blob], { type: 'application/pdf' });
-      return compartilharBlob(pdf, nomeArquivoSeguro(nomeArquivo, 'pdf'), titulo, textoCompartilhar);
+      return copiar.then(function () {
+        return compartilharBlob(pdf, nomeArquivoSeguro(nomeArquivo, 'pdf'), titulo, textoCompartilhar);
+      }).then(function (resultado) {
+        resultado.mensagemCopiada = mensagemCopiada;
+        return resultado;
+      });
     });
   }
 
@@ -204,10 +213,20 @@
       nomeArquivo: nomeArquivoSeguro(nomeArquivo, 'pdf'),
       titulo: String(titulo || 'Compartilhar documento'),
       mensagem: String(textoCompartilhar || '')
-    }).then(function () { return { metodo: 'compartilhado' }; });
+    }).then(function (resultado) {
+      return {
+        metodo: 'compartilhado',
+        mensagemCopiada: !!(resultado && resultado.mensagemCopiada)
+      };
+    });
   }
 
   window.SistemaOSCompartilhar = {
+    mensagemResultado: function (resultado) {
+      return resultado && resultado.mensagemCopiada
+        ? 'PDF preparado. Se a mensagem não aparecer no aplicativo escolhido, use Colar: o texto já foi copiado.'
+        : 'PDF preparado com mensagem. O aplicativo escolhido pode não aceitar texto junto ao anexo.';
+    },
     compartilharOuBaixarArquivo: compartilharOuBaixarArquivo,
     compartilharBlob: compartilharBlob,
     compartilharPdfPorUrl: compartilharPdfPorUrl,

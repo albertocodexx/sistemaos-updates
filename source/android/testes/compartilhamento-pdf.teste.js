@@ -17,6 +17,7 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
   let chamadaNativa = null;
   let arquivoEscrito = null;
   let compartilhamento = null;
+  let mensagemClipboard = null;
 
   try {
     w.Capacitor = {
@@ -24,7 +25,7 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
         Impressao: {
           async compartilharPdf(payload) {
             chamadaNativa = payload;
-            return { sucesso: true };
+            return { sucesso: true, mensagemCopiada: true };
           }
         },
         Filesystem: {
@@ -44,6 +45,9 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
         }
       }
     };
+    Object.defineProperty(w.navigator, 'clipboard', { value: {
+      async writeText(texto) { mensagemClipboard = texto; }
+    } });
     w.fetch = async () => ({
       ok: true,
       async blob() {
@@ -53,7 +57,7 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
 
     w.eval(ler('www/js/compartilhar-arquivo.js'));
 
-    await w.SistemaOSCompartilhar.compartilharPdfHtml(
+    const envioHtml = await w.SistemaOSCompartilhar.compartilharPdfHtml(
       '<html><body>OS-0001</body></html>',
       'ordem-de-servico-0001.pdf',
       'Compartilhar ordem de serviço',
@@ -62,8 +66,9 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
     assert.equal(chamadaNativa.nomeArquivo, 'ordem-de-servico-0001.pdf');
     assert.equal(chamadaNativa.mensagem, 'Olá! Segue a ordem de serviço OS-0001.');
     assert.match(chamadaNativa.html, /OS-0001/);
+    assert.equal(envioHtml.mensagemCopiada, true);
 
-    await w.SistemaOSCompartilhar.compartilharPdfPorUrl(
+    const envioUrl = await w.SistemaOSCompartilhar.compartilharPdfPorUrl(
       'https://arquivos.test/garantia.pdf',
       'garantia-0001.pdf',
       'Compartilhar garantia',
@@ -73,12 +78,23 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
     assert.equal(compartilhamento.text, 'Olá! Segue o comprovante de garantia.');
     assert.equal(compartilhamento.files.length, 1);
     assert.equal(compartilhamento.files[0], 'file:///cache/ordem-de-servico-0001.pdf');
+    assert.equal(mensagemClipboard, compartilhamento.text);
+    assert.equal(envioUrl.mensagemCopiada, true);
+    w.navigator.clipboard.writeText = async () => { throw new Error('Clipboard indisponível'); };
+    assert.equal((await w.SistemaOSCompartilhar.compartilharPdfPorUrl(
+      'https://arquivos.test/garantia.pdf', 'garantia.pdf', 'Garantia', 'Mensagem'
+    )).metodo, 'compartilhado', 'Falha ao copiar não impede compartilhar PDF e texto');
 
     const java = ler('android/app/src/main/java/com/assistencia/sistemaos/ImpressaoPlugin.java');
     assert.match(java, /void compartilharPdf\(PluginCall call\)/);
     assert.match(java, /Intent\.EXTRA_STREAM/);
     assert.match(java, /Intent\.EXTRA_TEXT/);
     assert.match(java, /FileProvider\.getUriForFile/);
+    assert.match(java, /ShareCompat\.IntentBuilder/);
+    assert.match(java, /ClipboardManager/);
+    assert.match(java, /ClipDescription/);
+    assert.match(java, /color-scheme/);
+    assert.match(java, /mensagemCopiada/);
 
     const app = ler('www/js/app.js');
     const garantia = ler('www/js/garantia-tela.js');
