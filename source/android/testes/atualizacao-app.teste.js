@@ -20,6 +20,7 @@ const versaoPacote = JSON.parse(fs.readFileSync(path.join(raiz, 'package.json'),
 assert.match(script, /albertocodexx\/sistemaos-updates/);
 assert.match(script, /releases\/latest/);
 assert.match(script, /SistemaOS-\\d\+\\\.\\d\+\\\.\\d\+\\\.apk/);
+assert.match(script, /SistemaOS-Android-/);
 assert.match(script, /\.sha256/);
 assert.match(script, /\[a-f0-9\]\{64\}/i);
 assert.match(script, /sha256:\s*release\.sha256/);
@@ -138,6 +139,41 @@ assert.match(filePaths, /external-files-path[^>]+Download\//);
   assert.match(urls[0], /api\.github\.com/);
   dom.window.close();
   console.log('OK: verificação usa o digest da API e não confunde bloqueio CORS com falta de internet.');
+})().catch(erro => {
+  console.error(erro);
+  process.exitCode = 1;
+});
+
+(async function testarLinhaAndroidSeparadaDoPc() {
+  const dom = new JSDOM('', { runScripts: 'outside-only', url: 'https://localhost/' });
+  const hashAndroid = 'b'.repeat(64);
+  dom.window.SistemaOSVersaoAPK = '20.5.0';
+  dom.window.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      assets: [
+        {
+          name: 'SistemaOS-40.5.1.apk',
+          browser_download_url: 'https://github.com/exemplo/SistemaOS-40.5.1.apk',
+          digest: 'sha256:' + 'c'.repeat(64)
+        },
+        {
+          name: 'SistemaOS-Android-20.5.1.apk',
+          browser_download_url: 'https://github.com/exemplo/SistemaOS-Android-20.5.1.apk',
+          digest: 'sha256:' + hashAndroid
+        }
+      ]
+    })
+  });
+  dom.window.eval(script);
+  const resultado = await dom.window.SistemaOSAtualizacao.verificar(true);
+  assert.equal(resultado.fase, 'disponivel');
+  assert.equal(resultado.versaoNova, '20.5.1');
+  assert.equal(resultado.nomeArquivo, 'SistemaOS-Android-20.5.1.apk');
+  assert.equal(resultado.sha256, hashAndroid);
+  dom.window.close();
+  console.log('OK: Android usa sua própria linha de versão sem confundir a versão do PC.');
 })().catch(erro => {
   console.error(erro);
   process.exitCode = 1;

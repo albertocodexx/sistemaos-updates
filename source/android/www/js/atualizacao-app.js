@@ -66,7 +66,7 @@
     } catch (_) {}
     // Ultimo recurso para execucao fora do Android. Este valor acompanha o
     // versionName do APK e evita oferecer a propria versao como atualizacao.
-    return normalizarVersao(global.SistemaOSVersaoAPK || '30.5.136');
+    return normalizarVersao(global.SistemaOSVersaoAPK || '20.5.1');
   }
 
   function lerCache() {
@@ -92,9 +92,13 @@
 
   function extrairAssetApk(release) {
     var ativos = Array.isArray(release && release.assets) ? release.assets : [];
-    return ativos.filter(function (asset) {
+    var android = ativos.filter(function (asset) {
+      return /^SistemaOS-Android-\d+\.\d+\.\d+\.apk$/i.test(String(asset.name || ''));
+    });
+    var legados = ativos.filter(function (asset) {
       return /^SistemaOS-\d+\.\d+\.\d+\.apk$/i.test(String(asset.name || ''));
-    }).sort(function (a, b) {
+    });
+    return (android.length ? android : legados).sort(function (a, b) {
       return compararVersoes(versaoDoAsset(b), versaoDoAsset(a));
     })[0] || null;
   }
