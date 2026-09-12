@@ -27,6 +27,9 @@ assert.match(instaladorNsis, /\$\{If\}\s+\$\{isUpdated\}[\s\S]*?Goto\s+sistema_o
 assert(instaladorNsis.indexOf('${If} ${isUpdated}') < instaladorNsis.indexOf('RMDir /r "${APP_ELECTRON_DIR}"'),
   'guarda de atualizacao precisa executar antes de qualquer limpeza de dados');
 assert.match(modulo, /autoUpdater\.checkForUpdates/);
+assert.match(modulo, /atualizacaoObrigatoriaDetectada/);
+assert.match(modulo, /setTimeout\(\(\) => verificar\(\)\.catch\(\(\) => \{\}\), 15000\)/,
+  'download obrigatório deve tentar novamente após queda temporária');
 assert.doesNotMatch(modulo, /resultado\?\.updateInfo\?\.version\s*\?\s*'verificando'/);
 assert.match(preload, /updateVerificar/);
 assert.match(preload, /updateInstalar/);
@@ -36,10 +39,12 @@ assert.match(tela, /btnInstalarAtualizacaoLogin/);
 assert.match(tela, /id="updateGlobal"/);
 assert.match(renderer, /updateGlobal/);
 assert.match(renderer, /loginVisivel/);
-assert.match(main, /function iniciarServicosEmSegundoPlano\(\)[\s\S]{0,1800}atualizador\.inicializar\(\{ app, getJanela: \(\) => janelaPrincipal \}\);/,
-  'atualizador inicia pelos serviços em segundo plano');
-assert.match(main, /if \(!inicioSomenteEmSegundoPlano\) criarJanelaPrincipal\(\);[\s\S]{0,300}void iniciarServicosEmSegundoPlano\(\);/,
-  'atualizador continua iniciando no modo oculto sem bloquear a janela no modo normal');
+assert.match(main, /atualizador\.inicializar\(\{[\s\S]{0,220}onEstado: refletirAtualizacaoNaAbertura/,
+  'atualizador deve iniciar ainda na tela de carregamento');
+assert.match(main, /await atualizador\.verificar\(\)[\s\S]{0,180}includes\(estadoAtualizacaoInicial\?\.fase\)\) return/,
+  'versão antiga não pode abrir enquanto uma atualização está sendo baixada');
+assert(main.indexOf('await atualizador.verificar()') < main.indexOf("atualizarTelaAbertura(24"),
+  'checagem obrigatória deve acontecer antes de preparar e abrir a interface');
 assert.doesNotMatch(ipc, /update:selecionarZip/);
 assert.doesNotMatch(tela, /Selecionar Arquivo \.zip/);
 
@@ -79,7 +84,7 @@ console.log('OK: atualização manual por ZIP foi substituída pelo GitHub Relea
     isDestroyed: () => false,
     webContents: { send: (_canal, dados) => estados.push(dados) }
   };
-  atualizador.inicializar({ app: { isPackaged: true }, getJanela: () => janela });
+  atualizador.inicializar({ app: { isPackaged: true }, getJanela: () => janela, onEstado: dados => estados.push(dados) });
   const estado = await atualizador.verificar();
   assert.equal(estado.fase, 'pronto');
   assert.equal(estado.versaoNova, '99.0.0');

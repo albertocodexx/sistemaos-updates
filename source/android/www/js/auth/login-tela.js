@@ -32,6 +32,10 @@
   var textoAtualizacaoGlobal = document.getElementById('atualizacao-global-app-texto');
   var btnAtualizacaoGlobal = document.getElementById('btn-atualizacao-global-app');
   var btnAbrirChamado = document.getElementById('btn-abrir-chamado-login');
+  var estadoSessaoAtual = window.SistemaOSSessao.obterEstado();
+  var atualizacaoInicialVerificada = false;
+  var atualizacaoObrigatoria = false;
+  var atualizacaoAutomaticaIniciada = false;
 
   function definirStatus(texto, ehErro, ehSucesso) {
     status.textContent = texto || '';
@@ -135,7 +139,8 @@
 
   function mostrarAtualizacao(resultado) {
     if (!resultado) return;
-    var deveExibir = ['verificando', 'disponivel', 'baixando', 'instalando', 'confirmacao'].indexOf(resultado.fase) !== -1;
+    var deveExibir = ['verificando', 'disponivel', 'baixando', 'instalando', 'confirmacao'].indexOf(resultado.fase) !== -1 ||
+      (resultado.fase === 'erro' && atualizacaoObrigatoria);
     var aplicativoAberto = tela.hidden === true;
     if (atualizacao) {
       atualizacao.hidden = !deveExibir || aplicativoAberto;
@@ -151,8 +156,34 @@
       : (resultado.mensagem || 'Verificando atualização do aplicativo…');
     if (textoAtualizacao) textoAtualizacao.textContent = mensagem;
     if (textoAtualizacaoGlobal) textoAtualizacaoGlobal.textContent = mensagem;
-    if (btnInstalarAtualizacao) btnInstalarAtualizacao.hidden = resultado.fase !== 'disponivel';
-    if (btnAtualizacaoGlobal) btnAtualizacaoGlobal.hidden = resultado.fase !== 'disponivel';
+    var podeTentarInstalar = resultado.fase === 'disponivel' || (resultado.fase === 'erro' && atualizacaoObrigatoria);
+    if (btnInstalarAtualizacao) btnInstalarAtualizacao.hidden = !podeTentarInstalar;
+    if (btnAtualizacaoGlobal) btnAtualizacaoGlobal.hidden = !podeTentarInstalar;
+  }
+
+  function aplicarEstadoAtualizacao(resultado) {
+    resultado = resultado || {};
+    var fase = String(resultado.fase || '');
+    if (['disponivel', 'baixando', 'instalando', 'confirmacao', 'pronto'].indexOf(fase) !== -1) {
+      atualizacaoInicialVerificada = true;
+      atualizacaoObrigatoria = true;
+    } else if (['atualizado', 'indisponivel', 'desenvolvimento'].indexOf(fase) !== -1) {
+      atualizacaoInicialVerificada = true;
+      atualizacaoObrigatoria = false;
+    } else if (fase === 'erro' && !atualizacaoObrigatoria) {
+      // Sem rede não existe confirmação de uma versão nova. A sessão offline
+      // continua utilizável; assim que a conexão voltar, a checagem é refeita.
+      atualizacaoInicialVerificada = true;
+    }
+    renderizar(estadoSessaoAtual);
+    mostrarAtualizacao(resultado);
+    if (fase === 'disponivel' && !atualizacaoAutomaticaIniciada) {
+      // A atualização obrigatória faz parte da abertura do aplicativo. Inicia
+      // o download sem exigir um segundo toque; o Android ainda exibirá a
+      // confirmação nativa de instalação, que não pode ser automatizada.
+      atualizacaoAutomaticaIniciada = true;
+      instalarAtualizacao(null);
+    }
   }
 
   async function instalarAtualizacao(botao) {
@@ -182,7 +213,18 @@
 
   function renderizar(estado) {
     estado = estado || window.SistemaOSSessao.obterEstado();
+    estadoSessaoAtual = estado;
     ocultarBlocos();
+    if (!atualizacaoInicialVerificada || atualizacaoObrigatoria) {
+      bloquearAplicativo();
+      definirStatus(
+        atualizacaoObrigatoria
+          ? 'Atualização obrigatória. Instale a nova versão para continuar.'
+          : 'Verificando se há uma atualização…'
+      );
+      carregando.hidden = atualizacaoObrigatoria;
+      return;
+    }
     if (estado.tipo === 'desativado' || estado.tipo === 'autenticado' || estado.tipo === 'offline_com_sessao' || estado.tipo === 'cobranca') {
       mostrarAplicativo(estado);
       return;
@@ -351,7 +393,7 @@
   if (btnSairSessao) btnSairSessao.addEventListener('click', sair);
 
   window.addEventListener('sistema-os:atualizacao-disponivel', function (evento) {
-    mostrarAtualizacao(evento.detail);
+    aplicarEstadoAtualizacao(evento.detail);
   });
   if (btnInstalarAtualizacao) {
     btnInstalarAtualizacao.addEventListener('click', function () {
@@ -371,4 +413,11 @@
     }
   });
   renderizar(window.SistemaOSSessao.obterEstado());
+  if (window.SistemaOSAtualizacao && typeof window.SistemaOSAtualizacao.verificarNaAbertura === 'function') {
+    window.SistemaOSAtualizacao.verificarNaAbertura().catch(function () {
+      aplicarEstadoAtualizacao({ fase: 'erro', mensagem: 'Não foi possível verificar atualizações agora.' });
+    });
+  } else {
+    aplicarEstadoAtualizacao({ fase: 'erro', mensagem: 'O verificador de atualização não foi carregado.' });
+  }
 })();

@@ -154,6 +154,55 @@ async function executar() {
     assert.equal(fila[0].idExportacao, 'os-local-offline');
   });
 
+  await teste('updates iguais são deduplicados, mas alterações diferentes da mesma revision nunca são confundidas', async () => {
+    global.SistemaOSSessao = {
+      obterEstado() { return { tipo: 'autenticado', usuario: { id: 'usuario-a' }, contexto: { empresa_id: 'empresa-a', usuario_id: 'usuario-a' } }; }
+    };
+    global.SistemaOSSupabaseOS = {
+      _dadosParaCriacao(d) { return d; },
+      _patchParaServidor(p) { return p; },
+      _classificarErro() { return 'servidor'; }
+    };
+    const sync = recarregar(caminhoSync);
+    const statusA1 = sync._operacaoAtualizacao('os-1', 7, { status: 'Em reparo', observacoes: 'A' });
+    const statusA2 = sync._operacaoAtualizacao('os-1', 7, { observacoes: 'A', status: 'Em reparo' });
+    const statusB = sync._operacaoAtualizacao('os-1', 7, { status: 'Pronto para retirada', observacoes: 'B' });
+    assert.equal(statusA1.id, statusA2.id, 'a ordem das chaves não pode criar uma operação duplicada');
+    assert.notEqual(statusA1.id, statusB.id, 'um segundo conteúdo não pode herdar a Promise do primeiro update');
+  });
+
+  await teste('registro do dispositivo é renovado ao trocar empresa ou usuário e chamadas simultâneas compartilham o heartbeat', async () => {
+    let atual = { empresaId: 'empresa-a', usuarioId: 'usuario-a' };
+    let heartbeats = 0;
+    global.localStorage = localStorageFalso();
+    global.SistemaOSSessao = {
+      obterEstado() {
+        return { tipo: 'autenticado', usuario: { id: atual.usuarioId }, contexto: { empresa_id: atual.empresaId, usuario_id: atual.usuarioId } };
+      }
+    };
+    global.SistemaOSSupabaseOS = {
+      _dadosParaCriacao(d) { return d; }, _patchParaServidor(p) { return p; }, _classificarErro() { return 'servidor'; }
+    };
+    global.SupabaseClientApp = {
+      obterCliente() {
+        return { async rpc(nome) {
+          assert.equal(nome, 'registrar_heartbeat');
+          heartbeats += 1;
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return { data: { id: 'device-' + atual.empresaId + '-' + atual.usuarioId, empresa_id: atual.empresaId, usuario_id: atual.usuarioId }, error: null };
+        } };
+      }
+    };
+    const sync = recarregar(caminhoSync);
+    const [primeiro, repetido] = await Promise.all([sync.obterDispositivoId(), sync.obterDispositivoId()]);
+    assert.equal(primeiro, repetido);
+    assert.equal(heartbeats, 1);
+    atual = { empresaId: 'empresa-b', usuarioId: 'usuario-b' };
+    const trocado = await sync.obterDispositivoId();
+    assert.equal(trocado, 'device-empresa-b-usuario-b');
+    assert.equal(heartbeats, 2, 'não pode reutilizar o dispositivo autenticado da conta anterior');
+  });
+
   await teste('retry valida sessão, mantém ordem e só conclui após confirmação do servidor', async () => {
     const fila = [
       {
@@ -191,7 +240,9 @@ async function executar() {
     };
     global.SistemaOSHistorico = {
       async enfileirarOperacaoNuvem(item) { return item; },
-      async listarOperacoesNuvemPendentes() { return fila; },
+      async listarOperacoesNuvemPendentes() {
+        return Array.from(estados.values()).filter((item) => item.status === 'pendente');
+      },
       async atualizarOperacaoNuvem(id, patch) {
         estados.set(id, Object.assign({}, estados.get(id), patch));
         return estados.get(id);
@@ -293,6 +344,63 @@ async function executar() {
     assert.equal(idsPendentes.includes('envio-recente'), false);
     assert.equal(idsPendentes.includes('envio-travado'), true);
     dom.window.close();
+  });
+
+  await teste('limite da fila é aplicado depois de filtrar o usuário ativo', async () => {
+    const dom = new JSDOM('<!doctype html><html></html>', { runScripts: 'outside-only', url: 'https://etapa5-identidade.local/' });
+    dom.window.indexedDB = indexedDB;
+    dom.window.IdExportacao = { gerar() { return 'id-identidade'; } };
+    dom.window.eval(fs.readFileSync(path.join(raiz, 'www/js/historico.js'), 'utf8'));
+    const historico = dom.window.SistemaOSHistorico;
+    historico.definirEmpresa('empresa-fila');
+    for (let i = 0; i < 12; i += 1) {
+      await historico.enfileirarOperacaoNuvem({
+        id: 'outro-' + i, empresaId: 'empresa-fila', usuarioId: 'usuario-outro',
+        entidade: 'ordem_servico', operacao: 'insert', status: 'pendente', criadoEm: new Date(1000 + i).toISOString()
+      });
+    }
+    await historico.enfileirarOperacaoNuvem({
+      id: 'atual-1', empresaId: 'empresa-fila', usuarioId: 'usuario-atual',
+      entidade: 'ordem_servico', operacao: 'insert', status: 'pendente', criadoEm: new Date(9000).toISOString()
+    });
+    const pendentes = await historico.listarOperacoesNuvemPendentes({ empresaId: 'empresa-fila', usuarioId: 'usuario-atual' });
+    assert.deepEqual(pendentes.map((item) => item.id), ['atual-1']);
+    dom.window.close();
+  });
+
+  await teste('uma sincronização esvazia mais de dez operações da conta sem esperar o próximo ciclo de cinco minutos', async () => {
+    const estados = new Map();
+    for (let i = 0; i < 12; i += 1) {
+      const item = {
+        id: 'os:create:lote-' + i, empresaId: 'empresa-a', usuarioId: 'usuario-a', entidade: 'ordem_servico',
+        operacao: 'insert', idExportacao: 'lote-' + i, dados: { cliente_nome_snapshot: 'Cliente ' + i },
+        status: 'pendente', tentativas: 0, criadoEm: new Date(1000 + i).toISOString()
+      };
+      estados.set(item.id, item);
+    }
+    Object.defineProperty(global, 'navigator', { value: { onLine: true }, configurable: true });
+    global.localStorage = localStorageFalso();
+    global.SistemaOSSessao = {
+      obterEstado() { return { tipo: 'autenticado', usuario: { id: 'usuario-a' }, contexto: { empresa_id: 'empresa-a', usuario_id: 'usuario-a' } }; },
+      async revalidar() { return this.obterEstado(); }
+    };
+    global.SistemaOSSupabaseOS = {
+      _dadosParaCriacao(d) { return d; }, _patchParaServidor(p) { return p; }, _classificarErro(e) { return e.tipo || 'servidor'; },
+      async criar(dados, id) { return { id: 'remoto-' + id, numero: 'OS-' + id, revision: 1 }; }
+    };
+    global.SupabaseClientApp = { obterCliente() { return { async rpc() { return { data: { id: 'device-a' }, error: null }; } }; } };
+    global.SistemaOSHistorico = {
+      async listarOperacoesNuvemPendentes(filtro) {
+        assert.deepEqual(filtro, { empresaId: 'empresa-a', usuarioId: 'usuario-a' });
+        return Array.from(estados.values()).filter((item) => item.status === 'pendente').slice(0, 10);
+      },
+      async atualizarOperacaoNuvem(id, patch) { estados.set(id, Object.assign({}, estados.get(id), patch)); return estados.get(id); },
+      async enfileirarOperacaoNuvem(item) { estados.set(item.id, item); return item; }
+    };
+    const sync = recarregar(caminhoSync);
+    const resultado = await sync.processarFila();
+    assert.equal(resultado.enviados, 12);
+    assert.equal(Array.from(estados.values()).filter((item) => item.status !== 'concluido').length, 0);
   });
 
   await teste('assinatura feita sem servidor permanece na fila duravel do Android', async () => {

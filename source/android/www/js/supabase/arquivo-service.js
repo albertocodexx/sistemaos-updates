@@ -178,7 +178,7 @@
     return { disponivel: false, motivo: 'indisponivel', mensagem: 'Arquivo indisponível no momento.' };
   }
 
-  async function removerArquivosOS(osId) {
+  async function prepararExclusaoOS(osId) {
     if (!texto(osId)) throw new Error('Id da OS e obrigatorio para limpar os arquivos.');
     var resposta = await cliente().rpc('listar_arquivos_exclusao_os', { p_id: osId });
     if (resposta.error) throw resposta.error;
@@ -193,6 +193,11 @@
       adicionar(arquivo.storage_bucket, arquivo.arquivo_nuvem_path);
       adicionar('miniaturas', arquivo.miniatura_path);
     });
+    return { osId: texto(osId), porBucket: porBucket };
+  }
+
+  async function removerManifestoExclusao(manifesto) {
+    var porBucket = manifesto && manifesto.porBucket || {};
     var removidos = 0;
     var buckets = Object.keys(porBucket);
     for (var b = 0; b < buckets.length; b += 1) {
@@ -206,6 +211,10 @@
       }
     }
     return { removidos: removidos };
+  }
+
+  async function removerArquivosOS(osId) {
+    return removerManifestoExclusao(await prepararExclusaoOS(osId));
   }
 
   function infoDataUrl(dataUrl) {
@@ -580,6 +589,8 @@
   return {
     listarArquivos: listarArquivos,
     obterArquivo: obterArquivo,
+    prepararExclusaoOS: prepararExclusaoOS,
+    removerManifestoExclusao: removerManifestoExclusao,
     removerArquivosOS: removerArquivosOS,
     _somenteArquivosAtuais: somenteArquivosAtuais,
     obterMetadados: obterMetadados,

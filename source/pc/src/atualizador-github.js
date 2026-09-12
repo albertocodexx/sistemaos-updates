@@ -14,8 +14,11 @@ const REPOSITORIO = Object.freeze({
 let iniciado = false;
 let appElectron = null;
 let obterJanela = null;
+let aoPublicarEstado = null;
 let instalacaoSolicitada = false;
 let temporizadorInstalacao = null;
+let temporizadorNovaTentativa = null;
+let atualizacaoObrigatoriaDetectada = false;
 let estado = { fase: 'ocioso', versaoAtual: '0.0.0', versaoNova: null, progresso: 0, mensagem: '' };
 let ultimaFaseJanela = 'ocioso';
 
@@ -30,6 +33,7 @@ function versaoAtual() {
 
 function publicar(parcial) {
   estado = Object.assign({}, estado, parcial, { versaoAtual: versaoAtual() });
+  try { aoPublicarEstado?.(Object.assign({}, estado)); } catch (_) {}
   const janela = obterJanela?.();
   if (janela && !janela.isDestroyed()) {
     janela.webContents.send('update:status', estado);
@@ -58,11 +62,12 @@ function erroLegivel(erro) {
   return texto;
 }
 
-function inicializar({ app, getJanela }) {
+function inicializar({ app, getJanela, onEstado }) {
   if (iniciado) return;
   iniciado = true;
   appElectron = app;
   obterJanela = getJanela;
+  aoPublicarEstado = typeof onEstado === 'function' ? onEstado : null;
   publicar({ fase: 'ocioso', mensagem: 'Atualizações pelo GitHub configuradas.' });
 
   // A atualização automática só roda na versão instalada. No modo de
@@ -78,17 +83,25 @@ function inicializar({ app, getJanela }) {
   autoUpdater.logger = null;
 
   autoUpdater.on('checking-for-update', () => publicar({ fase: 'verificando', progresso: 0, mensagem: 'Verificando atualizações...' }));
-  autoUpdater.on('update-available', (info) => publicar({
-    fase: 'baixando', versaoNova: info.version || null, progresso: 0,
-    mensagem: `Baixando a versão ${info.version || 'nova'}...`
-  }));
+  autoUpdater.on('update-available', (info) => {
+    atualizacaoObrigatoriaDetectada = true;
+    clearTimeout(temporizadorNovaTentativa);
+    publicar({
+      fase: 'baixando', versaoNova: info.version || null, progresso: 0,
+      mensagem: `Baixando a versão ${info.version || 'nova'}...`
+    });
+  });
   autoUpdater.on('download-progress', (progresso) => publicar({
     fase: 'baixando', progresso: Math.round(Number(progresso?.percent || 0)),
     mensagem: `Baixando atualização: ${Math.round(Number(progresso?.percent || 0))}%`
   }));
-  autoUpdater.on('update-not-available', () => publicar({
-    fase: 'atualizado', versaoNova: null, progresso: 100, mensagem: 'Este computador já está na versão mais recente.'
-  }));
+  autoUpdater.on('update-not-available', () => {
+    atualizacaoObrigatoriaDetectada = false;
+    clearTimeout(temporizadorNovaTentativa);
+    publicar({
+      fase: 'atualizado', versaoNova: null, progresso: 100, mensagem: 'Este computador já está na versão mais recente.'
+    });
+  });
   autoUpdater.on('update-downloaded', (info) => {
     publicar({
       fase: 'pronto', versaoNova: info.version || null, progresso: 100,
@@ -100,11 +113,20 @@ function inicializar({ app, getJanela }) {
     temporizadorInstalacao = setTimeout(() => instalar(), 900);
     temporizadorInstalacao.unref?.();
   });
-  autoUpdater.on('error', (erro) => publicar({ fase: 'erro', progresso: 0, mensagem: erroLegivel(erro) }));
+  autoUpdater.on('error', (erro) => {
+    publicar({ fase: 'erro', progresso: 0, mensagem: erroLegivel(erro) });
+    // Se a release já foi encontrada, a versão antiga continua bloqueada e o
+    // download é retomado automaticamente. Sem isto uma queda curta de rede
+    // deixava a tela de abertura parada até o usuário reiniciar o programa.
+    if (atualizacaoObrigatoriaDetectada && !instalacaoSolicitada) {
+      clearTimeout(temporizadorNovaTentativa);
+      temporizadorNovaTentativa = setTimeout(() => verificar().catch(() => {}), 15000);
+      temporizadorNovaTentativa.unref?.();
+    }
+  });
 
-  // Inicia antes do login. Havendo versão nova, baixa e aplica sem interromper
-  // o usuário com perguntas; o progresso aparece na tela de entrada.
-  setTimeout(() => { verificar().catch(() => {}); }, 600).unref?.();
+  // A chamada de verificação é feita explicitamente pelo boot do main.js.
+  // Assim a janela principal só é criada quando não existe versão nova.
 }
 
 async function verificar() {

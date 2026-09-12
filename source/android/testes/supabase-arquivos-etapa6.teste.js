@@ -64,7 +64,8 @@ async function executar() {
   const fonteOS = fs.readFileSync(caminhoOS, 'utf8');
   assert.match(fonteArquivos, /listar_arquivos_exclusao_os/);
   assert.match(fonteArquivos, /removerArquivosOS/);
-  assert.match(fonteOS, /SistemaOSSupabaseArquivo\.removerArquivosOS\(id\)/);
+  assert.match(fonteOS, /prepararExclusaoOS\(id\)/);
+  assert.match(fonteOS, /removerManifestoExclusao\(manifesto\)/);
   async function teste(nome, fn) {
     await fn();
     total += 1;
@@ -146,6 +147,44 @@ async function executar() {
     assert.equal(resultado.disponivel, false);
     assert.equal(resultado.motivo, 'desktop-offline');
     assert.match(resultado.mensagem, /computador.*ligado/i);
+  });
+
+  await teste('exclusão confirma a OS antes de remover arquivos e conflito preserva o Storage', async () => {
+    const ordem = [];
+    const manifesto = { osId: 'os-1', porBucket: { 'arquivos-os': { 'empresa/os/foto.jpg': true } } };
+    global.SistemaOSSupabaseArquivo = {
+      async prepararExclusaoOS() { ordem.push('listar-arquivos'); return manifesto; },
+      async removerManifestoExclusao(recebido) { assert.strictEqual(recebido, manifesto); ordem.push('remover-storage'); }
+    };
+    global.SupabaseClientApp = { obterCliente() { return { async rpc(nome) {
+      ordem.push(nome);
+      return { data: { id: 'os-1', empresa_id: 'empresa-a', numero: 'OS-0001', revision: 3 }, error: null };
+    } }; } };
+    let servico = recarregar(caminhoOS);
+    await servico.excluir('os-1', 2);
+    assert.deepEqual(ordem, ['listar-arquivos', 'excluir_ordem_servico', 'remover-storage']);
+
+    ordem.length = 0;
+    global.SupabaseClientApp = { obterCliente() { return { async rpc(nome) {
+      ordem.push(nome);
+      return { data: null, error: { code: '40001', message: 'conflito_revision' } };
+    } }; } };
+    servico = recarregar(caminhoOS);
+    await assert.rejects(() => servico.excluir('os-1', 2));
+    assert.deepEqual(ordem, ['listar-arquivos', 'excluir_ordem_servico']);
+  });
+
+  await teste('falha tardia ao limpar Storage não desfaz exclusão confirmada', async () => {
+    global.SistemaOSSupabaseArquivo = {
+      async prepararExclusaoOS() { return { osId: 'os-1', porBucket: {} }; },
+      async removerManifestoExclusao() { throw new Error('storage indisponível'); }
+    };
+    global.SupabaseClientApp = { obterCliente() { return { async rpc() {
+      return { data: { id: 'os-1', empresa_id: 'empresa-a', numero: 'OS-0001', revision: 3 }, error: null };
+    } }; } };
+    const servico = recarregar(caminhoOS);
+    const resultado = await servico.excluir('os-1', 2);
+    assert.equal(resultado.limpezaArquivosPendente, true);
   });
 
   await teste('fila de arquivos referencia o histórico sem duplicar Base64 na operação', async () => {

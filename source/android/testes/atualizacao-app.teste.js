@@ -27,6 +27,8 @@ assert.match(script, /sha256:\s*release\.sha256/);
 assert.match(script, /sha256:\s*ultima\.sha256/);
 assert.match(script, /asset\.digest/);
 assert.match(script, /baixarEInstalar/);
+assert.match(script, /verificarNaAbertura/);
+assert.match(script, /verificar\(true\)/, 'abertura deve ignorar cache antigo da release');
 assert.match(script, /sistema-os:atualizacao-disponivel/);
 assert.match(html, /btn-verificar-atualizacao-app/);
 assert.match(html, /btn-instalar-atualizacao-login/);
@@ -34,6 +36,15 @@ assert.match(html, /atualizacao-global-app/);
 assert.match(html, /btn-atualizacao-global-app/);
 assert.match(html, /btn-mostrar-senha-auth/);
 assert.match(loginScript, /senha\.type = mostrar \? 'text' : 'password'/);
+assert.match(loginScript, /atualizacaoObrigatoria/);
+assert.match(loginScript, /Atualização obrigatória\. Instale a nova versão para continuar/);
+assert.match(loginScript, /verificarNaAbertura\(\)/);
+assert.match(loginScript, /fase === 'disponivel'[\s\S]{0,500}instalarAtualizacao\(null\)/,
+  'uma versão nova deve iniciar o download automaticamente durante a abertura');
+assert(
+  html.indexOf('js/atualizacao-app.js') < html.indexOf('js/auth/login-tela.js'),
+  'verificador precisa carregar antes do gate de login'
+);
 assert.match(estilos, /\.auth-mostrar-senha/);
 assert.match(html, /js\/atualizacao-app\.js/);
 assert.match(html, /js\/atualizacao-tela\.js/);

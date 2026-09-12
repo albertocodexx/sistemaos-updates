@@ -76,16 +76,39 @@
     salvarEstadoCache(estado);
   }
 
-  function enfileirarEdicaoAparelho(dados) {
+  function valoresIguais(a, b) {
+    try { return JSON.stringify(a) === JSON.stringify(b); } catch (_) { return a === b; }
+  }
+
+  function calcularAlteracoes(base, proximo) {
+    base = base || {};
+    proximo = proximo || {};
+    var patch = {};
+    Object.keys(proximo).forEach(function (chave) {
+      if (chave === 'id' || chave.charAt(0) === '_') return;
+      if (!valoresIguais(base[chave], proximo[chave])) patch[chave] = proximo[chave];
+    });
+    return patch;
+  }
+
+  function enfileirarEdicaoAparelho(id, alteracoes) {
     var estado = estadoCache();
-    var id = String(dados && dados.id || '');
+    id = String(id || '');
     if (!id) return;
-    // Uma unica entrada por aparelho: varias alteracoes offline substituem a
-    // anterior. Isso mantem a fila pequena e evita uploads repetidos.
+    var existente = (estado.fila || []).find(function (item) {
+      return item.acao === 'salvar_aparelho' && item.id === id;
+    });
+    // Uma única entrada por aparelho, mas acumulando somente os campos que o
+    // celular realmente alterou. Guardar a fotografia inteira sobrescrevia
+    // mudanças feitas no PC enquanto o Android estava offline.
     estado.fila = (estado.fila || []).filter(function (item) {
       return !(item.acao === 'salvar_aparelho' && item.id === id);
     });
-    estado.fila.push({ acao: 'salvar_aparelho', id: id, dados: semMetadados(dados), criadoEm: new Date().toISOString() });
+    estado.fila.push({
+      acao: 'salvar_aparelho', id: id,
+      dados: Object.assign({}, existente && existente.dados || {}, alteracoes || {}),
+      criadoEm: existente && existente.criadoEm || new Date().toISOString()
+    });
     estado.fila = estado.fila.slice(-100);
     salvarEstadoCache(estado);
   }
@@ -161,7 +184,8 @@
   async function salvarAparelho(alteracoes, atual) {
     atual = atual || await obterAparelho(alteracoes && alteracoes.id);
     if (!atual || !atual.id) throw new Error('Aparelho não encontrado no estoque sincronizado. Atualize a lista e tente novamente.');
-    var dados = Object.assign({}, semMetadados(atual), alteracoes || {}, { id: atual.id });
+    var baseAtual = semMetadados(atual);
+    var dados = Object.assign({}, baseAtual, alteracoes || {}, { id: atual.id });
     dados.marca = String(dados.marca || '').trim();
     dados.modelo = String(dados.modelo || '').trim();
     dados.tipoEquipamento = String(dados.tipoEquipamento || 'Smartphone').trim();
@@ -196,7 +220,7 @@
           _pendenteNuvem: true, _atualizadoEm: new Date().toISOString()
         });
         atualizarItemCache('aparelho', pendente);
-        enfileirarEdicaoAparelho(pendente);
+        enfileirarEdicaoAparelho(atual.id, calcularAlteracoes(baseAtual, dados));
         return pendente;
       }
       if (!/conflito_revision_estoque|revision/i.test(String(erro && (erro.message || erro)))) throw erro;
@@ -322,12 +346,15 @@
   }
 
   function assinar(onChange) {
-    if (typeof cliente().channel !== 'function') return function () {};
-    var canal = cliente().channel('estoque-mobile-' + Date.now())
+    var clienteAtual = cliente();
+    if (typeof clienteAtual.channel !== 'function') return function () {};
+    var canal = clienteAtual.channel('estoque-mobile-' + Date.now())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'estoque_itens' }, function () {
         if (typeof onChange === 'function') onChange();
       }).subscribe();
-    return function () { cliente().removeChannel(canal); };
+    return function () {
+      if (typeof clienteAtual.removeChannel === 'function') clienteAtual.removeChannel(canal);
+    };
   }
 
   if (root.addEventListener) {
@@ -339,6 +366,7 @@
     STATUS_APARELHO: STATUS_APARELHO,
     normalizarTipoItem: normalizarTipoItem,
     normalizarPecasUsadas: normalizarPecasUsadas,
+    _calcularAlteracoes: calcularAlteracoes,
     listar: listar,
     listarCache: listarCache,
     obterAparelho: obterAparelho,

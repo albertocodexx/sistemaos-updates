@@ -303,6 +303,18 @@ function atualizarTelaAbertura(progresso, texto) {
   janelaAbertura.webContents.executeJavaScript(codigo, true).catch(() => {});
 }
 
+function refletirAtualizacaoNaAbertura(estado) {
+  estado = estado || {};
+  if (estado.fase === 'verificando') atualizarTelaAbertura(8, 'Verificando atualização obrigatória…');
+  else if (estado.fase === 'baixando') {
+    atualizarTelaAbertura(10 + Math.round(Math.max(0, Math.min(100, Number(estado.progresso) || 0)) * .78), estado.mensagem);
+  } else if (estado.fase === 'pronto' || estado.fase === 'instalando') {
+    atualizarTelaAbertura(96, estado.mensagem || 'Instalando atualização…');
+  } else if (estado.fase === 'erro') {
+    atualizarTelaAbertura(14, estado.mensagem || 'Não foi possível verificar atualizações.');
+  }
+}
+
 function fecharTelaAbertura() {
   if (!janelaAbertura || janelaAbertura.isDestroyed()) return;
   janelaAbertura.destroy();
@@ -431,7 +443,6 @@ function iniciarServicosEmSegundoPlano() {
 
     backup.definirPublicadorNuvem((caminho) => supabaseDesktop.publicarUltimoBackup(caminho));
     backup.definirConsultorMercadoPago((numero) => supabaseDesktop.consultarPagamentosMercadoPago(numero));
-    atualizador.inicializar({ app, getJanela: () => janelaPrincipal });
     servicosEmSegundoPlanoProntos = true;
     vincularServicosNaJanela();
     backup.iniciarAgendamentoBackup();
@@ -449,6 +460,16 @@ app.whenReady().then(async () => {
   const inicioSomenteEmSegundoPlano = process.argv.includes('--background');
   if (!inicioSomenteEmSegundoPlano) criarTelaAbertura();
   await new Promise(resolve => setTimeout(resolve, 35));
+  // Verifica antes de abrir o renderer/login. Se uma versão nova existir,
+  // mantém somente a tela de carregamento, baixa e instala automaticamente;
+  // a versão antiga nunca chega a ficar utilizável.
+  atualizador.inicializar({
+    app,
+    getJanela: () => janelaPrincipal,
+    onEstado: refletirAtualizacaoNaAbertura
+  });
+  const estadoAtualizacaoInicial = await atualizador.verificar();
+  if (['baixando', 'pronto', 'instalando'].includes(estadoAtualizacaoInicial?.fase)) return;
   atualizarTelaAbertura(24, 'Protegendo os dados locais…');
   db.configurarArmazenamentoSeguro?.(safeStorage);
   db.removerConfiguracaoObsoleta?.();

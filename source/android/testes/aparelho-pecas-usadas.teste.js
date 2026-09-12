@@ -19,6 +19,10 @@ assert.deepStrictEqual(estoque.normalizarPecasUsadas([
   { nome: 'Tela', valor: 199.9 },
   { nome: 'Carcaça completa', valor: 0 }
 ]);
+assert.deepStrictEqual(estoque._calcularAlteracoes(
+  { id: 'EST-2', status: 'Em análise', observacoes: 'Alterada no PC', valorVenda: 500 },
+  { id: 'EST-2', status: 'Aguardando peça', observacoes: 'Alterada no PC', valorVenda: 500 }
+), { status: 'Aguardando peça' }, 'fila offline deve guardar apenas o delta e preservar edições simultâneas do PC');
 assert.match(html, /id="aparelho-mobile-pecas-lista"/, 'modal deve detalhar as peças usadas');
 assert.match(html, /id="aparelho-mobile-total-pecas"/, 'modal deve permitir ajustar o total das peças');
 assert.match(tela, /pecasUsadas:\s*normalizarPecasUsadas\(pecasUsadasAparelho\)/, 'edição deve enviar o detalhamento para a nuvem');

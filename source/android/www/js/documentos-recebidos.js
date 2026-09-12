@@ -34,6 +34,7 @@
   if (!inputImportar || !listaDocs) return;
 
   var documentoEmEdicaoId = null; // id do registro (IndexedDB) aberto agora
+  var verificacaoAutomaticaEmAndamento = null;
 
   // Mesma troca aplicada em app.js: o destino da mensagem passa a ser o
   // toast flutuante (js/toast.js) em vez do elemento .feedback-acao fixo
@@ -119,6 +120,7 @@
   // nada pendente, não mostra feedback nenhum (evita ruído toda vez que o
   // técnico abre a aba); só avisa quando importa algo de fato novo.
   function verificarDocsParaCelularAutomatico() {
+    if (verificacaoAutomaticaEmAndamento) return verificacaoAutomaticaEmAndamento;
     function buscarPeloSupabase() {
       if (!window.SupabaseClientApp) return Promise.resolve([]);
       var cliente;
@@ -131,7 +133,7 @@
           });
         }).catch(function () { return []; });
     }
-    return sincronizarExclusoesPendentes().then(buscarPeloSupabase).then(function (pacotes) {
+    verificacaoAutomaticaEmAndamento = sincronizarExclusoesPendentes().then(buscarPeloSupabase).then(function (pacotes) {
       if (!pacotes.length) return;
       var importados = 0;
       var promessa = Promise.resolve();
@@ -152,7 +154,12 @@
           carregarListaDocumentos();
         }
       });
-    }).catch(function () { /* verificação automática nunca deve quebrar a tela */ });
+    }).catch(function () { /* verificação automática nunca deve quebrar a tela */ })
+      .then(function (resultado) {
+        verificacaoAutomaticaEmAndamento = null;
+        return resultado;
+      });
+    return verificacaoAutomaticaEmAndamento;
   }
 
   function cancelarSolicitacaoNaNuvem(registro) {
@@ -689,6 +696,27 @@
     carregarListaDocumentos();
     verificarDocsParaCelularAutomatico();
   });
+
+  // O PC pode enviar um documento enquanto o Android está em segundo plano
+  // ou sem rede. Reconsultar ao voltar/ficar online evita esperar o usuário
+  // abrir manualmente a aba; a deduplicação acima impede chamadas paralelas.
+  window.addEventListener('online', verificarDocsParaCelularAutomatico);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) verificarDocsParaCelularAutomatico();
+  });
+  document.addEventListener('sistema-os:sessao-alterada', function (evento) {
+    if (evento && evento.detail && evento.detail.tipo === 'autenticado') {
+      verificarDocsParaCelularAutomatico();
+    }
+  });
+  try {
+    var pluginApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+    if (pluginApp && typeof pluginApp.addListener === 'function') {
+      pluginApp.addListener('appStateChange', function (estado) {
+        if (estado && estado.isActive) verificarDocsParaCelularAutomatico();
+      });
+    }
+  } catch (_) {}
 
   // Verificação automática também ao abrir o APP (não só a aba) — mesmo
   // "puxar agora" disparado uma vez no carregamento inicial. Roda em

@@ -9,11 +9,11 @@ Atualizações oficiais do Sistema OS para Windows e Android.
 
 Os dois links apontam sempre para os arquivos da atualização marcada como mais recente.
 
-## Atualização PC 40.5.2 / Android 20.5.3
+## Atualização PC 40.5.3 / Android 20.5.5
 
-Esta versão melhora as consultas no celular, corrige a apresentação das assinaturas e completa o fluxo auditável de pagamentos e estados das OS no PC.
+Esta versão corrige a tela de Reparos no celular, reforça a comunicação PC/Android, evita conflitos de sincronização e torna a atualização obrigatória na abertura.
 
-- [Detalhes da versão](release-notes-40.5.2.md)
+- [Detalhes da versão](release-notes-40.5.3.md)
 
 ## Atualização 30.5.136
 

@@ -415,14 +415,29 @@
   async function excluir(id, revisionEsperada) {
     if (!texto(id)) throw new Error('Id da OS e obrigatorio para excluir.');
     if (!Number(revisionEsperada)) throw new Error('Revision esperada e obrigatoria para excluir.');
-    if (root.SistemaOSSupabaseArquivo && typeof root.SistemaOSSupabaseArquivo.removerArquivosOS === 'function') {
-      await root.SistemaOSSupabaseArquivo.removerArquivosOS(id);
+    var arquivos = root.SistemaOSSupabaseArquivo;
+    var manifesto = null;
+    // Primeiro apenas fotografa os caminhos. Apagar o Storage antes da RPC
+    // podia destruir fotos/assinaturas e depois manter a OS viva quando a
+    // revision conflitava ou a rede caía durante excluir_ordem_servico.
+    if (arquivos && typeof arquivos.prepararExclusaoOS === 'function') {
+      manifesto = await arquivos.prepararExclusaoOS(id);
     }
     var resposta = await root.SupabaseClientApp.obterCliente().rpc('excluir_ordem_servico', {
       p_id: id,
       p_revision: Number(revisionEsperada)
     });
-    return normalizar(lancarResposta(resposta));
+    var resultado = normalizar(lancarResposta(resposta));
+    // Depois da confirmação relacional, a limpeza do Storage é melhor esforço:
+    // um órfão temporário é recuperável; uma OS existente sem seus arquivos não.
+    if (manifesto && typeof arquivos.removerManifestoExclusao === 'function') {
+      try {
+        await arquivos.removerManifestoExclusao(manifesto);
+      } catch (_) {
+        resultado.limpezaArquivosPendente = true;
+      }
+    }
+    return resultado;
   }
 
   // Um único canal atende Reparos e notificações. Antes, cada consumidor
@@ -446,7 +461,12 @@
   }
 
   function garantirCanalRealtime() {
-    if (canalRealtime || !assinantesRealtime.length) return;
+    if (!assinantesRealtime.length) return;
+    // O canal é compartilhado por todas as telas. A troca real de sessão o
+    // encerra explicitamente no listener abaixo; consultar novamente o SDK a
+    // cada assinante pode devolver um wrapper diferente para o mesmo cliente
+    // e abrir canais duplicados, repetindo eventos e consumo de CPU/rede.
+    if (canalRealtime) return;
     var cliente = root.SupabaseClientApp.obterCliente();
     if (!cliente || typeof cliente.channel !== 'function') return;
     clienteCanalRealtime = cliente;
@@ -455,8 +475,8 @@
       .subscribe();
   }
 
-  function encerrarCanalRealtimeSeOcioso() {
-    if (assinantesRealtime.length || !canalRealtime) return;
+  function encerrarCanalRealtimeSeOcioso(forcar) {
+    if ((!forcar && assinantesRealtime.length) || !canalRealtime) return;
     if (timerRealtime) root.clearTimeout(timerRealtime);
     timerRealtime = null;
     if (clienteCanalRealtime && typeof clienteCanalRealtime.removeChannel === 'function') {
@@ -479,6 +499,20 @@
       assinantesRealtime = assinantesRealtime.filter(function (assinante) { return assinante !== onChange; });
       encerrarCanalRealtimeSeOcioso();
     };
+  }
+
+  // SupabaseClientApp troca a instância ao sair/entrar ou mudar de conta.
+  // Um canal preso na instância anterior deixa o Android sem receber as
+  // alterações do PC mesmo com a nova sessão aparentemente autenticada.
+  if (root.document && typeof root.document.addEventListener === 'function') {
+    root.document.addEventListener('sistema-os:sessao-alterada', function (evento) {
+      invalidarConsultasLeves();
+      encerrarCanalRealtimeSeOcioso(true);
+      var tipo = evento && evento.detail && evento.detail.tipo;
+      if ((tipo === 'autenticado' || tipo === 'offline_com_sessao') && assinantesRealtime.length) {
+        try { garantirCanalRealtime(); } catch (_) { /* reconexão posterior fará nova tentativa */ }
+      }
+    });
   }
 
   return {

@@ -5,6 +5,7 @@ const path = require('path');
 const raiz = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(raiz, 'www', 'index.html'), 'utf8');
 const reparos = fs.readFileSync(path.join(raiz, 'www', 'js', 'prazos.js'), 'utf8');
+const css = fs.readFileSync(path.join(raiz, 'www', 'css', 'app.css'), 'utf8');
 const servicoOS = fs.readFileSync(path.join(raiz, 'www', 'js', 'supabase', 'os-service.js'), 'utf8');
 const consulta = fs.readFileSync(path.join(raiz, 'www', 'js', 'consulta.js'), 'utf8');
 const catalogo = fs.readFileSync(path.join(raiz, 'www', 'js', 'catalogo-aparelhos.js'), 'utf8');
@@ -27,6 +28,10 @@ assert.ok(catalogo.includes('Moto G9 Play'), 'catalogo ampliado deve incluir Mot
 assert.ok(html.includes('Acompanhamento de reparos'), 'painel deve apresentar o acompanhamento de reparos');
 assert.ok(reparos.includes('<strong>Aparelho:</strong>') && reparos.includes('<strong>Defeito:</strong>') && reparos.includes('<strong>Reparo:</strong>'),
   'card deve mostrar aparelho, defeito e etapa do reparo');
+assert.ok(/@media \(max-width: 520px\)[\s\S]*?\.painel-prazos \.item-historico\s*\{[\s\S]*?display:\s*block/.test(css),
+  'Reparos no celular não pode herdar a coluna de miniatura e esmagar o conteúdo');
+assert.ok(css.includes('button:active:not(:disabled)') && css.includes('@media (prefers-reduced-motion: reduce)'),
+  'botões devem responder ao toque sem desrespeitar movimento reduzido');
 assert.ok(pacote.dependencies['@capacitor/local-notifications'], 'plugin nativo de notificacoes deve estar instalado');
 assert.ok(servicoOS.includes("table: 'ordens_servico'") && servicoOS.includes('postgres_changes'), 'Reparos deve receber alteracoes do PC por Realtime');
 assert.ok(reparos.includes('SistemaOSSupabaseOS.assinar') && reparos.includes('setInterval') && reparos.includes('30000'),

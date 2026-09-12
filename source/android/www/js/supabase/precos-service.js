@@ -86,12 +86,15 @@
   }
 
   function assinar(onChange) {
-    if (typeof cliente().channel !== 'function') return function () {};
-    var canal = cliente().channel('tabela-precos-mobile-' + Date.now())
+    var clienteAtual = cliente();
+    if (typeof clienteAtual.channel !== 'function') return function () {};
+    var canal = clienteAtual.channel('tabela-precos-mobile-' + Date.now())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tabela_precos' }, function () {
         if (typeof onChange === 'function') onChange();
       }).subscribe();
-    return function () { cliente().removeChannel(canal); };
+    return function () {
+      if (typeof clienteAtual.removeChannel === 'function') clienteAtual.removeChannel(canal);
+    };
   }
 
   return {

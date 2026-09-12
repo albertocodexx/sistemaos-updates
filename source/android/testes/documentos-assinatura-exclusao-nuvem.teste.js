@@ -28,6 +28,12 @@ assert.match(fluxo, /sincronizarExclusoesPendentes\(\)\.then\(buscarPeloSupabase
   'a exclusão pendente deve ser sincronizada antes de buscar novamente a fila');
 assert.match(fluxo, /existente && existente\.statusLocal === 'excluido'/,
   'um documento com tombstone nunca deve ser reimportado');
+assert.match(fluxo, /verificacaoAutomaticaEmAndamento/,
+  'consultas simultâneas de documentos devem compartilhar a mesma execução');
+assert.match(fluxo, /addEventListener\('online', verificarDocsParaCelularAutomatico\)/,
+  'fila de documentos deve voltar a sincronizar quando a internet retornar');
+assert.match(fluxo, /appStateChange[\s\S]*estado\.isActive/,
+  'documentos enviados pelo PC devem ser buscados ao voltar ao aplicativo');
 assert.match(historico, /statusLocal: 'excluido'/);
 assert.match(historico, /exclusaoNuvemConfirmada/);
 assert.match(migracao, /status = 'cancelada'/);

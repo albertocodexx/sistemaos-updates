@@ -803,11 +803,18 @@
     });
   }
 
-  function listarOperacoesNuvemPendentes() {
+  function listarOperacoesNuvemPendentes(filtroIdentidade) {
     var agora = Date.now();
     var limiteEnvioTravado = agora - (5 * 60 * 1000);
     return listarOperacoesNuvem().then(function (itens) {
       return itens.filter(function (item) {
+        // O banco local é isolado por empresa, mas pode conter operações de
+        // vários usuários da mesma assistência. Filtrar antes do limite evita
+        // que dez pendências de outro usuário escondam indefinidamente as da
+        // conta que está aberta agora.
+        if (filtroIdentidade &&
+            ((item.empresaId && item.empresaId !== filtroIdentidade.empresaId) ||
+             (item.usuarioId && item.usuarioId !== filtroIdentidade.usuarioId))) return false;
         if (item.status === 'pendente') return true;
         if (item.status === 'erro') {
           return !item.proximaTentativaEm || new Date(item.proximaTentativaEm).getTime() <= agora;

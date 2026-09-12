@@ -13,6 +13,9 @@
   var processamento = null;
   var operacoesEmVoo = Object.create(null);
   var dispositivoRegistrado = null;
+  var dispositivoIdentidade = '';
+  var registroDispositivoEmVoo = null;
+  var registroDispositivoIdentidade = '';
   var sessaoValidadaParaRetryEm = 0;
 
   function uuid() {
@@ -43,6 +46,47 @@
       empresaId: contexto.empresa_id || contexto.empresaId || '',
       usuarioId: contexto.usuario_id || contexto.usuarioId || usuario.id || ''
     };
+  }
+
+  function chaveIdentidade(quem) {
+    quem = quem || identidade();
+    return String(quem.empresaId || '') + ':' + String(quem.usuarioId || '');
+  }
+
+  function erroSessaoAlterada() {
+    var erro = new Error('A conta ativa mudou durante a sincronização. Entre novamente na conta anterior para concluir o envio.');
+    erro.tipo = 'sessao-alterada';
+    return erro;
+  }
+
+  function validarIdentidadeOperacao(operacao) {
+    var atual = identidade();
+    if (!atual.empresaId || !atual.usuarioId ||
+        (operacao && operacao.empresaId && operacao.empresaId !== atual.empresaId) ||
+        (operacao && operacao.usuarioId && operacao.usuarioId !== atual.usuarioId)) {
+      throw erroSessaoAlterada();
+    }
+    return atual;
+  }
+
+  function serializarEstavel(valor) {
+    if (valor === null || typeof valor !== 'object') return JSON.stringify(valor);
+    if (Array.isArray(valor)) return '[' + valor.map(serializarEstavel).join(',') + ']';
+    return '{' + Object.keys(valor).sort().map(function (chave) {
+      return JSON.stringify(chave) + ':' + serializarEstavel(valor[chave]);
+    }).join(',') + '}';
+  }
+
+  function assinaturaDados(valor) {
+    var texto = serializarEstavel(valor || {});
+    var a = 2166136261;
+    var b = 2246822507;
+    for (var i = 0; i < texto.length; i += 1) {
+      var codigo = texto.charCodeAt(i);
+      a = Math.imul(a ^ codigo, 16777619);
+      b = Math.imul(b ^ codigo, 3266489909);
+    }
+    return texto.length.toString(36) + '-' + (a >>> 0).toString(36) + '-' + (b >>> 0).toString(36);
   }
 
   function estaOnline() {
@@ -99,20 +143,41 @@
   }
 
   async function registrarDispositivo() {
-    if (dispositivoRegistrado) return dispositivoRegistrado;
-    var resposta = await root.SupabaseClientApp.obterCliente().rpc('registrar_heartbeat', {
-      p_device_id: deviceIdLocal(),
-      p_tipo: 'android',
-      p_nome: 'Sistema OS Android'
+    var quem = identidade();
+    var chave = chaveIdentidade(quem);
+    if (!quem.empresaId || !quem.usuarioId) throw erroSessaoAlterada();
+    if (dispositivoRegistrado && dispositivoIdentidade === chave) return dispositivoRegistrado;
+    if (registroDispositivoEmVoo && registroDispositivoIdentidade === chave) return registroDispositivoEmVoo;
+
+    registroDispositivoIdentidade = chave;
+    registroDispositivoEmVoo = (async function () {
+      var resposta = await root.SupabaseClientApp.obterCliente().rpc('registrar_heartbeat', {
+        p_device_id: deviceIdLocal(),
+        p_tipo: 'android',
+        p_nome: 'Sistema OS Android'
+      });
+      if (resposta.error) {
+        resposta.error.tipo = servico()._classificarErro(resposta.error);
+        throw resposta.error;
+      }
+      var dados = Array.isArray(resposta.data) ? resposta.data[0] : resposta.data;
+      if (chaveIdentidade() !== chave ||
+          (dados && dados.empresa_id && String(dados.empresa_id) !== String(quem.empresaId)) ||
+          (dados && dados.usuario_id && String(dados.usuario_id) !== String(quem.usuarioId))) {
+        throw erroSessaoAlterada();
+      }
+      var confirmado = dados && dados.id ? dados.id : null;
+      if (!confirmado) throw new Error('Servidor nao confirmou o dispositivo Android.');
+      dispositivoRegistrado = confirmado;
+      dispositivoIdentidade = chave;
+      return confirmado;
+    })().finally(function () {
+      if (registroDispositivoIdentidade === chave) {
+        registroDispositivoEmVoo = null;
+        registroDispositivoIdentidade = '';
+      }
     });
-    if (resposta.error) {
-      resposta.error.tipo = servico()._classificarErro(resposta.error);
-      throw resposta.error;
-    }
-    var dados = Array.isArray(resposta.data) ? resposta.data[0] : resposta.data;
-    dispositivoRegistrado = dados && dados.id ? dados.id : null;
-    if (!dispositivoRegistrado) throw new Error('Servidor nao confirmou o dispositivo Android.');
-    return dispositivoRegistrado;
+    return registroDispositivoEmVoo;
   }
 
   function baseOperacao(tipo, parametros) {
@@ -155,12 +220,13 @@
   }
 
   function operacaoAtualizacao(id, revision, patch, registroLocalId, numero) {
+    var dados = servico()._patchParaServidor(patch);
     return baseOperacao('update', {
-      id: 'os:update:' + String(id) + ':' + String(revision),
+      id: 'os:update:' + String(id) + ':' + String(revision) + ':' + assinaturaDados(dados),
       entidadeId: String(id),
       idExportacao: null,
       revisionEsperada: Number(revision),
-      dados: servico()._patchParaServidor(patch),
+      dados: dados,
       registroLocalId: registroLocalId || null,
       numero: numero || null
     });
@@ -169,13 +235,14 @@
 
   function operacaoAtualizacaoDocumento(tipo, id, revision, dados, registroLocalId, numero) {
     if (tipo === 'os') return operacaoAtualizacao(id, revision, dados, registroLocalId, numero);
+    var dadosSeguros = dadosDocumento(tipo, dados);
     return baseOperacao('update', {
-      id: tipo + ':update:' + String(id) + ':' + String(revision),
+      id: tipo + ':update:' + String(id) + ':' + String(revision) + ':' + assinaturaDados(dadosSeguros),
       entidade: tipoParaEntidade(tipo),
       entidadeId: String(id),
       idExportacao: null,
       revisionEsperada: Number(revision),
-      dados: dadosDocumento(tipo, dados),
+      dados: dadosSeguros,
       registroLocalId: registroLocalId || null,
       numero: numero || null
     });
@@ -251,6 +318,7 @@
   }
 
   async function executar(operacao) {
+    validarIdentidadeOperacao(operacao);
     if (operacao.entidade === 'assinatura_remota') {
       var respostaAssinatura = await root.SupabaseClientApp.obterCliente().functions.invoke('assinaturas-remotas', {
         body: { acao: 'responder', dados: operacao.dados }
@@ -438,11 +506,12 @@
   }
 
   async function processarInterno() {
-    var fila = await historico().listarOperacoesNuvemPendentes();
+    var atual = identidade();
+    var fila = await historico().listarOperacoesNuvemPendentes(atual);
     if (!fila.length) return { executado: false, motivo: 'sem-pendentes', enviados: 0, conflitos: 0, falharam: 0 };
     if (!await validarAntesDoRetry()) return { executado: false, motivo: 'sessao-invalida', enviados: 0, conflitos: 0, falharam: 0 };
 
-    var atual = identidade();
+    atual = identidade();
     var contagem = { executado: true, enviados: 0, conflitos: 0, falharam: 0 };
     for (var i = 0; i < fila.length; i += 1) {
       var item = fila[i];
@@ -515,7 +584,7 @@
       total.falharam += Number(resultado.falharam || 0);
       if (resultado.motivo && !total.motivo) total.motivo = resultado.motivo;
       if (resultado.erro && !total.erro) total.erro = resultado.erro;
-      if (!resultado.executado || !resultado.enviados || !resultado.novosPendentes ||
+      if (!resultado.executado || !resultado.enviados ||
           resultado.conflitos || resultado.falharam) break;
     }
     return total;
@@ -559,6 +628,12 @@
     _operacaoRespostaAssinatura: operacaoRespostaAssinatura,
     _dadosDocumento: dadosDocumento,
     _atrasoMs: atrasoMs,
-    _resetDispositivo: function () { dispositivoRegistrado = null; }
+    _assinaturaDados: assinaturaDados,
+    _resetDispositivo: function () {
+      dispositivoRegistrado = null;
+      dispositivoIdentidade = '';
+      registroDispositivoEmVoo = null;
+      registroDispositivoIdentidade = '';
+    }
   };
 });

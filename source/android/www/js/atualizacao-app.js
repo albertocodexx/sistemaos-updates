@@ -9,6 +9,7 @@
   var ultima = null;
   var abrindoFallback = false;
   var downloadEmAndamento = null;
+  var verificacaoInicial = null;
 
   async function fetchComTempoLimite(url, opcoes) {
     var controle = typeof AbortController === 'function' ? new AbortController() : null;
@@ -66,7 +67,7 @@
     } catch (_) {}
     // Ultimo recurso para execucao fora do Android. Este valor acompanha o
     // versionName do APK e evita oferecer a propria versao como atualizacao.
-    return normalizarVersao(global.SistemaOSVersaoAPK || '20.5.4');
+    return normalizarVersao(global.SistemaOSVersaoAPK || '20.5.5');
   }
 
   function lerCache() {
@@ -204,7 +205,10 @@
 
   async function baixarEInstalar() {
     if (downloadEmAndamento) return downloadEmAndamento;
-    if (!ultima || ultima.fase !== 'disponivel') return { sucesso: false, erro: 'Verifique a atualização antes de instalar.' };
+    if (!ultima || !ultima.url || !ultima.sha256 ||
+        (ultima.fase !== 'disponivel' && ultima.fase !== 'erro')) {
+      return { sucesso: false, erro: 'Verifique a atualização antes de instalar.' };
+    }
     var plugin = global.Capacitor && global.Capacitor.Plugins && global.Capacitor.Plugins.Atualizacao;
     if (!plugin || typeof plugin.baixarEInstalar !== 'function') {
       return { sucesso: false, erro: 'O instalador automático não está disponível neste aplicativo.' };
@@ -242,9 +246,24 @@
     return downloadEmAndamento;
   }
 
+  function verificarNaAbertura() {
+    if (!verificacaoInicial) {
+      // A abertura ignora o cache: o bloqueio obrigatório precisa conhecer a
+      // release que existe AGORA, não o resultado guardado horas atrás.
+      verificacaoInicial = verificar(true).then(function (resultado) {
+        return resultado;
+      }, function (erro) {
+        verificacaoInicial = null;
+        throw erro;
+      });
+    }
+    return verificacaoInicial;
+  }
+
   global.SistemaOSAtualizacao = Object.freeze({
     REPOSITORIO: REPOSITORIO,
     verificar: verificar,
+    verificarNaAbertura: verificarNaAbertura,
     baixarEInstalar: baixarEInstalar,
     abrirDownloadManual: abrirDownloadManual,
     obterUltima: function () { return ultima; }
@@ -276,14 +295,13 @@
     } catch (_) {}
   })();
 
-  // Verificação automática: não interrompe o trabalho do técnico, apenas
-  // consulta a release oficial em segundo plano ao abrir o aplicativo.
-  // A instalação continua exigindo o toque explícito do usuário no Android.
-  setTimeout(function () {
-    verificar(false).then(function (resultado) {
-      if (resultado && resultado.fase === 'disponivel' && global.SistemaOSToast && typeof global.SistemaOSToast.mostrar === 'function') {
-        global.SistemaOSToast.mostrar('Atualização ' + resultado.versaoNova + ' disponível. Toque em "Atualizar agora".');
-      }
-    }).catch(function () {});
-  }, 400);
+  // Se a abertura ocorreu sem internet, verifica novamente assim que a rede
+  // voltar. Uma release encontrada nesse momento volta a acionar o gate
+  // obrigatório da tela de login.
+  if (global.addEventListener) {
+    global.addEventListener('online', function () { verificar(true).catch(function () {}); });
+  }
+
+  // A interface de login chama verificarNaAbertura imediatamente e mantém o
+  // restante do aplicativo bloqueado até obter a resposta da release.
 })(window);

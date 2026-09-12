@@ -204,6 +204,29 @@ body {
   transition: background .15s ease, color .15s ease;
 }
 
+/* Resposta tátil coerente também nos botões específicos criados por JS.
+   Vários deles não usam .btn-primario/.btn-secundario e antes pareciam não
+   responder ao toque. Só transform/opacity são animados para não custar
+   layout ou pintura no WebView. */
+button,
+[role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 130ms cubic-bezier(.215,.61,.355,1), opacity 130ms ease-out;
+}
+button:active:not(:disabled),
+[role="button"]:active:not([aria-disabled="true"]) {
+  transform: scale(.97);
+  opacity: .9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  [role="button"] {
+    transition: none;
+  }
+}
+
 .os-assinar-depois {
   display: grid !important;
   grid-template-columns: auto 1fr;
@@ -1786,6 +1809,19 @@ html[data-tema="claro"] .assinatura-preview-box {
 .painel-prazos .item-historico {
   border-left: 3px solid var(--acento);
 }
+/* O card de Reparos não possui miniatura. A grade móvel genérica de
+   .item-historico reservava mesmo assim uma primeira coluna de 56 px e
+   espremia todo o texto/controles nela. */
+@media (max-width: 520px) {
+  .painel-prazos .item-historico {
+    display: block;
+    width: 100%;
+  }
+  .painel-prazos .item-historico-info {
+    width: 100%;
+    min-width: 0;
+  }
+}
 .painel-prazos .reparo-dados {
   display: grid;
   gap: 7px;
@@ -1798,7 +1834,8 @@ html[data-tema="claro"] .assinatura-preview-box {
 .painel-prazos .reparo-dados p {
   margin: 0;
   line-height: 1.45;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 .painel-prazos .reparo-prazo-selo {
   display: inline-flex;
