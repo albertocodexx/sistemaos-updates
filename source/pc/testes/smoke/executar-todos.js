@@ -93,7 +93,8 @@ const testes = [
   'teste-migracao-supabase.js',
   'teste-cobrancas-pc-ia-sincronizadas.js',
   'teste-ia-custos-compra-local.js',
-  'teste-ia-chat-online.js'
+  'teste-ia-chat-online.js',
+  'teste-pdf-assinaturas-recorte.js'
 ];
 
 let falhas = 0;

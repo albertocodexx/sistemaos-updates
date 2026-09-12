@@ -877,7 +877,7 @@
     <section class="painel-config" id="painel-config" hidden>
 
       <form id="form-config" class="form-os" novalidate>
-        <p class="config-versao-aplicativo">Aplicativo instalado: <strong>20.5.2</strong></p>
+        <p class="config-versao-aplicativo">Aplicativo instalado: <strong>20.5.3</strong></p>
 
         <fieldset class="secao-config config-empresa-somente-leitura">
           <legend>Dados da empresa</legend>
@@ -1347,35 +1347,40 @@
       </p>
 
       <fieldset class="secao-config consulta-unificada">
-        <legend>Consultar cliente, OS e documentos</legend>
-        <p class="aviso aviso-tecnico">Busque pelo nome ou ID do cliente para ver todos os registros associados.</p>
-        <div class="linha-busca-consulta consulta-busca-cliente">
-          <input type="search" id="consulta-cliente-termo" placeholder="Nome, ID, CPF ou telefone" autocomplete="off" />
-          <button type="button" id="btn-consultar-cliente" class="btn-primario">Buscar cliente</button>
+        <legend>Consultar documentos</legend>
+        <div class="consulta-subabas" role="tablist" aria-label="Tipo de documento">
+          <button type="button" role="tab" id="consulta-aba-os" data-consulta-tipo="os" aria-selected="true" aria-controls="consulta-cliente-resultado">OS</button>
+          <button type="button" role="tab" id="consulta-aba-entrega" data-consulta-tipo="entrega" aria-selected="false" aria-controls="consulta-cliente-resultado" tabindex="-1">Entregas</button>
+          <button type="button" role="tab" id="consulta-aba-garantia" data-consulta-tipo="garantia" aria-selected="false" aria-controls="consulta-cliente-resultado" tabindex="-1">Garantias</button>
+          <button type="button" role="tab" id="consulta-aba-desbloqueio" data-consulta-tipo="desbloqueio" aria-selected="false" aria-controls="consulta-cliente-resultado" tabindex="-1">Desbloqueios</button>
+          <button type="button" role="tab" id="consulta-aba-compra" data-consulta-tipo="compra" aria-selected="false" aria-controls="consulta-cliente-resultado" tabindex="-1">Compras</button>
+          <button type="button" role="tab" id="consulta-aba-venda" data-consulta-tipo="venda" aria-selected="false" aria-controls="consulta-cliente-resultado" tabindex="-1">Vendas</button>
+          <button type="button" role="tab" id="consulta-aba-cliente" data-consulta-tipo="cliente" aria-selected="false" aria-controls="consulta-cliente-resultado" tabindex="-1">Clientes</button>
         </div>
-        <div id="consulta-cliente-resultado" class="consulta-clientes-resultado"></div>
-        <p class="aviso aviso-tecnico">Ou informe o número para abrir uma OS diretamente.</p>
-        <div class="linha-busca-consulta">
+        <label for="consulta-cliente-termo" id="consulta-busca-rotulo">Buscar OS por nome do cliente, número ou aparelho</label>
+        <div class="linha-busca-consulta consulta-busca-cliente">
+          <input type="search" id="consulta-cliente-termo" placeholder="Ex.: Gabriela ou OS-0019" autocomplete="off" maxlength="120" />
+          <button type="button" id="btn-consultar-cliente" class="btn-primario">Buscar</button>
+        </div>
+        <div id="consulta-cliente-resultado" class="consulta-clientes-resultado" role="tabpanel" aria-labelledby="consulta-aba-os" aria-live="polite"><p class="aviso">Informe o nome ou número para consultar.</p></div>
+        <div class="linha-busca-consulta" hidden>
           <input type="text" id="consulta-os-numero" inputmode="numeric" placeholder="Ex: 1 ou OS-0001" />
           <button type="button" id="btn-consultar-os" class="btn-primario">Buscar</button>
         </div>
         <div class="consulta-documentos-grade">
           <section class="consulta-documento-card">
-            <h3>Ordem de Serviço</h3>
             <div id="consulta-os-resultado" class="resultado-consulta" hidden></div>
           </section>
           <section class="consulta-documento-card">
-            <h3>Garantia</h3>
             <div id="consulta-garantia-resultado" class="resultado-consulta" hidden></div>
           </section>
           <section class="consulta-documento-card">
-            <h3>Entrega</h3>
             <div id="consulta-entrega-resultado" class="resultado-consulta" hidden></div>
           </section>
         </div>
       </fieldset>
 
-      <section class="desbloqueios-registros desbloqueios-consulta">
+      <section class="desbloqueios-registros desbloqueios-consulta" hidden>
         <div class="desbloqueios-ferramentas">
           <div><h3>Autorizações de desbloqueio</h3><p>Consulte os documentos já gerados sem misturar com o formulário de uma nova autorização.</p></div>
           <input type="search" id="desbloqueio-busca" placeholder="Cliente, número ou aparelho" autocomplete="off" />
@@ -1792,6 +1797,7 @@
   <script src="js/id-exportacao.js"></script>
   <script src="js/historico.js"></script>
   <script src="js/supabase/arquivo-service.js"></script>
+  <script src="js/supabase/consultas-service.js"></script>
   <script src="js/supabase/sync-service.js"></script>
   <script src="js/supabase/estoque-service.js"></script>
   <script src="js/supabase/precos-service.js"></script>

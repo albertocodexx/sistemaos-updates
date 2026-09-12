@@ -46,7 +46,7 @@
   var PRIORIDADES_OS_VALIDAS = ['Baixa', 'Normal', 'Alta', 'Urgente'];
 
   function escaparHtml(t) {
-    return String(t || '')
+    return String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
@@ -72,6 +72,7 @@
     clienteNome: 'Cliente',
     clienteTelefone: 'Telefone',
     clienteCpf: 'CPF',
+    clienteId: 'ID do cliente',
     nomeRetirou: 'Retirado por',
     aparelhoMarca: 'Marca',
     aparelhoModelo: 'Modelo',
@@ -80,6 +81,9 @@
     defeitoGarantia: 'Defeito da garantia',
     reparoRealizado: 'Reparo realizado',
     observacoes: 'Observações',
+    descricao: 'Descrição',
+    cor: 'Cor',
+    estadoAssinatura: 'Assinatura',
     prioridade: 'Prioridade',
     valor: 'Valor',
     formaPagamento: 'Forma de pagamento',
@@ -91,12 +95,6 @@
     semPrazo: 'Prazo',
     dataConclusao: 'Data de conclusão',
     dataHoraEntrega: 'Data/hora da entrega',
-    quantidadeArquivos: 'Quantidade de arquivos',
-    disponibilidadesArquivos: 'Disponibilidade dos arquivos',
-    arquivosDisponiveis: 'Arquivos disponíveis',
-    assinaturaDisponivel: 'Assinatura disponível',
-    comprovanteDisponivel: 'Comprovante disponível',
-    fotosDisponiveis: 'Fotos disponíveis',
     data: 'Data',
     dataHoraAssinatura: 'Data/hora assinatura'
   };
@@ -104,7 +102,9 @@
   var ENTIDADE_ARQUIVO_POR_TIPO = {
     os: 'ordem_servico',
     garantia: 'garantia',
-    entrega: 'entrega'
+    entrega: 'entrega',
+    compra: 'compra',
+    venda: 'venda'
   };
 
   function tamanhoLegivel(bytes) {
@@ -223,6 +223,8 @@
       ? 'Segue o comprovante de garantia da ' + numero
       : tipo === 'entrega'
         ? 'Segue o comprovante de entrega da ' + numero
+        : tipo === 'compra' ? 'Segue o comprovante de compra ' + numero
+        : tipo === 'venda' ? 'Segue o comprovante de venda ' + numero
         : 'Segue a Ordem de Serviço ' + numero;
     var concordancia = tipo === 'os' ? 'emitida' : 'emitido';
     return saudacao + descricao + ', ' + concordancia + ' pela ' + nomeEmpresa + '.';
@@ -389,7 +391,40 @@
     abrirUrlExterna(resultado.url);
   }
 
-  function renderizarArquivosSobDemanda(lista, container) {
+  function criarBotaoCompartilhar(dados, tipo, arquivo) {
+    var botao = document.createElement('button');
+    botao.type = 'button';
+    botao.className = 'btn-secundario btn-compartilhar-pdf-consulta';
+    botao.textContent = 'Compartilhar PDF';
+    botao.addEventListener('click', async function () {
+      var versao = versaoConsultaCliente;
+      botao.disabled = true; botao.textContent = 'Preparando PDF…';
+      try {
+        if (tipo === 'desbloqueio') {
+          await window.SistemaOSDesbloqueiosMobile.compartilhar(dados.id);
+          return;
+        }
+        var lista = arquivo ? [arquivo] : await window.CloudData.listarArquivos(ENTIDADE_ARQUIVO_POR_TIPO[tipo], dados.id);
+        if (versao !== versaoConsultaCliente) return;
+        var pdf = lista.find(function (a) { return a.mimeType === 'application/pdf' || /\.pdf$/i.test(a.nomeArquivo || ''); });
+        if (!pdf) throw new Error('Ainda não há PDF disponível. Gere o documento e aguarde a sincronização.');
+        var acesso = await window.CloudData.obterArquivo(pdf.id, { miniatura: false });
+        if (versao !== versaoConsultaCliente) return;
+        if (!acesso?.disponivel || !acesso.url) throw new Error(acesso?.mensagem || 'O PDF está no computador. Aguarde a sincronização e tente novamente.');
+        var resposta = await window.SistemaOSCompartilhar.compartilharPdfPorUrl(acesso.url, pdf.nomeArquivo || tipo + '.pdf', 'Compartilhar documento', mensagemCompartilhamento(tipo, dados));
+        if (versao === versaoConsultaCliente) window.SistemaOSToast?.mostrar(window.SistemaOSCompartilhar.mensagemResultado(resposta), 'sucesso');
+      } catch (erro) {
+        if (versao === versaoConsultaCliente) {
+          var aviso = botao.parentElement.querySelector('.consulta-compartilhar-erro');
+          if (!aviso) { aviso = document.createElement('p'); aviso.className = 'consulta-compartilhar-erro aviso'; botao.parentElement.appendChild(aviso); }
+          aviso.textContent = erro.message || 'Não foi possível compartilhar. Tente novamente.';
+        }
+      } finally { botao.disabled = false; botao.textContent = 'Compartilhar PDF'; }
+    });
+    return botao;
+  }
+
+  function renderizarArquivosSobDemanda(lista, container, dados, tipo) {
     container.innerHTML = '';
     if (!lista || !lista.length) {
       container.textContent = 'Nenhum arquivo disponível para este registro.';
@@ -440,6 +475,9 @@
             .catch(function () { mostrarResultadoArquivo(arquivo, null, item, btnAbrir, false); });
         });
         acoes.appendChild(btnAbrir);
+        if (arquivo.mimeType === 'application/pdf' || /\.pdf$/i.test(arquivo.nomeArquivo || '')) {
+          acoes.appendChild(criarBotaoCompartilhar(dados, tipo, arquivo));
+        }
       }
       item.appendChild(acoes);
       container.appendChild(item);
@@ -452,8 +490,9 @@
     var botao = document.createElement('button');
     botao.type = 'button';
     botao.className = 'btn-secundario btn-listar-arquivos-consulta';
-    var quantidade = Number(dados.quantidadeArquivos || 0);
-    botao.textContent = quantidade > 0 ? 'Ver arquivos (' + quantidade + ')' : 'Ver arquivos disponíveis';
+    // A view inclui fotos, assinaturas e versões antigas. Só contar a lista
+    // efetivamente visível, depois da leitura de metadados (sem download).
+    botao.textContent = 'Ver arquivos';
     var lista = document.createElement('div');
     lista.className = 'arquivos-consulta-lista';
     lista.hidden = true;
@@ -463,7 +502,10 @@
       botao.disabled = true;
       lista.textContent = 'Carregando metadados…';
       window.CloudData.listarArquivos(ENTIDADE_ARQUIVO_POR_TIPO[tipo], dados.id)
-        .then(function (arquivos) { renderizarArquivosSobDemanda(arquivos, lista); })
+        .then(function (arquivos) {
+          botao.textContent = 'Ver arquivos (' + arquivos.length + ')';
+          renderizarArquivosSobDemanda(arquivos, lista, dados, tipo);
+        })
         .catch(function () { lista.textContent = 'Não foi possível carregar os metadados dos arquivos.'; })
         .then(function () { botao.disabled = false; });
     });
@@ -485,9 +527,10 @@
     if (tipo === 'garantia') CAMPOS_EXTERNOS.termos = 1;
 
     function formatarValorConsulta(chave, valor) {
+      if (chave === 'valor') return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       if (typeof valor === 'boolean') return valor ? 'Sim' : 'Não';
       if (typeof valor !== 'string') return valor;
-      if (!/^(data|dataInicio|dataLimiteGarantia|dataHoraAssinatura|dataHoraEntrega)$/i.test(chave)) return valor;
+      if (!/^data/i.test(chave)) return valor;
       var encontrouData = valor.match(/^(\d{4})-(\d{2})-(\d{2})/);
       return encontrouData ? encontrouData[3] + '/' + encontrouData[2] + '/' + encontrouData[1] : valor;
     }
@@ -509,6 +552,7 @@
             if (sub === 'nome') dadosPlanos.clienteNome = valor[sub];
             else if (sub === 'telefone') dadosPlanos.clienteTelefone = valor[sub];
             else if (sub === 'cpf') dadosPlanos.clienteCpf = valor[sub];
+            else if (sub === 'clienteId') dadosPlanos.clienteId = valor[sub];
           } else if (chave === 'aparelho') {
             if (sub === 'nome') dadosPlanos.aparelhoNome = valor[sub];
             else if (sub === 'marca') dadosPlanos.aparelhoMarca = valor[sub];
@@ -539,18 +583,8 @@
         return '<p><strong>' + escaparHtml(ROTULOS_CAMPOS[chave]) + ':</strong> ' + escaparHtml(formatarValorConsulta(chave, valor)) + '</p>';
       });
 
-    // Campos extras que não estão no ROTULOS_CAMPOS (ex: clienteTelefone, aparelhoMarca)
-    Object.keys(dadosPlanos).forEach(function (chave) {
-      if (ROTULOS_CAMPOS[chave] !== undefined) return;
-      if (CAMPOS_EXTERNOS[chave]) return;
-      if (CAMPOS_EXTERNOS[chave]) return;
-      var valor = dadosPlanos[chave];
-      if (valor === undefined || valor === null || valor === '') return;
-      if (typeof valor === 'object') return;
-      // Gera rótulo legível a partir do nome da chave
-      var rotulo = chave.replace(/([A-Z])/g, ' $1').replace(/^./, function (s) { return s.toUpperCase(); });
-      linhas.push('<p><strong>' + escaparHtml(rotulo) + ':</strong> ' + escaparHtml(formatarValorConsulta(chave, valor)) + '</p>');
-    });
+    // Apenas rótulos conhecidos: não expor chaves de sincronização ou zeros
+    // de campos financeiros que não vieram nesta consulta leve.
     elemento.innerHTML = linhas.length ? linhas.join('') : '<p>Sem dados para exibir.</p>';
     // Botão "Abrir PDF" — aparece quando o PC devolve pdfUrl (para OS,
     // garantia e entrega). Baixa o PDF como blob e abre em nova aba,
@@ -572,7 +606,6 @@
       botaoPdf.addEventListener('click', function () {
         botaoPdf.disabled = true;
         botaoPdf.textContent = '⏳ Abrindo…';
-        console.log('[Pdf] Abrir PDF: clique recebido. pdfUrl:', dados.pdfUrl);
         var reabilitar = function () {
           botaoPdf.disabled = false;
           botaoPdf.textContent = rotuloPdf;
@@ -634,7 +667,7 @@
       avisoPdf.textContent = '⚠️ ' + msgMotivo + ' Os demais dados desta OS continuam corretos acima.';
       elemento.appendChild(avisoPdf);
     }
-    if (origem === 'supabase' && dados.id && window.CloudData &&
+    if (origem === 'supabase' && dados.id && ENTIDADE_ARQUIVO_POR_TIPO[tipo] && window.CloudData &&
         window.CloudData.listarArquivos && window.CloudData.obterArquivo) {
       elemento.appendChild(criarBlocoArquivosSobDemanda(dados, tipo));
     }
@@ -1132,6 +1165,10 @@
 
   function adicionarGrupoCliente(container, titulo, itens, tipo) {
     (itens || []).forEach(function (item) {
+      if (window.SistemaOSConsultasBusca) {
+        adicionarDocumentoBusca(container, tipo.toLowerCase(), window.SistemaOSConsultasBusca.normalizar(tipo.toLowerCase(), item));
+        return;
+      }
       var linha = document.createElement('div');
       linha.className = 'consulta-cliente-documento';
       linha.innerHTML = '<div><strong>' + escaparHtml(rotuloDocumento(tipo, item)) + '</strong><br><span>' + escaparHtml(detalheDocumento(tipo, item)) + '</span></div>';
@@ -1152,11 +1189,100 @@
   }
 
   var versaoConsultaCliente = 0;
+  var tipoConsultaAtivo = 'os';
+  var NOMES_CONSULTA = { os: 'OS', entrega: 'Entregas', garantia: 'Garantias', desbloqueio: 'Desbloqueios', compra: 'Compras', venda: 'Vendas', cliente: 'Clientes' };
+  function selecionarTipoConsulta(tipo, buscar) {
+    if (!Object.hasOwn(NOMES_CONSULTA, tipo)) return;
+    versaoConsultaCliente++;
+    tipoConsultaAtivo = tipo;
+    painel.querySelectorAll('[data-consulta-tipo]').forEach(function (tab) {
+      var ativo = tab.dataset.consultaTipo === tipo;
+      tab.setAttribute('aria-selected', String(ativo)); tab.tabIndex = ativo ? 0 : -1;
+    });
+    resultadoCliente.setAttribute('aria-labelledby', 'consulta-aba-' + tipo);
+    document.getElementById('consulta-busca-rotulo').textContent = tipo === 'cliente'
+      ? 'Buscar cliente por nome, ID, CPF ou telefone'
+      : 'Buscar ' + NOMES_CONSULTA[tipo] + ' por nome, número ou dados do documento';
+    campoConsultaCliente.placeholder = tipo === 'cliente' ? 'Nome, ID, CPF ou telefone' : 'Nome do cliente ou número do documento';
+    [resultadoOS, resultadoGarantia, resultadoEntrega].forEach(function (el) { if (el) { el.hidden = true; el.innerHTML = ''; } });
+    resultadoCliente.innerHTML = '<p class="aviso">Informe o nome ou número para consultar.</p>';
+    btnConsultarCliente.disabled = false;
+    if (buscar && campoConsultaCliente.value.trim()) return executarBuscaDocumentos();
+  }
+
+  function adicionarDocumentoBusca(container, tipo, dados) {
+    var card = document.createElement('article'); card.className = 'consulta-busca-documento';
+    var numero = dados.numero || dados.numeroOS || '';
+    var nome = dados.clienteNome || dados.cliente?.nome || '';
+    var aparelho = [dados.aparelhoMarca || dados.aparelho?.marca, dados.aparelhoModelo || dados.aparelho?.modelo].filter(Boolean).join(' ');
+    var valor = dados.valor != null ? Number(dados.valor).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }) : '';
+    card.innerHTML = '<h3>' + escaparHtml((NOMES_CONSULTA[tipo] || tipo) + ' · ' + numero) + '</h3><p>' + escaparHtml(nome) + '</p><p>' + escaparHtml([aparelho, dados.status, valor].filter(Boolean).join(' · ')) + '</p>';
+    var acoes = document.createElement('div'); acoes.className = 'consulta-busca-acoes';
+    var detalhe = document.createElement('div'); detalhe.className = 'consulta-busca-detalhe'; detalhe.hidden = true;
+    var abrir = document.createElement('button'); abrir.type = 'button'; abrir.className = 'btn-primario'; abrir.textContent = 'Ver detalhes'; abrir.setAttribute('aria-expanded', 'false');
+    abrir.addEventListener('click', function () {
+      if (tipo === 'desbloqueio') { window.SistemaOSDesbloqueiosMobile?.visualizar(dados.id); return; }
+      if (!detalhe.hidden) { detalhe.hidden = true; abrir.textContent = 'Ver detalhes'; abrir.setAttribute('aria-expanded', 'false'); return; }
+      renderizarResultadoConsulta(detalhe, dados, tipo, numero, 'supabase');
+      abrir.textContent = 'Recolher detalhes'; abrir.setAttribute('aria-expanded', 'true');
+    });
+    acoes.appendChild(abrir); acoes.appendChild(criarBotaoCompartilhar(dados, tipo));
+    card.appendChild(acoes); card.appendChild(detalhe); container.appendChild(card);
+  }
+
+  async function buscarDocumentosSemVinculo(termo, versao) {
+    var respostas = await Promise.allSettled(window.SistemaOSConsultasBusca.tipos.map(function (tipo) { return window.SistemaOSConsultasBusca.buscar(tipo, termo); }));
+    if (versao !== versaoConsultaCliente) return;
+    var total = 0;
+    respostas.forEach(function (r) {
+      if (r.status !== 'fulfilled') return;
+      r.value.itens.forEach(function (item) { adicionarDocumentoBusca(resultadoCliente, item.tipo, item.dados); total++; });
+    });
+    var aviso = document.createElement('p'); aviso.className = 'aviso';
+    aviso.textContent = total ? 'Documentos encontrados pelo nome salvo no atendimento.'
+      : respostas.some(function (r) { return r.status === 'rejected'; }) ? 'Não foi possível consultar todos os documentos. Verifique a conexão e tente novamente.'
+      : 'Nenhum registro encontrado. Confira o nome ou tente o número do documento.';
+    resultadoCliente.prepend(aviso);
+  }
+
+  async function executarBuscaDocumentos() {
+    if (tipoConsultaAtivo === 'cliente') return executarConsultaCliente();
+    var versao = ++versaoConsultaCliente;
+    var tipo = tipoConsultaAtivo, termo = campoConsultaCliente.value.trim();
+    [resultadoOS, resultadoGarantia, resultadoEntrega].forEach(function (el) { if (el) el.hidden = true; });
+    if (!termo) { resultadoCliente.innerHTML = '<p class="aviso">Digite um nome ou número antes de buscar.</p>'; return; }
+    btnConsultarCliente.disabled = true;
+    resultadoCliente.innerHTML = '<p class="aviso">Buscando…</p>';
+    try {
+      var resposta = await window.SistemaOSConsultasBusca.buscar(tipo, termo);
+      if (versao !== versaoConsultaCliente) return;
+      resultadoCliente.innerHTML = '';
+      var aviso = document.createElement('p'); aviso.className = 'aviso';
+      aviso.textContent = resposta.itens.length ? resposta.itens.length + ' registro(s)' + (resposta.mais ? ' · Refine a busca para ver os demais.' : '.') : 'Nenhum registro encontrado nesta subaba. Confira o nome ou número.';
+      resultadoCliente.appendChild(aviso);
+      resposta.itens.forEach(function (item) { adicionarDocumentoBusca(resultadoCliente, item.tipo, item.dados); });
+    } catch (_) {
+      if (versao === versaoConsultaCliente) resultadoCliente.innerHTML = '<p class="aviso aviso-erro">Não foi possível consultar. Verifique a conexão e tente novamente.</p>';
+    } finally { if (versao === versaoConsultaCliente) btnConsultarCliente.disabled = false; }
+  }
+
+  painel.querySelectorAll('[data-consulta-tipo]').forEach(function (tab) {
+    tab.addEventListener('click', function () { selecionarTipoConsulta(tab.dataset.consultaTipo, true); });
+    tab.addEventListener('keydown', function (e) {
+      var tabs = Array.from(painel.querySelectorAll('[data-consulta-tipo]')), index = tabs.indexOf(tab);
+      if (!['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) return;
+      e.preventDefault();
+      var next = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (index + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[next].focus(); tabs[next].click();
+    });
+  });
   document.addEventListener('sistema-os:sessao-alterada', function () {
     versaoConsultaCliente++;
     if (resultadoCliente) resultadoCliente.innerHTML = '';
     if (campoConsultaCliente) campoConsultaCliente.value = '';
     if (btnConsultarCliente) btnConsultarCliente.disabled = false;
+    ultimaConsultaOSPorNumero = {};
+    [resultadoOS, resultadoGarantia, resultadoEntrega].forEach(function (el) { if (el) { el.innerHTML = ''; el.hidden = true; } });
   });
 
   async function executarConsultaCliente() {
@@ -1176,7 +1302,7 @@
       var clientes = resposta.data || [];
       resultadoCliente.innerHTML = '';
       if (!clientes.length) {
-        resultadoCliente.innerHTML = '<p class="aviso">Nenhum cliente correspondente foi encontrado.</p>';
+        await buscarDocumentosSemVinculo(termo, versao);
         return;
       }
       clientes.forEach(function (cliente) {
@@ -1195,13 +1321,16 @@
         resultadoCliente.appendChild(card);
       });
     } catch (erro) {
-      if (versao === versaoConsultaCliente) resultadoCliente.innerHTML = '<p class="aviso aviso-erro">Não foi possível consultar agora. Confira sua conexão e tente novamente.</p>';
+      if (versao === versaoConsultaCliente) {
+        resultadoCliente.innerHTML = '';
+        await buscarDocumentosSemVinculo(termo, versao);
+      }
     } finally { if (versao === versaoConsultaCliente) btnConsultarCliente.disabled = false; }
   }
 
-  if (btnConsultarCliente) btnConsultarCliente.addEventListener('click', executarConsultaCliente);
+  if (btnConsultarCliente) btnConsultarCliente.addEventListener('click', executarBuscaDocumentos);
   if (campoConsultaCliente) campoConsultaCliente.addEventListener('keydown', function (evento) {
-    if (evento.key === 'Enter') { evento.preventDefault(); executarConsultaCliente(); }
+    if (evento.key === 'Enter') { evento.preventDefault(); executarBuscaDocumentos(); }
   });
 
   if (btnConsultarOS) {
@@ -1264,14 +1393,16 @@
     if (!valor) throw new Error('A etiqueta não contém um número de OS válido.');
     if (btnIrConsulta && typeof btnIrConsulta.click === 'function') btnIrConsulta.click();
     campoConsultaOS.value = valor;
+    selecionarTipoConsulta('os', false);
+    campoConsultaCliente.value = valor;
     consultaAbertaPorQR = !!(opcoes && opcoes.origem === 'qr');
     try {
-      await executarConsultaUnificada();
+      await executarBuscaDocumentos();
     } finally {
       consultaAbertaPorQR = false;
     }
-    if (resultadoOS && typeof resultadoOS.scrollIntoView === 'function') {
-      resultadoOS.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (resultadoCliente && typeof resultadoCliente.scrollIntoView === 'function') {
+      resultadoCliente.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
     return valor;
   }

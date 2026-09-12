@@ -30,7 +30,7 @@ public class PdfCompartilhavelTest {
 
     @Test public void documentosReaisSaoLegiveisEInteiros() throws Exception {
         try (ActivityScenario<PdfQaActivity> scenario = ActivityScenario.launch(PdfQaActivity.class)) {
-            for (String nome : new String[]{"os", "entrega", "garantia", "desbloqueio", "multipagina"}) {
+            for (String nome : new String[]{"os", "entrega", "garantia", "desbloqueio", "compra", "venda", "multipagina"}) {
                 String html;
                 try (InputStream entrada = InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("pdf-qa/" + nome + ".html")) {
                     ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -58,7 +58,7 @@ public class PdfCompartilhavelTest {
                     if (nome.equals("os")) assertEquals(1, renderer.getPageCount());
                     for (int i = 0; i < renderer.getPageCount(); i++) {
                         try (PdfRenderer.Page pagina = renderer.openPage(i)) {
-                            assertEquals(nome.equals("os"), pagina.getWidth() > pagina.getHeight());
+                            assertEquals(nome.equals("os") || nome.equals("compra") || nome.equals("venda"), pagina.getWidth() > pagina.getHeight());
                             Bitmap b = Bitmap.createBitmap(pagina.getWidth(), pagina.getHeight(), Bitmap.Config.ARGB_8888);
                             b.eraseColor(Color.WHITE);
                             pagina.render(b, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT);

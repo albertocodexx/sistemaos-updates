@@ -99,7 +99,7 @@ final class PdfCompartilhavel {
                 @Override public void onPageFinished(WebView view, String url) {
                     if (terminou || carregou) return;
                     carregou = true;
-                    ajustarTermos(() -> aguardarFrame(() -> {
+                    AssinaturasPdf.preparar(view, () -> ajustarTermos(() -> aguardarFrame(() -> {
                         int alturaConteudo = Math.max(altura, Math.round(view.getContentHeight() * view.getScale()));
                         // Uma diferença de arredondamento de 1px não cria uma página vazia.
                         paginas = Math.max(1, (int) Math.ceil((alturaConteudo - 1) / (double) altura));
@@ -109,7 +109,7 @@ final class PdfCompartilhavel {
                             View.MeasureSpec.makeMeasureSpec(paginas * altura, View.MeasureSpec.EXACTLY));
                         view.layout(0, 0, largura, paginas * altura);
                         aguardarFrame(() -> desenharPagina(0, 0));
-                    }));
+                    })));
                 }
             });
             String regras = "<meta name=\"viewport\" content=\"width=" + largura + ",initial-scale=1\">" +

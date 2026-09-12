@@ -141,6 +141,7 @@ public class ImpressaoPlugin extends Plugin {
                 prepararWebView(html, new WebViewClient() {
                     @Override
                     public void onPageFinished(WebView view, String url) {
+                        AssinaturasPdf.preparar(view, () -> {
                         try {
                             PrintManager manager = (PrintManager) getContext()
                                 .getSystemService(Context.PRINT_SERVICE);
@@ -152,6 +153,7 @@ public class ImpressaoPlugin extends Plugin {
                         } catch (Exception erro) {
                             call.reject("Não foi possível abrir a impressão: " + erro.getMessage(), erro);
                         }
+                        });
                     }
                 });
             } catch (Exception erro) {

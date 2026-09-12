@@ -246,7 +246,7 @@ async function executar() {
     const resultado = win.document.getElementById('consulta-os-resultado');
     assert.equal(chamadas, 3);
     assert.match(resultado.textContent, /Ana/);
-    assert.match(resultado.textContent, /Quantidade de arquivos/);
+    assert.doesNotMatch(resultado.textContent, /Quantidade de arquivos|Disponibilidade dos arquivos/);
     assert.ok(resultado.querySelector('.resultado-consulta-acoes'));
     assert.equal(win.document.querySelectorAll('#consulta-os-numero').length, 1);
     assert.ok(win.document.getElementById('consulta-garantia-resultado'));

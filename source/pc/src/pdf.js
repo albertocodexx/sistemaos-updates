@@ -11,6 +11,12 @@ const { gerarHtmlCompra } = require('./templates/compra-template');
 const { gerarHtmlEntrega } = require('./templates/entrega-template');
 const { gerarHtmlGarantia } = require('./templates/garantia-template');
 const { gerarHtmlDesbloqueio, gerarHtmlDesbloqueioTermico } = require('./templates/desbloqueio-template');
+const scriptAssinaturasPdf = fs.readFileSync(path.join(__dirname, 'pdf-assinaturas.js'), 'utf8');
+
+async function prepararAssinaturasPdf(janela) {
+  await janela.webContents.executeJavaScript(scriptAssinaturasPdf + '\nSistemaOSPdfAssinaturas.preparar(document);');
+  await janela.webContents.executeJavaScript('Promise.all(Array.from(document.images).map(i => i.decode ? i.decode().catch(() => {}) : Promise.resolve())).then(() => true)');
+}
 
 // ── Renderiza um HTML para PDF ───────────────────────────────
 // Antes, o HTML era carregado via `loadURL('data:text/html,...')`.
@@ -33,6 +39,7 @@ async function renderizarHtmlParaPdf(html, opcoesPdf) {
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } });
   try {
     await janela.loadFile(tmpPath);
+    await prepararAssinaturasPdf(janela);
     const t0 = Date.now();
     const buffer = await janela.webContents.printToPDF(opcoesPdf);
     console.log('[Pdf] renderizarHtmlParaPdf: printToPDF OK. tamanhoPdf:', buffer.length, 'bytes | tempo:', (Date.now() - t0), 'ms');
@@ -58,6 +65,7 @@ async function imprimirHtmlLocal(html, opcoes = {}) {
   });
   try {
     await janela.loadFile(tmpPath);
+    await prepararAssinaturasPdf(janela);
     await janela.webContents.executeJavaScript(
       'document.fonts && document.fonts.ready ? document.fonts.ready.then(() => true) : true',
       true

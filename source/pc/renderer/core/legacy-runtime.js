@@ -99,6 +99,9 @@ function _statusPagamentoVisivel(os) {
   if (['Pago', 'Autorizado'].includes(os?.statusPagamento) || Number(os?.percentualPagamentoConfirmado) === 100) {
     return '100% pago';
   }
+  if (os?.statusPagamento === 'Pago parcial') {
+    return `${Math.max(1, Math.min(99, Number(os?.percentualPagamentoConfirmado) || 1))}% pago`;
+  }
   if (os?.statusPagamento === 'Aguardando Pagamento Presencial') {
     const percentual = Number(os?.percentualPagamentoAguardado) || 100;
     return `Aguardando ${percentual}% presencial`;
@@ -188,6 +191,19 @@ function promptModal(mensagem, valorPadrao = '', opcoes = {}) {
     input.id = 'promptCustomInput';
     input.style.cssText = 'width:100%;padding:9px 12px;border-radius:6px;border:1px solid var(--borda,#ccc);box-sizing:border-box;font-size:14px;';
     input.value = valorPadrao || '';
+    if (Array.isArray(opcoes.opcoes) && opcoes.opcoes.length) {
+      const listaId = 'promptCustomOpcoes';
+      const lista = document.createElement('datalist');
+      lista.id = listaId;
+      [...new Set(opcoes.opcoes.map(textoModal).filter(Boolean))].forEach(valor => {
+        const item = document.createElement('option');
+        item.value = valor;
+        lista.appendChild(item);
+      });
+      input.setAttribute('list', listaId);
+      input.setAttribute('autocomplete', 'off');
+      corpo.appendChild(lista);
+    }
     corpo.appendChild(p);
     if (opcoes.senha) {
       const grupoSenha = document.createElement('div');
@@ -727,7 +743,7 @@ function statusClass(status) {
     'Aguardando aprovação':'aprovacao','Aguardando peça':'peca','Em reparo':'reparo',
     'Em testes':'testes','Pronto para retirada':'prontoretirada','Entregue':'entregue','Cancelado':'cancelado',
     'Aguardando Pagamento':'aguardando-pag','Aguardando Pagamento Presencial':'aguardando-pag',
-    'Aguardando Pagamento na Retirada':'aguardando-pag','Pago 50%':'aguardando-pag','Pago':'autorizado','Autorizado':'autorizado',
+    'Aguardando Pagamento na Retirada':'aguardando-pag','Pago 50%':'aguardando-pag','Pago parcial':'aguardando-pag','Pago':'autorizado','Autorizado':'autorizado',
     'Pendente':'aguardando','Aprovado':'autorizado','Desaprovado':'cancelado',
     'Aguardando chegada':'aguardando','Em análise':'orcamento',
     'Pronto para venda':'pronto','Reservado':'reservado','Vendido':'vendido'
@@ -2376,6 +2392,10 @@ function _renderizarAcoesDetalheOS(os, { incluirAcoesDestrutivas = false } = {})
   const botaoFiscal = window.fiscalSistemaOSHabilitado?.() === true
     ? `<button class="botao botao-secundario" onclick="emitirNotaFiscalSistemaOS('os','${numero}')">${ICONE_DOCUMENTO} Emitir NFS-e</button>`
     : '';
+  const botaoPagamento = !pagamentoQuitado && os.status !== 'Cancelado'
+    ? `<button class="botao botao-secundario" onclick="registrarPagamentoManualOS('${numero}')">${ICONE_CHECK} Registrar pagamento</button>
+       <button class="botao botao-secundario" onclick="definirPagamentoNaRetiradaOS('${numero}')">${ICONE_RELOGIO} Pagamento na retirada</button>`
+    : '';
 
   const acoesDestrutivas = incluirAcoesDestrutivas
     ? `
@@ -2393,6 +2413,7 @@ function _renderizarAcoesDetalheOS(os, { incluirAcoesDestrutivas = false } = {})
         <button class="botao botao-secundario" onclick="abrirEtiqueta('${numero}')">${ICONE_ETIQUETA} Imprimir etiqueta QR</button>
         ${botaoFiscal}
         ${botaoWhatsApp}
+        ${botaoPagamento}
         <button class="botao botao-secundario" onclick="exportarParaAssinaturaCelular('os','${numero}')">${ICONE_CELULAR} Enviar para assinatura no celular</button>
         ${acoesDestrutivas}
       </div>
@@ -3382,7 +3403,7 @@ window.abrirEditarOS = async numero => {
     // v31: mostra para qualquer OS que ainda não tem statusPagamento = Autorizado
     btnRM.classList.toggle('escondido', ['Pago', 'Autorizado'].includes(os.statusPagamento));
     btnRM.dataset.osNumero = os.numero;
-    btnRM.dataset.osValor  = os.valorInvestido || 0;
+    btnRM.dataset.osValor  = Math.max(0, _valorServicoOS(os) - _valorCobradoOS(os));
   }
   const btnDPR = $('btnDefinirPagamentoRetirada');
   if (btnDPR) {
@@ -3459,7 +3480,16 @@ $('btnSalvarEditar').addEventListener('click', async () => {
     const statusPagForm  = statusPagSpEl ? statusPagSpEl.value : '';
     // Auto-transição: ao colocar técnico = "Aguardando aprovação", define pagamento = "Aguardando Pagamento"
     // O status técnico permanece "Aguardando aprovação" — apenas o campo de pagamento é atualizado
-    const statusPagFinal = statusPagForm || (statusTecnico === 'Aguardando aprovação' ? 'Aguardando Pagamento' : '');
+    let statusPagFinal = statusPagForm || (statusTecnico === 'Aguardando aprovação' ? 'Aguardando Pagamento' : '');
+    const pagamentoDireto = statusPagFinal === 'Pago' && !['Pago', 'Autorizado'].includes(osEmEdicao.statusPagamento);
+    let dadosPagamentoDireto = null;
+    if (pagamentoDireto) {
+      dadosPagamentoDireto = await coletarDadosPagamentoManual(osEmEdicao, _numeroMoedaSistema($('editDiagValorEstimado').value));
+      if (!dadosPagamentoDireto) return;
+      // A trilha financeira é criada por pag:registrar; a edição comum nunca
+      // pode declarar uma OS paga sem valor, forma e registro auditável.
+      statusPagFinal = osEmEdicao.statusPagamento || '';
+    }
     const statusPagamentoDividido = ['Pagamento 50/50', 'Pagamento 50/50 remoto', 'Pagamento 50/50 presencial'];
     const ativouPagamentoMisto = statusPagamentoDividido.includes(statusPagFinal)
       && osEmEdicao.statusPagamento !== statusPagFinal;
@@ -3530,6 +3560,7 @@ $('btnSalvarEditar').addEventListener('click', async () => {
     }
     const numeroAtualizado = osEmEdicao.numero;
     await window.api.osatualizar(numeroAtualizado, dados, usuarioAtual?.id);
+    if (dadosPagamentoDireto) await confirmarDadosPagamentoManual(numeroAtualizado, dadosPagamentoDireto);
     toast('OS atualizada!', 'sucesso');
     // Rebusca a OS e repopula o próprio modal aberto. Assim valores calculados,
     // status e dados normalizados aparecem imediatamente, sem fechar e abrir.
@@ -9533,7 +9564,7 @@ window.carregarAutorizadas = async function carregarAutorizadas(termo) {
       if (_autorizadasSubaba === 'retirada') {
         return naRetirada;
       }
-      if (_autorizadasSubaba === 'pagas') return pagaIntegral || entradaPaga;
+      if (_autorizadasSubaba === 'pagas') return pagaIntegral;
       return true;
     });
     if (termo) {
@@ -9566,11 +9597,18 @@ window.carregarAutorizadas = async function carregarAutorizadas(termo) {
       const valorCobradoFmt = _valorCobradoOS(os).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
       const entrada50Paga = os.entrada50Paga === true || Number(os.percentualPagamentoConfirmado) === 50;
       const naRetirada = os.statusPagamento === 'Aguardando Pagamento na Retirada' && !entrada50Paga;
+      const pagaIntegral = ['Pago', 'Autorizado'].includes(os.statusPagamento)
+        || Number(os.percentualPagamentoConfirmado) >= 100;
+      const percentualPago = Math.max(0, Math.min(100, Number(os.percentualPagamentoConfirmado) || 0));
       const pagInfo = naRetirada
         ? `<span style="font-size:11px;color:#b45309;">Pagamento combinado na retirada</span>`
         : (entrada50Paga
           ? `<span style="font-size:11px;color:#059669;">${ICONE_CHECK} Entrada de 50% paga · saldo na retirada</span>`
-          : (os.pagamentoId ? `<span style="font-size:11px;color:#059669;">${ICONE_CHECK} 100% pago</span>` : ''));
+          : (pagaIntegral
+            ? `<span style="font-size:11px;color:#059669;">${ICONE_CHECK} 100% pago</span>`
+            : (percentualPago > 0
+              ? `<span style="font-size:11px;color:#b45309;">${percentualPago}% pago · saldo pendente</span>`
+              : '')));
       const formaPagBadge = os.formaPagamento ? `<span style="display:inline-block;background:#ede9fe;color:#6d28d9;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;">${ICONE_CARTAO} ${_escHtml(os.formaPagamento)}</span>` : '';
       const numeroJs = _argJsUri(os.numero);
       return `<div class="card-estoque" style="cursor:pointer;" onclick="verDetalheOSrapido(decodeURIComponent('${numeroJs}'))">
@@ -9579,7 +9617,7 @@ window.carregarAutorizadas = async function carregarAutorizadas(termo) {
             <div class="card-est-marca">${ICONE_CELULAR} ${_escHtml(_aparelhoSemRepeticao(ap.marca, ap.modelo) || '—')}</div>
             <div class="card-est-modelo">${_escHtml(cl.nome||'—')} ${cl.telefone ? '· '+_escHtml(cl.telefone) : ''}</div>
           </div>
-          <span class="status-badge ${naRetirada ? 'status-aguardando-pag' : 'status-autorizado'}">${naRetirada ? 'Pagamento na retirada' : `${ICONE_CHECK} ${entrada50Paga ? '50% pago' : '100% pago'}`}</span>
+          <span class="status-badge ${naRetirada ? 'status-aguardando-pag' : 'status-autorizado'}">${naRetirada ? 'Pagamento na retirada' : `${ICONE_CHECK} ${entrada50Paga ? '50% pago' : (pagaIntegral ? '100% pago' : 'Autorizada')}`}</span>
         </div>
         <div style="font-size:12px;color:var(--texto-sec);">${_escHtml(os.numero)} · ${dataFmt} ${pagInfo}${formaPagBadge}</div>
         <div class="card-est-valores">
@@ -11005,6 +11043,86 @@ async function gerarComprovantePDF(pagId) {
 })();
 
 // ── Botão Registrar Pagamento Manual ──────────────────────────
+const FORMAS_PAGAMENTO_OS = [
+  'Dinheiro', 'Pix', 'Cartão de crédito', 'Cartão de débito',
+  'Maquininha - crédito', 'Maquininha - débito', 'Transferência bancária',
+  'Boleto', 'Link de pagamento', 'Mercado Pago', 'PicPay', 'PayPal',
+  'Cheque', 'Vale ou convênio', 'Permuta', 'Outro'
+];
+
+async function coletarDadosPagamentoManual(os, valorTotalAlternativo = 0) {
+  const total = Number(valorTotalAlternativo) || _valorServicoOS(os);
+  const recebido = _valorCobradoOS(os);
+  const saldo = Math.max(0, total - recebido) || total;
+  const metodo = await promptModal('Forma de pagamento:', os?.formaPagamento || 'Pix', {
+    titulo: 'Registrar pagamento', opcoes: FORMAS_PAGAMENTO_OS
+  }).catch(() => null);
+  if (!metodo?.trim()) return null;
+  const valorStr = await promptModal('Valor recebido (R$):', saldo.toFixed(2), {
+    titulo: 'Registrar pagamento'
+  }).catch(() => null);
+  if (valorStr == null) return null;
+  const valor = _numeroMoedaSistema(valorStr);
+  if (!(valor > 0)) { toast('Informe um valor recebido maior que zero.', 'erro'); return null; }
+  if (saldo > 0 && valor > saldo + 0.01) {
+    toast(`O valor não pode superar o saldo de ${fmtMoeda(saldo)}.`, 'erro');
+    return null;
+  }
+  return { valor, metodo: metodo.trim() };
+}
+
+async function confirmarDadosPagamentoManual(numero, dados) {
+  const pagamento = await window.api.pagregistrar({
+    osNumero: numero,
+    valor: dados.valor,
+    metodo: dados.metodo,
+    origem: 'manual',
+    observacao: 'Registrado manualmente pelo operador'
+  });
+  toast(`Pagamento de ${fmtMoeda(dados.valor)} registrado via ${dados.metodo}.`, 'sucesso');
+  if (typeof carregarHistorico === 'function') await carregarHistorico();
+  if (typeof carregarPagamentos === 'function') await carregarPagamentos();
+  if (typeof carregarAutorizadas === 'function') await carregarAutorizadas();
+  return pagamento;
+}
+
+window.registrarPagamentoManualOS = async function registrarPagamentoManualOS(numero) {
+  try {
+    const os = await window.api.osobter(numero);
+    if (!os) throw new Error('OS não encontrada.');
+    const dados = await coletarDadosPagamentoManual(os);
+    if (!dados) return null;
+    const pagamento = await confirmarDadosPagamentoManual(numero, dados);
+    document.getElementById('modalDetalheOS')?.classList.add('escondido');
+    document.getElementById('modalEditarOS')?.classList.add('escondido');
+    return pagamento;
+  } catch (erro) {
+    toast('Não foi possível registrar o pagamento: ' + (erro?.message || erro), 'erro');
+    return null;
+  }
+};
+
+window.definirPagamentoNaRetiradaOS = async function definirPagamentoNaRetiradaOS(numero) {
+  try {
+    const os = await window.api.osobter(numero);
+    if (!os) throw new Error('OS não encontrada.');
+    const confirmado = await confirmModal(
+      `Autorizar a OS ${numero} com pagamento na retirada?\n\nNenhum valor será marcado como recebido.`,
+      { titulo: 'Pagamento na retirada', textoOk: 'Confirmar', textoCancelar: 'Cancelar' }
+    );
+    if (!confirmado) return;
+    await window.api.osatualizar(numero, {
+      status: /aguardando aprova/i.test(String(os.status || '')) ? 'Em reparo' : os.status,
+      statusAprovacao: 'Aprovado', statusPagamento: 'Aguardando Pagamento na Retirada',
+      percentualPagamentoAguardado: 100
+    });
+    toast(`OS ${numero} autorizada com pagamento na retirada.`, 'sucesso');
+    document.getElementById('modalDetalheOS')?.classList.add('escondido');
+    if (typeof carregarHistorico === 'function') await carregarHistorico();
+    if (typeof carregarAutorizadas === 'function') await carregarAutorizadas();
+  } catch (erro) { toast('Não foi possível definir o pagamento na retirada: ' + (erro?.message || erro), 'erro'); }
+};
+
 (function() {
   const btn = document.getElementById('btnRegistrarPagManual');
   if (!btn) return;
@@ -11013,104 +11131,15 @@ async function gerarComprovantePDF(pagId) {
     const valorSugerido = parseFloat(btn.dataset.osValor) || 0;
     if (!numero) return;
 
-    const metodo = await promptModal('Forma de pagamento:', 'Dinheiro', {
-      opcoes: ['Dinheiro', 'Pix', 'Cartão de crédito', 'Cartão de débito', 'Transferência']
-    }).catch(() => null);
-    if (!metodo) return;
-
-    const valorStr = await promptModal(`Valor recebido (R$):`, valorSugerido.toFixed(2)).catch(() => null);
-    if (!valorStr) return;
-    const valor = parseFloat(String(valorStr).replace(',', '.'));
-    if (!valor || valor <= 0) { toast('Valor inválido.', 'erro'); return; }
-
     try {
-      const pag = await window.api.pagregistrar({
-        osNumero: numero,
-        valor,
-        metodo,
-        origem: 'manual',
-        observacao: 'Registrado manualmente pelo operador'
-      });
-      toast(`Pagamento de R$ ${valor.toFixed(2)} registrado! OS marcada como Autorizada.`, 'sucesso');
+      const os = await window.api.osobter(numero);
+      const dados = await coletarDadosPagamentoManual(os, valorSugerido);
+      if (!dados) return;
+      await confirmarDadosPagamentoManual(numero, dados);
       document.getElementById('modalEditarOS')?.classList.add('escondido');
-      if (typeof carregarHistorico === 'function') carregarHistorico();
-      if (typeof carregarPagamentos === 'function') carregarPagamentos();
 
       // Pagamento lançado manualmente é uma operação interna e silenciosa.
       // O status muda, mas nenhuma mensagem é enviada ao cliente.
-      return;
-
-      // ── WhatsApp de confirmação de pagamento (manual) ──────────
-      // Envia o template de pagamento confirmado com comprovante PDF
-      (async () => {
-        try {
-          if (!window.api.wappenviarpagconf) return;
-          const cfg = (typeof configAtual !== 'undefined' && configAtual?.nomeEmpresa)
-            ? configAtual
-            : await window.api.configobter().catch(() => ({}));
-          const os = await window.api.osobter(numero).catch(() => null);
-          const tel = (os?.cliente?.telefone || '').replace(/\D/g, '');
-          if (!tel) {
-            console.log('[PagManual] Sem telefone — WhatsApp não enviado.');
-            return;
-          }
-
-          // Gera PDF do comprovante para anexar à mensagem
-          let caminhoPdfComprovante = '';
-          const pagamentoId = pag?.id || pag?.pagamentoId || null;
-          if (pagamentoId && window.api.paggerarpdfsilencioso) {
-            try {
-              const rPdf = await window.api.paggerarpdfsilencioso(pagamentoId);
-              if (rPdf?.sucesso) caminhoPdfComprovante = rPdf.caminho;
-            } catch (ePdf) {
-              console.warn('[PagManual] Falha ao gerar comprovante PDF:', ePdf.message);
-            }
-          }
-
-          const rWapp = await window.api.wappenviarpagconf({
-            telefone: tel,
-            os: {
-              nome_cliente : os?.cliente?.nome  || '',
-              numero       : numero,
-              marca        : os?.aparelho?.marca  || '',
-              modelo       : os?.aparelho?.modelo || '',
-            },
-            config: {
-              nomeEmpresa : cfg.nomeEmpresa || 'Assistência Técnica',
-              codigoPais  : (cfg.codigoPaisWhatsapp || '55').replace(/\D/g, '') || '55',
-            },
-            caminhoPdf: caminhoPdfComprovante,
-          });
-
-          if (rWapp?.sucesso) {
-            console.log(`[PagManual] WhatsApp de confirmação enviado — OS ${numero}`);
-            if (typeof window.adicionarNotificacao === 'function') {
-              window.adicionarNotificacao({
-                tipo: 'mensagem_enviada',
-                titulo: `WhatsApp enviado — confirmação de pagamento manual`,
-                descricao: `OS ${numero} · ${os?.cliente?.nome || ''}`,
-                osNumero: numero
-              });
-            }
-          } else {
-            console.warn('[PagManual] WhatsApp de confirmação falhou:', rWapp?.erro);
-            if (typeof window.adicionarNotificacao === 'function') {
-              window.adicionarNotificacao({
-                tipo: 'erro',
-                titulo: `Erro ao enviar WhatsApp — OS ${numero}`,
-                descricao: rWapp?.erro || 'WhatsApp desconectado ou sem resposta.',
-                osNumero: numero
-              });
-            }
-            toast(`${ICONE_ALERTA} Pagamento registrado, mas WhatsApp não foi enviado: ` + (rWapp?.erro || 'desconectado'), 'aviso');
-          }
-        } catch (e) {
-          console.warn('[PagManual] WhatsApp falhou:', e.message);
-          toast(`${ICONE_ALERTA} Pagamento registrado, mas WhatsApp não foi enviado: ` + e.message, 'aviso');
-        }
-      })();
-      // ────────────────────────────────────────────────────────────
-
     } catch(e) { toast('Erro: ' + e.message, 'erro'); }
   });
 })();

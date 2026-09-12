@@ -370,6 +370,20 @@
 
   window.SistemaOSDesbloqueiosMobile = Object.freeze({
     recarregar: carregarLista,
-    abrir: function (id) { return abrirDocumento(id, true); }
+    abrir: function (id) { return abrirDocumento(id, true); },
+    visualizar: function (id) { return abrirDocumento(id, false); },
+    compartilhar: async function (id) {
+      var versao = escopoVersao;
+      var resposta = await window.SupabaseClientApp.obterCliente().from('desbloqueios').select('*').eq('id', id).is('deleted_at', null).maybeSingle();
+      if (resposta.error) throw resposta.error;
+      if (versao !== escopoVersao) return;
+      if (!resposta.data) throw new Error('A autorização foi removida ou não está disponível.');
+      await (window.__modulosOSPromise || Promise.resolve());
+      if (versao !== escopoVersao) return;
+      var row = resposta.data;
+      var resultado = await window.SistemaOSCompartilhar.compartilharPdfHtml(gerarHtml(row, ''), 'desbloqueio-' + row.numero + '.pdf', 'Compartilhar autorização',
+        'Olá, ' + row.cliente_nome_snapshot + '. Segue a autorização de desbloqueio ' + row.numero + ', emitida pela ' + nomeEmpresa() + '.');
+      if (versao === escopoVersao) avisar(window.SistemaOSCompartilhar.mensagemResultado(resultado));
+    }
   });
 })();

@@ -9,11 +9,11 @@ Atualizações oficiais do Sistema OS para Windows e Android.
 
 Os dois links apontam sempre para os arquivos da atualização marcada como mais recente.
 
-## Atualização PC 40.5.1 / Android 20.5.2
+## Atualização PC 40.5.2 / Android 20.5.3
 
-As versões do PC e do Android agora seguem linhas SemVer independentes. O atualizador móvel reconhece o APK específico do Android e mantém uma ponte segura para instalações antigas.
+Esta versão melhora as consultas no celular, corrige a apresentação das assinaturas e completa o fluxo auditável de pagamentos e estados das OS no PC.
 
-- [Detalhes da versão](release-notes-40.5.1.md)
+- [Detalhes da versão](release-notes-40.5.2.md)
 
 ## Atualização 30.5.136
 

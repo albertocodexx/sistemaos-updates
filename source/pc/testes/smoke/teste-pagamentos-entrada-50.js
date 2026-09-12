@@ -170,7 +170,37 @@ try {
   }, /saldo restante de R\$ 100\.00/);
   assert.equal(pagamentosDaOS(osDuplicada.numero).length, 1);
 
-  console.log('OK - pagamentos de 50%, 100% direto e saldo restante validados.');
+  // 5. Pagamento manual abaixo de 50% continua pendente, registra a forma e
+  // só passa a quitado quando o acumulado alcança o total da OS.
+  const osParcial = criarOSPagamento(100);
+  const parcial = db.registrarPagamento({
+    osNumero: osParcial.numero,
+    valor: 60,
+    metodo: 'Cartão de débito',
+    origem: 'manual'
+  });
+  const depoisParcial = db.obterOSPorNumero(osParcial.numero);
+  assert.equal(parcial.tipoComprovante, 'pagamento_parcial');
+  assert.equal(parcial.percentualQuitado, 30);
+  assert.equal(depoisParcial.statusPagamento, 'Pago parcial');
+  assert.equal(depoisParcial.percentualPagamentoConfirmado, 30);
+  assert.equal(depoisParcial.valorRecebidoConfirmado, 60);
+  assert.equal(depoisParcial.valorRestanteServico, 140);
+  assert.equal(depoisParcial.formaPagamento, 'Cartão de débito');
+
+  const quitacaoParcial = db.registrarPagamento({
+    osNumero: osParcial.numero,
+    valor: 140,
+    metodo: 'Pix',
+    origem: 'manual'
+  });
+  const depoisQuitacaoParcial = db.obterOSPorNumero(osParcial.numero);
+  assert.equal(quitacaoParcial.tipoComprovante, 'quitacao_100');
+  assert.equal(depoisQuitacaoParcial.statusPagamento, 'Pago');
+  assert.equal(depoisQuitacaoParcial.percentualPagamentoConfirmado, 100);
+  assert.equal(depoisQuitacaoParcial.valorRestanteServico, 0);
+
+  console.log('OK - pagamentos de 30%, 50%, 100% e saldo restante validados.');
 } finally {
   fs.rmSync(raizTemporaria, { recursive: true, force: true });
 }

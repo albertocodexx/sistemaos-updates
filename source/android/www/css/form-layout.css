@@ -12,3 +12,17 @@
 #os-valor,#entrega-valor-reparo,#compra-valor,#venda-valor { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; min-height:50px; }
 .form-os .form-detalhes .form-detalhes { margin:8px 0; }
 .form-os .dica-campo { color:var(--cor-texto-fraco); font-size:12px; line-height:1.5; }
+.consulta-subabas { display:flex; flex-wrap:wrap; gap:0; margin:0 0 20px; border-bottom:1px solid var(--cor-borda); }
+.consulta-subabas [role=tab] { flex:0 0 auto; width:auto; min-height:48px; margin:0; padding:12px 14px; border:0; border-bottom:3px solid transparent; border-radius:0; background:transparent; color:var(--cor-texto-fraco); font-size:14px; font-weight:600; }
+.consulta-subabas [aria-selected=true] { color:var(--cor-texto); border-bottom-color:var(--cor-texto); }
+.consulta-subabas [role=tab]:focus-visible { outline:2px solid var(--cor-texto); outline-offset:-3px; }
+#painel-consulta [hidden] { display:none !important; }
+.consulta-busca-documento { border-bottom:1px solid var(--cor-borda); padding:16px 0; min-width:0; }
+.consulta-busca-documento h3 { margin:0 0 6px; font-size:17px; }
+.consulta-busca-documento p { margin:6px 0; overflow-wrap:anywhere; }
+.consulta-busca-acoes { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; }
+.consulta-busca-acoes button { flex:1 1 145px; min-width:0; margin:0; }
+.consulta-busca-detalhe { padding-top:16px; }
+.consulta-documentos-grade:has(.resultado-consulta:not([hidden])) { margin-top:16px; }
+.consulta-documento-card:not(:has(.resultado-consulta:not([hidden]))) { display:none; }
+.consulta-compartilhar-erro { flex-basis:100%; }

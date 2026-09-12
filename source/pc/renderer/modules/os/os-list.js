@@ -29,18 +29,20 @@
   ];
 
   function filtrarPorSubaba(ordens, subaba) {
+    const estaPaga = os => ['Pago', 'Autorizado'].includes(os.statusPagamento)
+      || Number(os.percentualPagamentoConfirmado) >= 100;
     if (subaba === 'novas') {
       return ordens.filter(os => STATUS_TECNICOS_NOVOS.includes(os.status)
         && !['Pago', 'Autorizado', 'Pago 50%', 'Aguardando Pagamento', 'Aguardando Pagamento Presencial', 'Aguardando Pagamento na Retirada', 'Pagamento 50/50', 'Pagamento 50/50 remoto', 'Pagamento 50/50 presencial'].includes(os.statusPagamento));
     }
     if (subaba === 'aguardando') {
-      return ordens.filter(os => ['Pago 50%', 'Aguardando Pagamento', 'Aguardando Pagamento Presencial', 'Aguardando Pagamento na Retirada', 'Pagamento 50/50', 'Pagamento 50/50 remoto', 'Pagamento 50/50 presencial'].includes(os.statusPagamento)
-        && os.status !== 'Cancelado' && os.status !== 'Entregue');
+      return ordens.filter(os => (['Pago 50%', 'Pago parcial', 'Aguardando Pagamento', 'Aguardando Pagamento Presencial', 'Aguardando Pagamento na Retirada', 'Pagamento 50/50', 'Pagamento 50/50 remoto', 'Pagamento 50/50 presencial'].includes(os.statusPagamento)
+        || (os.status === 'Entregue' && !estaPaga(os))) && os.status !== 'Cancelado');
     }
     if (subaba === 'pagas') {
-      return ordens.filter(os => ['Pago', 'Autorizado'].includes(os.statusPagamento) && os.status !== 'Entregue' && os.status !== 'Cancelado');
+      return ordens.filter(os => estaPaga(os) && os.status !== 'Entregue' && os.status !== 'Cancelado');
     }
-    if (subaba === 'finalizadas') return ordens.filter(os => os.status === 'Entregue');
+    if (subaba === 'finalizadas') return ordens.filter(os => os.status === 'Entregue' && estaPaga(os));
     if (subaba === 'canceladas') return ordens.filter(os => os.status === 'Cancelado');
     return ordens;
   }
@@ -63,6 +65,7 @@
       if (os.modalidadePagamentoAprovacao === 'presencial') return '50% presencial pago · 50% remoto pendente';
       return '50% pago · 50% pendente';
     }
+    if (os.statusPagamento === 'Pago parcial') return `${Number(os.percentualPagamentoConfirmado) || 0}% pago`;
     if (['Pago', 'Autorizado'].includes(os.statusPagamento) || Number(os.percentualPagamentoConfirmado) === 100) return '100% pago';
     if (os.statusPagamento === 'Aguardando Pagamento Presencial') {
       return `Aguardando ${Number(os.percentualPagamentoAguardado) || 100}% presencial`;
@@ -206,7 +209,13 @@
     }
   }
 
-  window.RendererOsList = Object.freeze({ init, carregarHistorico, trocarSubabaHistorico, abrirPdf });
+  window.RendererOsList = Object.freeze({
+    init,
+    carregarHistorico,
+    trocarSubabaHistorico,
+    abrirPdf,
+    _filtrarPorSubaba: filtrarPorSubaba
+  });
   window.carregarHistorico = carregarHistorico;
   window.trocarSubabaHistorico = trocarSubabaHistorico;
   window.abrirPdf = abrirPdf;

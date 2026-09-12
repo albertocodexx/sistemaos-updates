@@ -58,6 +58,18 @@ async function executar() {
   assert.strictEqual(typeof contexto.window.trocarSubabaHistorico, 'function');
   assert.strictEqual(typeof contexto.window.abrirPdf, 'function');
 
+  const filtrar = contexto.window.RendererOsList._filtrarPorSubaba;
+  const amostraFinanceira = [
+    { numero: 'OS-A', status: 'Em reparo', statusPagamento: '', statusAprovacao: 'Aprovado' },
+    { numero: 'OS-B', status: 'Pronto para retirada', statusPagamento: 'Pago parcial', percentualPagamentoConfirmado: 30 },
+    { numero: 'OS-C', status: 'Pronto para retirada', statusPagamento: 'Pago', percentualPagamentoConfirmado: 100 },
+    { numero: 'OS-D', status: 'Entregue', statusPagamento: 'Aguardando Pagamento na Retirada' },
+    { numero: 'OS-E', status: 'Entregue', statusPagamento: 'Pago', percentualPagamentoConfirmado: 100 }
+  ];
+  assert.deepStrictEqual(Array.from(filtrar(amostraFinanceira, 'aguardando'), item => item.numero), ['OS-B', 'OS-D']);
+  assert.deepStrictEqual(Array.from(filtrar(amostraFinanceira, 'pagas'), item => item.numero), ['OS-C']);
+  assert.deepStrictEqual(Array.from(filtrar(amostraFinanceira, 'finalizadas'), item => item.numero), ['OS-E']);
+
   assert.ok(indexHtml.indexOf('src="core/legacy-runtime.js"') < indexHtml.indexOf('src="modules/os/os-list.js"'));
   assert.doesNotMatch(renderer, /async function carregarHistorico\(/);
   assert.match(renderer, /window\.ICONE_TIPO_EQUIPAMENTO\s*=\s*ICONE_TIPO_EQUIPAMENTO/);

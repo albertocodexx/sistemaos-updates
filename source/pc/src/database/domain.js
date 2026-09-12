@@ -6186,7 +6186,7 @@ function registrarPagamento({ osNumero, valor, metodo, origem, observacao, camin
     const pagamentoEhEntrada50 = atual.exigirEntrada50Aprovacao === true
       && atual.entrada50Paga !== true
       && (
-        (valorEntradaConfigurada > 0 && valorNum <= valorEntradaConfigurada + 0.01)
+        (valorEntradaConfigurada > 0 && Math.abs(valorNum - valorEntradaConfigurada) <= 0.01)
         || (valorEntradaConfigurada <= 0 && Number(atual.percentualPagamentoAguardado) === 50)
       );
     const valorTotalSalvo = Number(atual.valorTotalServico || 0)
@@ -6203,20 +6203,25 @@ function registrarPagamento({ osNumero, valor, metodo, origem, observacao, camin
     const totalPagoAcumulado = (db.pagamentos || [])
       .filter(p => p.osNumero === osNumero)
       .reduce((soma, p) => soma + (Number(p.valor) || 0), 0);
-    const percentualQuitado = pagamentoEhEntrada50 ? 50 : 100;
     const valorAcumuladoLimitado = valorTotalServico > 0
       ? Math.min(valorTotalServico, totalPagoAcumulado)
       : totalPagoAcumulado;
+    const pagamentoQuitado = valorTotalServico <= 0 || totalPagoAcumulado >= valorTotalServico - 0.01;
+    const percentualCalculado = valorTotalServico > 0
+      ? Math.max(1, Math.min(100, Math.round((valorAcumuladoLimitado / valorTotalServico) * 100)))
+      : 100;
+    const percentualQuitado = pagamentoQuitado ? 100 : (pagamentoEhEntrada50 ? 50 : percentualCalculado);
     // O comprovante representa o estado financeiro alcançado por esta
     // transação: entrada de 50% ou quitação acumulada de 100%.
     pagamento.percentualQuitado = percentualQuitado;
-    pagamento.tipoComprovante = pagamentoEhEntrada50 ? 'entrada_50' : 'quitacao_100';
+    pagamento.tipoComprovante = pagamentoQuitado
+      ? 'quitacao_100'
+      : (percentualQuitado === 50 ? 'entrada_50' : 'pagamento_parcial');
     pagamento.valorTotalServico = valorTotalServico;
     pagamento.valorAcumulado = valorAcumuladoLimitado;
-    pagamento.valorRestanteAposPagamento = pagamentoEhEntrada50
-      ? Math.max(0, valorTotalServico - valorAcumuladoLimitado)
-      : 0;
-    const statusPagamentoConfirmado = pagamentoEhEntrada50 ? 'Pago 50%' : 'Pago';
+    pagamento.valorRestanteAposPagamento = Math.max(0, valorTotalServico - valorAcumuladoLimitado);
+    const statusPagamentoConfirmado = pagamentoQuitado ? 'Pago'
+      : (percentualQuitado === 50 ? 'Pago 50%' : 'Pago parcial');
     historicoStatus.push({
       status: statusPagamentoConfirmado,
       data: dataPagamento,
@@ -6246,15 +6251,13 @@ function registrarPagamento({ osNumero, valor, metodo, origem, observacao, camin
       // Este campo representa o estado parcial visível. Ao quitar o saldo,
       // percentualPagamentoConfirmado passa a 100 e a OS não pode continuar
       // sendo exibida como "50% pago · saldo na retirada".
-      entrada50Paga: pagamentoEhEntrada50,
-      percentualPagamentoConfirmado: pagamentoEhEntrada50 ? 50 : 100,
-      percentualPagamentoAguardado: pagamentoEhEntrada50 ? 50 : 0,
+      entrada50Paga: percentualQuitado === 50,
+      percentualPagamentoConfirmado: percentualQuitado,
+      percentualPagamentoAguardado: pagamentoQuitado ? 0 : Math.max(0, 100 - percentualQuitado),
       valorRecebidoConfirmado: valorAcumuladoLimitado,
       modalidadePagamentoAprovacao: origemPagamento === 'presencial' ? 'presencial' : 'online',
       valorTotalServico,
-      valorRestanteServico: pagamentoEhEntrada50
-        ? Math.max(0, valorTotalServico - valorNum)
-        : 0
+      valorRestanteServico: Math.max(0, valorTotalServico - valorAcumuladoLimitado)
     });
   }
 
