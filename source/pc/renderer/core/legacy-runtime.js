@@ -15085,10 +15085,11 @@ window.reenviarWappEntregue = async function(numero) {
     configurar('orcMarca', 'orcModelo');
     configurar('novaEntregaMarca', 'novaEntregaModelo');
     configurar('garMarca', 'garModelo');
+    configurar('desbloqueioMarca', 'desbloqueioModelo');
 
     const listaCores = obterDatalist('listaCoresAparelhos');
     preencherDatalist(listaCores, CORES_APARELHOS);
-    ['cor', 'editCor', 'estCor', 'cpACor'].forEach((id) => {
+    ['cor', 'editCor', 'estCor', 'cpACor', 'desbloqueioCor'].forEach((id) => {
       const campo = document.getElementById(id);
       if (campo) {
         campo.setAttribute('list', 'listaCoresAparelhos');

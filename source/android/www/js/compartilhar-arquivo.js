@@ -42,6 +42,15 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
+  function nomeArquivoSeguro(nomeArquivo, extensaoPadrao) {
+    var nome = String(nomeArquivo || ('documento.' + (extensaoPadrao || 'bin')))
+      .replace(/[\\/:*?"<>|]+/g, '-')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    return nome || ('documento.' + (extensaoPadrao || 'bin'));
+  }
+
   // Converte um Blob de texto (o .json) para uma string base64 pura, sem
   // o prefixo "data:...;base64," — é o formato que Filesystem.writeFile
   // espera quando nenhum `encoding` é passado (grava como binário
@@ -106,11 +115,11 @@
   //   'baixado'                        — nenhum compartilhamento disponível
   //   'baixado-apos-erro-compartilhar' — tentou compartilhar, falhou/cancelou,
   //                                      caiu pro download como garantia
-  function compartilharOuBaixarArquivo(dadosObj, nomeArquivo, titulo, textoCompartilhar) {
-    var blob = new Blob([JSON.stringify(dadosObj, null, 2)], { type: 'application/json' });
+  function compartilharBlob(blob, nomeArquivo, titulo, textoCompartilhar) {
+    var nomeSeguro = nomeArquivoSeguro(nomeArquivo, 'bin');
 
     if (pluginsNativosDisponiveis()) {
-      return gravarArquivoTemporario(blob, nomeArquivo)
+      return gravarArquivoTemporario(blob, nomeSeguro)
         .then(function (uri) {
           return window.Capacitor.Plugins.Share.share({
             title: titulo,
@@ -130,7 +139,7 @@
           // ambos da mesma forma: cai para o download, garantindo que o
           // arquivo sempre chega às mãos do usuário de um jeito ou de
           // outro.
-          baixarArquivo(blob, nomeArquivo);
+          baixarArquivo(blob, nomeSeguro);
           return { metodo: 'baixado-apos-erro-compartilhar' };
         });
     }
@@ -140,7 +149,7 @@
     // download puro.
     var arquivo;
     try {
-      arquivo = new File([blob], nomeArquivo, { type: 'application/json' });
+      arquivo = new File([blob], nomeSeguro, { type: blob.type || 'application/octet-stream' });
     } catch (e) {
       arquivo = null; // navegador muito antigo sem suporte a File — cai pro download
     }
@@ -158,17 +167,50 @@
             resolve({ metodo: 'cancelado' }); // usuário cancelou — não sincroniza
             return;
           }
-          baixarArquivo(blob, nomeArquivo);
+          baixarArquivo(blob, nomeSeguro);
           resolve({ metodo: 'baixado-apos-erro-compartilhar' });
         });
         return;
       }
-      baixarArquivo(blob, nomeArquivo);
+      baixarArquivo(blob, nomeSeguro);
       resolve({ metodo: 'baixado' });
     });
   }
 
+  function compartilharOuBaixarArquivo(dadosObj, nomeArquivo, titulo, textoCompartilhar) {
+    var blob = new Blob([JSON.stringify(dadosObj, null, 2)], { type: 'application/json' });
+    return compartilharBlob(blob, nomeArquivo, titulo, textoCompartilhar);
+  }
+
+  function compartilharPdfPorUrl(url, nomeArquivo, titulo, textoCompartilhar) {
+    return fetch(String(url || '')).then(function (resposta) {
+      if (!resposta.ok) throw new Error('O PDF não pôde ser baixado agora.');
+      return resposta.blob();
+    }).then(function (blob) {
+      var pdf = blob.type === 'application/pdf'
+        ? blob
+        : new Blob([blob], { type: 'application/pdf' });
+      return compartilharBlob(pdf, nomeArquivoSeguro(nomeArquivo, 'pdf'), titulo, textoCompartilhar);
+    });
+  }
+
+  function compartilharPdfHtml(html, nomeArquivo, titulo, textoCompartilhar) {
+    var impressao = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Impressao;
+    if (!impressao || typeof impressao.compartilharPdf !== 'function') {
+      return Promise.reject(new Error('Atualize o aplicativo para compartilhar o PDF diretamente.'));
+    }
+    return impressao.compartilharPdf({
+      html: String(html || ''),
+      nomeArquivo: nomeArquivoSeguro(nomeArquivo, 'pdf'),
+      titulo: String(titulo || 'Compartilhar documento'),
+      mensagem: String(textoCompartilhar || '')
+    }).then(function () { return { metodo: 'compartilhado' }; });
+  }
+
   window.SistemaOSCompartilhar = {
-    compartilharOuBaixarArquivo: compartilharOuBaixarArquivo
+    compartilharOuBaixarArquivo: compartilharOuBaixarArquivo,
+    compartilharBlob: compartilharBlob,
+    compartilharPdfPorUrl: compartilharPdfPorUrl,
+    compartilharPdfHtml: compartilharPdfHtml
   };
 })();

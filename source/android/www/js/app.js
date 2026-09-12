@@ -41,6 +41,7 @@
   var btnSalvarHistorico = document.getElementById('btn-salvar-historico');
   var btnExportarPC = document.getElementById('btn-exportar-pc');
   var btnEmitirComprovante = document.getElementById('btn-emitir-comprovante');
+  var btnCompartilharPdf = document.getElementById('btn-compartilhar-pdf');
   var feedbackAcao = document.getElementById('feedback-acao');
 
   // Trava síncrona contra clique duplo/toque longo em "Salvar no
@@ -379,6 +380,71 @@
         });
       }).catch(function (erro) {
         mostrarFeedback('Não foi possível emitir o comprovante: ' + (erro.message || erro), true);
+      });
+    });
+  }
+
+  function nomeEmpresaParaMensagem() {
+    var empresa = obterConfigEmpresaAtual() || {};
+    return String(empresa.nomeFantasia || empresa.nomeEmpresa || empresa.razaoSocial || 'assistência técnica').trim();
+  }
+
+  function numeroDocumentoAtual() {
+    var dados = osAtual || {};
+    return String(dados.numeroOSAtribuido || dados.numeroOS || dados.numero || 'OS').trim();
+  }
+
+  function mensagemCompartilhamentoAtual() {
+    var dados = osAtual || {};
+    var numero = numeroDocumentoAtual();
+    var cliente = documentoAtualTipo === 'entrega'
+      ? String(dados.nomeRetirou || dados.recebidoPor || '').trim()
+      : String(dados.cliente && dados.cliente.nome || '').trim();
+    var saudacao = cliente ? 'Olá, ' + cliente + '. ' : 'Olá! ';
+    var descricao = documentoAtualTipo === 'entrega'
+      ? 'Segue o comprovante de entrega da ' + numero
+      : 'Segue a Ordem de Serviço ' + numero;
+    return saudacao + descricao + ', ' + (documentoAtualTipo === 'entrega' ? 'emitido' : 'emitida') +
+      ' pela ' + nomeEmpresaParaMensagem() + '.';
+  }
+
+  function htmlCompartilhamentoAtual() {
+    if (documentoAtualTipo === 'entrega') {
+      return aplicarAssinaturasNaEntrega(
+        gerarHtmlEntrega(osAtual, obterConfigEmpresaAtual()),
+        osAtual
+      );
+    }
+    return aplicarAssinaturasNaOS(
+      gerarHtmlOS(osAtual, obterConfigEmpresaAtual()),
+      osAtual
+    );
+  }
+
+  if (btnCompartilharPdf) {
+    btnCompartilharPdf.addEventListener('click', function () {
+      if (!osAtual || (documentoAtualTipo !== 'os' && documentoAtualTipo !== 'entrega')) return;
+      btnCompartilharPdf.disabled = true;
+      btnCompartilharPdf.textContent = 'Preparando PDF…';
+      carregamentoModulos.then(function () {
+        if (!window.SistemaOSCompartilhar || !window.SistemaOSCompartilhar.compartilharPdfHtml) {
+          throw new Error('O compartilhamento ainda não terminou de carregar.');
+        }
+        var numero = numeroDocumentoAtual();
+        var tipo = documentoAtualTipo === 'entrega' ? 'entrega' : 'ordem-de-servico';
+        return window.SistemaOSCompartilhar.compartilharPdfHtml(
+          htmlCompartilhamentoAtual(),
+          tipo + '-' + numero + '.pdf',
+          documentoAtualTipo === 'entrega' ? 'Compartilhar comprovante de entrega' : 'Compartilhar Ordem de Serviço',
+          mensagemCompartilhamentoAtual()
+        );
+      }).then(function () {
+        mostrarFeedback('PDF e mensagem preparados para compartilhar.', false);
+      }).catch(function (erro) {
+        mostrarFeedback('Não foi possível compartilhar: ' + (erro.message || erro), true);
+      }).then(function () {
+        btnCompartilharPdf.disabled = false;
+        btnCompartilharPdf.textContent = 'Compartilhar PDF';
       });
     });
   }
@@ -1482,6 +1548,9 @@
     // item, reexportar dali marca corretamente aquele registro como
     // sincronizado (ver btnExportarPC.addEventListener).
     btnExportarPC.hidden = false;
+    if (btnCompartilharPdf) {
+      btnCompartilharPdf.hidden = documentoAtualTipo !== 'os' && documentoAtualTipo !== 'entrega';
+    }
     avisoAssinado.hidden = modoHistorico ? true : avisoAssinado.hidden;
     var assinaturaPodeFicarPendente = assinaturaEstaPendente(osAtual, documentoAtualTipo);
     btnAssinar.textContent = assinaturaPodeFicarPendente ? 'Assinar agora (opcional)' : 'Assinar';

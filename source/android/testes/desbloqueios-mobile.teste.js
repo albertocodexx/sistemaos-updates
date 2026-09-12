@@ -36,6 +36,8 @@ assert.doesNotMatch(trechoCriacao, /id="desbloqueio-busca"/);
 assert.match(trechoConsulta, /Autorizações de desbloqueio/);
 assert.match(trechoConsulta, /id="desbloqueio-busca"/);
 assert.match(tela, /salvar_desbloqueio/);
+assert.match(tela, /data-compartilhar/);
+assert.match(tela, /compartilharPdfHtml/);
 assert.match(tela, /excluir_desbloqueio/);
 assert.match(tela, /assinaturaEstado: estado/);
 assert.match(tela, /'nao_assinado'/);

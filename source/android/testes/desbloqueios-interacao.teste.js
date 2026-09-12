@@ -14,7 +14,7 @@ async function aguardar(pred){for(let i=0;i<100;i++){if(pred())return;await tick
   w.HTMLElement.prototype.scrollIntoView=function(){};
   w.confirm=()=>true;
   const get=id=>d.getElementById(id);
-  let rows=[],calls=[],signatureCallback,printCall,waiting=null;
+  let rows=[],calls=[],signatureCallback,printCall,shareCall,waiting=null;
   const client={from(){let selectedId;const q={select(){return this},eq(k,v){if(k==='id')selectedId=v;return this},is(){return this},order(){return this},async range(){return {data:rows.filter(x=>!x.deleted_at).map(x=>({...x}))}},async maybeSingle(){if(waiting)return waiting;return {data:rows.find(x=>x.id===selectedId&&!x.deleted_at)||null}}};return q;},async rpc(name,p){
     calls.push({name,p:structuredClone(p)});
     if(name==='excluir_desbloqueio'){rows.find(x=>x.id===p.p_id).deleted_at='2026-09-04';return {data:true};}
@@ -29,8 +29,9 @@ async function aguardar(pred){for(let i=0;i<100;i++){if(pred())return;await tick
   w.SupabaseClientApp={obterCliente:()=>client};
   w.SistemaOSAssinatura={abrir:cb=>{signatureCallback=cb}};
   w.ConfigApp={montarDadosEmpresa:()=>({nomeEmpresa:'Assistência QA',telefone:'00000000000'})};
-  w.Capacitor={Plugins:{Impressao:{imprimir:async data=>{printCall=data;}}}};
+  w.Capacitor={Plugins:{Impressao:{imprimir:async data=>{printCall=data;},compartilharPdf:async data=>{shareCall=data;}}}};
   w.__modules={'desbloqueio-template':{exports:require('../www/src/templates/desbloqueio-template')}};
+  w.eval(ler('www/js/compartilhar-arquivo.js'));
   w.eval(ler('www/js/assinatura-injetor.js'));
   w.eval(ler('www/js/desbloqueios-tela.js'));
   get('btn-desbloqueio-nao-assinado').click();await tick();
@@ -49,6 +50,9 @@ async function aguardar(pred){for(let i=0;i<100;i++){if(pred())return;await tick
   assert.doesNotMatch(iframe.srcdoc,/<script>ruim\(\)<\/script>/,'Texto informado não executa HTML');
   assert.match(iframe.srcdoc,/Assistência QA/,'Documento usa a empresa configurada');
   assert.doesNotMatch(iframe.srcdoc,/>CPF</);
+  d.querySelector('[data-compartilhar]').click();await aguardar(()=>!!shareCall);
+  assert.match(shareCall.html,/DES-0001/,'Compartilhamento recebe o PDF da autorização');
+  assert.match(shareCall.mensagem,/Cliente QA.*autorização de desbloqueio DES-0001.*Assistência QA/s,'Mensagem profissional acompanha o PDF');
   d.querySelector('[data-formato="58mm"]').click();
   d.querySelector('[data-imprimir]').click();await tick();
   assert.match(printCall.html,/width:58mm/,'Impressão Android recebe HTML térmico');

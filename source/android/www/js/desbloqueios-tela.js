@@ -43,6 +43,10 @@
   function moeda(valor) {
     return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
+  function nomeEmpresa() {
+    var empresa = window.ConfigApp?.montarDadosEmpresa?.() || {};
+    return String(empresa.nomeFantasia || empresa.nomeEmpresa || empresa.razaoSocial || 'assistência técnica').trim();
+  }
   function normalizarRpc(data) { return Array.isArray(data) ? data[0] : data; }
   function estadoRotulo(item) {
     if (item.assinatura_estado === 'assinado' || item.assinaturaClienteBase64) return 'Assinado';
@@ -133,7 +137,7 @@
     var html = gerarHtml(row, formato || '');
     var camada = document.createElement('div');
     camada.className = 'desbloqueio-preview-modal';
-    camada.innerHTML = '<div class="desbloqueio-preview-card"><header><div><strong>' + escapar(row.numero) + '</strong><span>' + (formato ? 'Impressão ' + escapar(formato) : 'Documento A4') + '</span></div><button type="button" aria-label="Fechar">×</button></header><iframe title="Prévia da autorização"></iframe><footer><button type="button" class="btn-secundario" data-formato="58mm">Térmico 58 mm</button><button type="button" class="btn-secundario" data-formato="80mm">Térmico 80 mm</button><button type="button" class="btn-primario" data-imprimir>Imprimir / salvar PDF</button></footer></div>';
+    camada.innerHTML = '<div class="desbloqueio-preview-card"><header><div><strong>' + escapar(row.numero) + '</strong><span>' + (formato ? 'Impressão ' + escapar(formato) : 'Documento A4') + '</span></div><button type="button" aria-label="Fechar">×</button></header><iframe title="Prévia da autorização"></iframe><footer><button type="button" class="btn-secundario" data-formato="58mm">Térmico 58 mm</button><button type="button" class="btn-secundario" data-formato="80mm">Térmico 80 mm</button><button type="button" class="btn-secundario" data-compartilhar>Compartilhar PDF</button><button type="button" class="btn-primario" data-imprimir>Imprimir / salvar PDF</button></footer></div>';
     document.body.appendChild(camada);
     var frame = camada.querySelector('iframe');
     var formatoAtual = formato || '';
@@ -157,6 +161,27 @@
         if (plugin?.imprimir) await plugin.imprimir({ html: gerarHtml(row, formatoAtual), titulo: row.numero + ' - Autorização' });
         else { frame.contentWindow.focus(); frame.contentWindow.print(); }
       } catch (erro) { avisar(mensagemErro(erro), true); }
+    });
+    camada.querySelector('[data-compartilhar]').addEventListener('click', async function (evento) {
+      var botao = evento.currentTarget;
+      botao.disabled = true;
+      botao.textContent = 'Preparando PDF…';
+      try {
+        var cliente = String(row.cliente_nome_snapshot || '').trim();
+        var saudacao = cliente ? 'Olá, ' + cliente + '. ' : 'Olá! ';
+        await window.SistemaOSCompartilhar.compartilharPdfHtml(
+          gerarHtml(row, ''),
+          'autorizacao-desbloqueio-' + row.numero + '.pdf',
+          'Compartilhar autorização de desbloqueio',
+          saudacao + 'Segue a autorização de desbloqueio ' + row.numero + ', emitida pela ' + nomeEmpresa() + '.'
+        );
+        avisar('PDF e mensagem preparados para compartilhar.');
+      } catch (erro) {
+        avisar(mensagemErro(erro), true);
+      } finally {
+        botao.disabled = false;
+        botao.textContent = 'Compartilhar PDF';
+      }
     });
     camada.querySelectorAll('[data-formato]').forEach(function (botao) {
       botao.addEventListener('click', function () {

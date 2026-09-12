@@ -106,6 +106,7 @@ assert(!templateOsFonte.includes('fmtMoeda(p.valor)'), 'PDF da OS não expõe o 
 assert(rendererFonte.includes("await window.abrirEditarOS(numeroAtualizado)"), 'modal da OS é recarregado imediatamente depois de salvar');
 assert(rendererFonte.includes("campo.hasAttribute('list')") && rendererFonte.includes('primeiraOpcaoCompativel'), 'Tab completa a primeira sugestão de qualquer campo com lista');
 assert(rendererFonte.includes('listaCoresAparelhos') && rendererFonte.includes("configurar('estMarca', 'estModelo')"), 'cores e formulários auxiliares receberam autocomplete rápido');
+assert(rendererFonte.includes("configurar('desbloqueioMarca', 'desbloqueioModelo')") && rendererFonte.includes("'desbloqueioCor'"), 'Desbloqueios recebeu listas de marca, modelo e cor');
 assert(rendererFonte.includes("nome: 'estCompradorNome'") && rendererFonte.includes("nome: 'cpVNome'"), 'Venda e Compra completam clientes cadastrados por nome/CPF usando Tab');
 assert(rendererFonte.includes('listaCapacidadesAparelhos') && rendererFonte.includes('listaGarantiasVenda'), 'Compra e Venda têm listas rápidas adicionais para capacidade e garantia');
 

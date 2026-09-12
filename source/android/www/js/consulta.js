@@ -213,6 +213,21 @@
     return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
+  function mensagemCompartilhamento(tipo, dados, numeroConsultado) {
+    var empresa = window.ConfigApp?.montarDadosEmpresa?.() || {};
+    var nomeEmpresa = String(empresa.nomeFantasia || empresa.nomeEmpresa || empresa.razaoSocial || 'assistência técnica').trim();
+    var cliente = String(dados.clienteNome || dados.nomeRetirou || dados.cliente?.nome || '').trim();
+    var numero = String(dados.numero || dados.numeroOS || numeroConsultado || 'OS').trim();
+    var saudacao = cliente ? 'Olá, ' + cliente + '. ' : 'Olá! ';
+    var descricao = tipo === 'garantia'
+      ? 'Segue o comprovante de garantia da ' + numero
+      : tipo === 'entrega'
+        ? 'Segue o comprovante de entrega da ' + numero
+        : 'Segue a Ordem de Serviço ' + numero;
+    var concordancia = tipo === 'os' ? 'emitida' : 'emitido';
+    return saudacao + descricao + ', ' + concordancia + ' pela ' + nomeEmpresa + '.';
+  }
+
   function recebidoNaOS(dados) {
     var exato = Number(dados.valorRecebidoConfirmado || 0);
     if (exato > 0) return exato;
@@ -581,6 +596,29 @@
         }
       });
       elemento.appendChild(botaoPdf);
+      var botaoCompartilharPdf = document.createElement('button');
+      botaoCompartilharPdf.type = 'button';
+      botaoCompartilharPdf.className = 'btn-secundario btn-compartilhar-pdf-consulta';
+      botaoCompartilharPdf.textContent = 'Compartilhar PDF';
+      botaoCompartilharPdf.addEventListener('click', function () {
+        botaoCompartilharPdf.disabled = true;
+        botaoCompartilharPdf.textContent = 'Preparando PDF…';
+        var numeroDocumento = String(dados.numero || dados.numeroOS || numeroConsultado || 'OS');
+        window.SistemaOSCompartilhar.compartilharPdfPorUrl(
+          dados.pdfUrl,
+          tipo + '-' + numeroDocumento + '.pdf',
+          'Compartilhar ' + (tipo === 'garantia' ? 'garantia' : tipo === 'entrega' ? 'comprovante de entrega' : 'Ordem de Serviço'),
+          mensagemCompartilhamento(tipo, dados, numeroConsultado)
+        ).then(function () {
+          if (window.SistemaOSToast) window.SistemaOSToast.mostrar('PDF e mensagem preparados para compartilhar.', 'sucesso');
+        }).catch(function (erro) {
+          if (window.SistemaOSToast) window.SistemaOSToast.mostrar('Não foi possível compartilhar: ' + (erro.message || erro), 'erro');
+        }).then(function () {
+          botaoCompartilharPdf.disabled = false;
+          botaoCompartilharPdf.textContent = 'Compartilhar PDF';
+        });
+      });
+      elemento.appendChild(botaoCompartilharPdf);
     } else if (dados.pdfFalhou) {
       // PDF indisponível no PC (upload falhou / arquivo sumiu / sem path).
       // Antes só sumia o botão silenciosamente.

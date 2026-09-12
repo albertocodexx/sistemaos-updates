@@ -9,6 +9,12 @@ Atualizações oficiais do Sistema OS para Windows e Android.
 
 Os dois links apontam sempre para os arquivos da atualização marcada como mais recente.
 
+## Atualização 30.5.136
+
+PC e Android agora usam a mesma versão pública no padrão SemVer. No Android, OS, entregas, garantias e autorizações de desbloqueio podem ser compartilhadas como PDF com uma mensagem profissional já preenchida. No PC, o cadastro de desbloqueio passa a sugerir marca, modelo e cor.
+
+- [Detalhes da versão](release-notes-30.5.136.md)
+
 ## Atualização 30.5.133 / Android 1.0.89
 
 Esta versão reforça a segurança e a confiabilidade da sincronização entre PC, Android e PostgreSQL. Inclui isolamento multiempresa auditado em produção, permissões mais restritas nas funções do banco, filas offline duráveis para assinaturas e operações, paginação completa para recuperar dados em outro computador e respostas de erro sem vazamento de detalhes internos.

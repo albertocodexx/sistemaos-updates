@@ -7,6 +7,10 @@
       imei:g.imei_snapshot, servicoRealizado:g.reparo_realizado, garantiaDias:g.garantia_dias, dataInicio:g.data_abertura+'T12:00:00',
       dataLimite:g.data_limite ? g.data_limite+'T12:00:00' : '', termos:g.termos || '' };
   }
+  function nomeEmpresa() {
+    const empresa = root.ConfigApp?.montarDadosEmpresa?.() || {};
+    return String(empresa.nomeFantasia || empresa.nomeEmpresa || empresa.razaoSocial || 'assistência técnica').trim();
+  }
   function retornoAtual(linha) {
     const extras = linha.dados_extras || {};
     const retornos = Array.isArray(extras.retornosGarantia) ? extras.retornosGarantia : [];
@@ -95,6 +99,28 @@
           } catch (e) { root.SistemaOSToast.mostrar('Não foi possível imprimir. Tente novamente.', 'erro'); }
         };
         dialog.appendChild(imprimir);
+        const compartilhar = document.createElement('button'); compartilhar.type = 'button'; compartilhar.className = 'btn-secundario'; compartilhar.textContent = 'Compartilhar PDF';
+        compartilhar.onclick = async () => {
+          compartilhar.disabled = true;
+          compartilhar.textContent = 'Preparando PDF…';
+          try {
+            const cliente = String(linha.cliente_nome_snapshot || '').trim();
+            const saudacao = cliente ? 'Olá, ' + cliente + '. ' : 'Olá! ';
+            await root.SistemaOSCompartilhar.compartilharPdfHtml(
+              html,
+              'garantia-' + numero + '.pdf',
+              'Compartilhar garantia',
+              saudacao + 'Segue o comprovante de garantia da ' + numero + ', emitido pela ' + nomeEmpresa() + '.'
+            );
+            root.SistemaOSToast.mostrar('PDF e mensagem preparados para compartilhar.', 'sucesso');
+          } catch (e) {
+            root.SistemaOSToast.mostrar('Não foi possível compartilhar: ' + (e.message || e), 'erro');
+          } finally {
+            compartilhar.disabled = false;
+            compartilhar.textContent = 'Compartilhar PDF';
+          }
+        };
+        dialog.appendChild(compartilhar);
       } else {
         const form = document.createElement('form');
         form.innerHTML = '<p>OS e identificação do cliente são preservadas. Alterações valem apenas para esta garantia.</p>'+
