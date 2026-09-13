@@ -877,7 +877,7 @@
     <section class="painel-config" id="painel-config" hidden>
 
       <form id="form-config" class="form-os" novalidate>
-        <p class="config-versao-aplicativo">Aplicativo instalado: <strong>20.5.5</strong></p>
+        <p class="config-versao-aplicativo">Aplicativo instalado: <strong>20.5.6</strong></p>
 
         <fieldset class="secao-config config-empresa-somente-leitura">
           <legend>Dados da empresa</legend>
@@ -1736,10 +1736,21 @@
 
   <div id="tela-assinatura" class="tela-assinatura" hidden>
     <div class="assinatura-topo">
-      <p id="assinatura-topo-texto">Assine com o dedo no espaço abaixo</p>
+      <div>
+        <strong>Assinatura do cliente</strong>
+        <p id="assinatura-topo-texto">Use o dedo e assine acima da linha</p>
+      </div>
+      <span class="assinatura-orientacao">Celular deitado</span>
     </div>
-    <canvas id="canvas-assinatura" class="canvas-assinatura"></canvas>
+    <div class="assinatura-area">
+      <div class="assinatura-papel">
+        <canvas id="canvas-assinatura" class="canvas-assinatura" aria-label="Área para desenhar a assinatura"></canvas>
+        <div class="assinatura-linha" aria-hidden="true"></div>
+        <span class="assinatura-legenda" aria-hidden="true">ASSINE ACIMA DA LINHA</span>
+      </div>
+    </div>
     <div class="assinatura-acoes">
+      <button type="button" id="btn-cancelar-assinatura" class="btn-secundario">Cancelar</button>
       <button type="button" id="btn-limpar-assinatura" class="btn-secundario">Limpar</button>
       <button type="button" id="btn-confirmar-assinatura" class="btn-primario" disabled>Confirmar</button>
     </div>

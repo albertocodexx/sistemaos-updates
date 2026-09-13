@@ -13,12 +13,40 @@
   var ctx = canvas.getContext('2d');
   var btnLimpar = document.getElementById('btn-limpar-assinatura');
   var btnConfirmar = document.getElementById('btn-confirmar-assinatura');
+  var btnCancelar = document.getElementById('btn-cancelar-assinatura');
 
   var desenhando = false;
   var temTraco = false;
   var ultimoX = 0;
   var ultimoY = 0;
   var callbackConfirmar = null;
+  var aberturaAtual = 0;
+
+  function pluginOrientacao() {
+    return window.Capacitor && window.Capacitor.Plugins
+      ? window.Capacitor.Plugins.ScreenOrientation
+      : null;
+  }
+
+  function bloquearOrientacao(orientacao) {
+    var plugin = pluginOrientacao();
+    if (plugin && typeof plugin.lock === 'function') {
+      return Promise.resolve(plugin.lock({ orientation: orientacao })).catch(function () {});
+    }
+    var orientacaoWeb = window.screen && window.screen.orientation;
+    if (orientacaoWeb && typeof orientacaoWeb.lock === 'function') {
+      return Promise.resolve(orientacaoWeb.lock(orientacao)).catch(function () {});
+    }
+    return Promise.resolve();
+  }
+
+  function orientarParaAssinar() {
+    return bloquearOrientacao('landscape');
+  }
+
+  function restaurarOrientacaoDoApp() {
+    return bloquearOrientacao('portrait');
+  }
 
   function dimensionarCanvas() {
     // Redimensiona o canvas para ocupar o espaço real em pixels do
@@ -28,8 +56,9 @@
     var retangulo = canvas.getBoundingClientRect();
     var imagemAnterior = temTraco ? canvas.toDataURL() : null;
 
-    canvas.width = retangulo.width * dpr;
-    canvas.height = retangulo.height * dpr;
+    if (!retangulo.width || !retangulo.height) return;
+    canvas.width = Math.round(retangulo.width * dpr);
+    canvas.height = Math.round(retangulo.height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     configurarTraco();
 
@@ -203,6 +232,7 @@
   window.addEventListener('mouseup', encerrarTraco);
 
   btnLimpar.addEventListener('click', limparCanvas);
+  if (btnCancelar) btnCancelar.addEventListener('click', fechar);
 
   btnConfirmar.addEventListener('click', function () {
     if (!temTraco) return; // defesa extra além do disabled
@@ -226,18 +256,36 @@
     if (!tela.hidden) dimensionarCanvas();
   });
 
+  function agendarDimensionamento(token) {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        if (!tela.hidden && token === aberturaAtual) dimensionarCanvas();
+      });
+    });
+  }
+
   function abrir(aoConfirmar) {
     callbackConfirmar = aoConfirmar;
-    limparCanvas();
+    aberturaAtual += 1;
+    var token = aberturaAtual;
     tela.hidden = false;
-    // Aguarda o layout ficar visível antes de medir o canvas.
-    requestAnimationFrame(dimensionarCanvas);
+    document.documentElement.classList.add('assinatura-aberta');
+    temTraco = false;
+    btnConfirmar.disabled = true;
+    // A captura abre deitada para oferecer uma área larga, parecida com a
+    // linha do documento. O duplo frame mede somente depois de o Android
+    // concluir a rotação e de o novo layout estar visível.
+    orientarParaAssinar().then(function () { agendarDimensionamento(token); });
+    agendarDimensionamento(token);
   }
 
   function fechar() {
+    aberturaAtual += 1;
     tela.hidden = true;
+    document.documentElement.classList.remove('assinatura-aberta');
     callbackConfirmar = null;
+    restaurarOrientacaoDoApp();
   }
 
-  window.SistemaOSAssinatura = { abrir: abrir };
+  window.SistemaOSAssinatura = { abrir: abrir, fechar: fechar };
 })();

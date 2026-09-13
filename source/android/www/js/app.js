@@ -391,24 +391,73 @@
 
   function numeroDocumentoAtual() {
     var dados = osAtual || {};
+    if (documentoAtualTipo === 'venda') {
+      return String(dados.numeroVenda || dados.id || 'Venda').trim();
+    }
+    if (documentoAtualTipo === 'compra') {
+      return String(dados.numeroCompra || dados.numero || 'Compra').trim();
+    }
     return String(dados.numeroOSAtribuido || dados.numeroOS || dados.numero || 'OS').trim();
   }
 
-  function mensagemCompartilhamentoAtual() {
+  function metadadosCompartilhamentoAtual() {
     var dados = osAtual || {};
     var numero = numeroDocumentoAtual();
-    var cliente = documentoAtualTipo === 'entrega'
-      ? String(dados.nomeRetirou || dados.recebidoPor || '').trim()
-      : String(dados.cliente && dados.cliente.nome || '').trim();
-    var saudacao = cliente ? 'Olá, ' + cliente + '. ' : 'Olá! ';
-    var descricao = documentoAtualTipo === 'entrega'
-      ? 'Segue o comprovante de entrega da ' + numero
-      : 'Segue a Ordem de Serviço ' + numero;
-    return saudacao + descricao + ', ' + (documentoAtualTipo === 'entrega' ? 'emitido' : 'emitida') +
-      ' pela ' + nomeEmpresaParaMensagem() + '.';
+    if (documentoAtualTipo === 'compra') {
+      return {
+        cliente: String(dados.vendedor && dados.vendedor.nome || '').trim(),
+        descricao: 'Segue o contrato de compra ' + numero,
+        generoEmitido: 'emitido',
+        prefixoArquivo: 'contrato-de-compra',
+        titulo: 'Compartilhar contrato de compra'
+      };
+    }
+    if (documentoAtualTipo === 'venda') {
+      return {
+        cliente: String(dados.compradorNome || '').trim(),
+        descricao: 'Segue o comprovante de venda ' + numero,
+        generoEmitido: 'emitido',
+        prefixoArquivo: 'comprovante-de-venda',
+        titulo: 'Compartilhar comprovante de venda'
+      };
+    }
+    if (documentoAtualTipo === 'entrega') {
+      return {
+        cliente: String(dados.nomeRetirou || dados.recebidoPor || '').trim(),
+        descricao: 'Segue o comprovante de entrega da ' + numero,
+        generoEmitido: 'emitido',
+        prefixoArquivo: 'entrega',
+        titulo: 'Compartilhar comprovante de entrega'
+      };
+    }
+    return {
+      cliente: String(dados.cliente && dados.cliente.nome || '').trim(),
+      descricao: 'Segue a Ordem de Serviço ' + numero,
+      generoEmitido: 'emitida',
+      prefixoArquivo: 'ordem-de-servico',
+      titulo: 'Compartilhar Ordem de Serviço'
+    };
+  }
+
+  function mensagemCompartilhamentoAtual() {
+    var meta = metadadosCompartilhamentoAtual();
+    var saudacao = meta.cliente ? 'Olá, ' + meta.cliente + '. ' : 'Olá! ';
+    return saudacao + meta.descricao + ', ' + meta.generoEmitido + ' pela ' + nomeEmpresaParaMensagem() + '.';
   }
 
   function htmlCompartilhamentoAtual() {
+    if (documentoAtualTipo === 'compra') {
+      return aplicarAssinaturasNaCompra(
+        gerarHtmlCompra(osAtual, obterConfigEmpresaAtual()),
+        osAtual
+      );
+    }
+    if (documentoAtualTipo === 'venda') {
+      return aplicarAssinaturasNaVenda(
+        gerarHtmlVenda(osAtual, obterConfigEmpresaAtual()),
+        osAtual
+      );
+    }
     if (documentoAtualTipo === 'entrega') {
       return aplicarAssinaturasNaEntrega(
         gerarHtmlEntrega(osAtual, obterConfigEmpresaAtual()),
@@ -423,7 +472,10 @@
 
   if (btnCompartilharPdf) {
     btnCompartilharPdf.addEventListener('click', function () {
-      if (!osAtual || (documentoAtualTipo !== 'os' && documentoAtualTipo !== 'entrega')) return;
+      if (!osAtual) {
+        mostrarFeedback('Gere ou abra um documento antes de compartilhar.', true);
+        return;
+      }
       btnCompartilharPdf.disabled = true;
       btnCompartilharPdf.textContent = 'Preparando PDF…';
       carregamentoModulos.then(function () {
@@ -431,11 +483,11 @@
           throw new Error('O compartilhamento ainda não terminou de carregar.');
         }
         var numero = numeroDocumentoAtual();
-        var tipo = documentoAtualTipo === 'entrega' ? 'entrega' : 'ordem-de-servico';
+        var meta = metadadosCompartilhamentoAtual();
         return window.SistemaOSCompartilhar.compartilharPdfHtml(
           htmlCompartilhamentoAtual(),
-          tipo + '-' + numero + '.pdf',
-          documentoAtualTipo === 'entrega' ? 'Compartilhar comprovante de entrega' : 'Compartilhar Ordem de Serviço',
+          meta.prefixoArquivo + '-' + numero + '.pdf',
+          meta.titulo,
           mensagemCompartilhamentoAtual()
         );
       }).then(function (resultado) {
@@ -1549,7 +1601,11 @@
     // sincronizado (ver btnExportarPC.addEventListener).
     btnExportarPC.hidden = false;
     if (btnCompartilharPdf) {
-      btnCompartilharPdf.hidden = documentoAtualTipo !== 'os' && documentoAtualTipo !== 'entrega';
+      // OS, Compra, Venda e Entrega usam o mesmo compartilhamento nativo.
+      // Antes Compra/Venda eram escondidas aqui e o clique também retornava
+      // silenciosamente, por isso tocar em "Compartilhar" numa venda não
+      // abria nada no Android.
+      btnCompartilharPdf.hidden = false;
     }
     avisoAssinado.hidden = modoHistorico ? true : avisoAssinado.hidden;
     var assinaturaPodeFicarPendente = assinaturaEstaPendente(osAtual, documentoAtualTipo);

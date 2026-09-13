@@ -103,11 +103,20 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
     const html = ler('www/index.html');
     assert.match(html, /id="btn-compartilhar-pdf"/);
     assert.match(app, /compartilharPdfHtml/);
+    assert.match(app, /documentoAtualTipo === 'compra'/, 'Compra deve gerar o próprio PDF no compartilhamento');
+    assert.match(app, /documentoAtualTipo === 'venda'/, 'Venda deve gerar o próprio PDF no compartilhamento');
+    assert.match(app, /aplicarAssinaturasNaCompra\([\s\S]*gerarHtmlCompra/, 'Compra deve preservar assinaturas no PDF compartilhado');
+    assert.match(app, /aplicarAssinaturasNaVenda\([\s\S]*gerarHtmlVenda/, 'Venda deve preservar assinaturas no PDF compartilhado');
+    assert.match(app, /prefixoArquivo: 'contrato-de-compra'/);
+    assert.match(app, /prefixoArquivo: 'comprovante-de-venda'/);
+    assert.match(app, /btnCompartilharPdf\.hidden = false/, 'Compartilhar deve permanecer visível nos quatro documentos');
+    assert.doesNotMatch(app, /if \(!osAtual \|\| \(documentoAtualTipo !== 'os' && documentoAtualTipo !== 'entrega'\)\) return/,
+      'O clique não pode ignorar silenciosamente Compra ou Venda');
     assert.match(garantia, /compartilharPdfHtml/);
     assert.match(desbloqueio, /compartilharPdfHtml/);
     assert.match(consulta, /compartilharPdfPorUrl/);
 
-    console.log('OK: OS, entrega, garantia e desbloqueio compartilham PDF com mensagem pronta no Android.');
+    console.log('OK: OS, compra, venda, entrega, garantia e desbloqueio compartilham PDF com mensagem pronta no Android.');
   } finally {
     dom.window.close();
   }
