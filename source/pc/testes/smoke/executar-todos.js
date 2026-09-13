@@ -73,6 +73,7 @@ const testes = [
   'teste-pagamentos-entrada-50.js',
   'teste-jornada-usuario-completa.js',
   'teste-pdfs-sem-fotos-anexadas.js',
+  'teste-pdf-vias-separadas.js',
   'teste-assinatura-estados-pdf.js',
   'teste-comprovante-os.js',
   'teste-fluxo-comprovante-entrega.js',

@@ -19,10 +19,12 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
   });
   const w = dom.window;
   const orientacoes = [];
+  let desbloqueios = 0;
 
   w.requestAnimationFrame = callback => { callback(); return 1; };
   w.Capacitor = { Plugins: { ScreenOrientation: {
-    async lock(opcoes) { orientacoes.push(opcoes.orientation); }
+    async lock(opcoes) { orientacoes.push(opcoes.orientation); },
+    async unlock() { desbloqueios += 1; }
   } } };
   w.HTMLCanvasElement.prototype.getBoundingClientRect = function () {
     return { left: 0, top: 0, width: 640, height: 220, right: 640, bottom: 220 };
@@ -41,20 +43,22 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
     w.SistemaOSAssinatura.abrir(() => {});
     await Promise.resolve();
     assert.equal(w.document.getElementById('tela-assinatura').hidden, false);
-    assert.equal(orientacoes[0], 'landscape', 'Ao abrir, a assinatura deve travar o celular de lado');
+    assert.equal(orientacoes[0], 'landscape-primary', 'Ao abrir, a assinatura deve travar o celular de lado');
     assert.ok(w.document.querySelector('.assinatura-linha'), 'A superfície deve mostrar a linha de assinatura');
     assert.match(w.document.querySelector('.assinatura-legenda').textContent, /ASSINE ACIMA DA LINHA/);
 
     w.document.getElementById('btn-cancelar-assinatura').click();
-    await Promise.resolve();
+    await new Promise(resolve => setImmediate(resolve));
     assert.equal(w.document.getElementById('tela-assinatura').hidden, true);
-    assert.equal(orientacoes.at(-1), 'portrait', 'Ao sair, o aplicativo deve voltar para o modo em pé');
+    assert.ok(desbloqueios >= 1, 'Ao sair, deve liberar o bloqueio anterior antes de voltar ao retrato');
+    assert.equal(orientacoes.at(-1), 'portrait-primary', 'Ao sair, o aplicativo deve voltar para o modo em pé normal');
+    assert.match(ler('www/js/assinatura.js'), /\[180, 650\]/, 'A volta ao retrato deve ser repetida após a reconfiguração da WebView');
 
     const css = ler('www/css/app.css');
     assert.match(css, /\.assinatura-papel[\s\S]*border: 2px solid/);
     assert.match(css, /\.assinatura-linha[\s\S]*bottom: 25%/);
     assert.match(css, /\.canvas-assinatura[\s\S]*background: transparent/);
-    console.log('OK: assinatura abre em paisagem, mostra papel e linha-guia, e retorna ao modo retrato ao fechar.');
+    console.log('OK: assinatura abre em paisagem e força retrato primário ao fechar, com repetição resiliente.');
   } finally {
     dom.window.close();
   }

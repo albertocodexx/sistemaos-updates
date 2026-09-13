@@ -1,6 +1,6 @@
 // src/templates/compra-template.js
-// Contrato de Compra — duas vias lado a lado (paisagem A4)
-// Estilo escuro (cabeçalhos pretos), compacto para caber declarações e termos.
+// Contrato de Compra — uma folha A4 retrato para cada via.
+// Mantém as duas vias completas, sem reduzir ou dividir o conteúdo na mesma folha.
 
 const { montarDadosEmpresa } = require('./empresa-compositor');
 const { resolverTemaPdf } = require('./tema-pdf');
@@ -201,27 +201,19 @@ function gerarHtmlCompra(cp, config) {
   body{
     font-family:'Arial','Helvetica Neue',sans-serif;
     background:#fff;font-size:11px;color:#111;line-height:1.4;
+    width:210mm;min-height:297mm;
     --logo-h:${config.tamanhoLogoPdf||80}px;
     --fonte-termos:${fonteTermosInicial}pt;
   }
   .pagina{
-    width:297mm;height:210mm;
-    display:flex;flex-direction:row;align-items:stretch;
-    overflow:hidden;position:relative;
+    width:210mm;min-height:297mm;display:block;
   }
   .via{
-    width:50%;padding:7mm 8mm 5mm;
-    display:flex;flex-direction:column;overflow:hidden;
+    width:210mm;min-height:297mm;padding:7mm 12mm 6mm;
+    display:flex;flex-direction:column;overflow:visible;
+    break-after:page;page-break-after:always;
   }
-  .linha-corte{
-    width:1.5px;flex-shrink:0;
-    background:repeating-linear-gradient(to bottom,#6b7280 0,#6b7280 5px,transparent 5px,transparent 10px);z-index:5;
-  }
-  .tesoura{
-    position:absolute;top:50%;left:50%;
-    transform:translate(-50%,-50%);
-    background:#fff;border-radius:50%;padding:2px;z-index:10;
-  }
+  .via:last-child{break-after:auto;page-break-after:auto;}
 
   /* CABEÇALHO */
   .cabecalho{
@@ -256,10 +248,10 @@ function gerarHtmlCompra(cp, config) {
   }
 
   /* SEÇÕES */
-  .secoes{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:2.5px;}
-  .secao{flex-shrink:0;border:1px solid ${t.bordas};border-radius:3px;overflow:hidden;}
+  .secoes{flex:1;min-height:0;overflow:visible;display:flex;flex-direction:column;gap:4px;}
+  .secao{flex-shrink:0;border:1px solid ${t.bordas};border-radius:3px;overflow:visible;break-inside:avoid;page-break-inside:avoid;}
   .secao-atencao .stit{background:#92400e!important;border-left-color:#d97706!important;}
-  .secao-termos{flex:1;min-height:0;display:flex;flex-direction:column;}
+  .secao-termos{flex:0 0 auto;display:flex;flex-direction:column;}
 
   .stit{
     font-size:9px;font-weight:800;color:#fff;
@@ -282,13 +274,13 @@ function gerarHtmlCompra(cp, config) {
   .termos-txt{
     font-size:var(--fonte-termos, 7.8pt);color:#1a1a1a;line-height:1.5;
     padding:3px 10px 4px;white-space:pre-wrap;text-align:justify;
-    flex:1;overflow:hidden;
+    overflow:visible;
   }
 
   /* ASSINATURAS */
   .assinaturas{
     display:flex;justify-content:space-between;gap:12px;
-    margin-top:6px;flex-shrink:0;
+    margin-top:6px;flex-shrink:0;break-inside:avoid;page-break-inside:avoid;
   }
   .assin-bloco{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;}
   .assin-esp{height:60px;width:100%;}
@@ -306,22 +298,12 @@ function gerarHtmlCompra(cp, config) {
     text-align:center;font-size:9px;color:#555;flex-shrink:0;
   }
 
-  @page{size:A4 landscape;margin:0;}
-  @media print{.pagina{page-break-inside:avoid;}}
+  @page{size:A4 portrait;margin:0;}
 </style>
 </head>
 <body>
   <div class="pagina">
     ${viaVendedor}
-    <div class="linha-corte"></div>
-    <div class="tesoura">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="6" cy="6" r="2.4" stroke="${t.elementosGraficos}" stroke-width="1.8"/>
-        <circle cx="6" cy="18" r="2.4" stroke="${t.elementosGraficos}" stroke-width="1.8"/>
-        <line x1="8" y1="7.5" x2="20" y2="17" stroke="${t.elementosGraficos}" stroke-width="1.8" stroke-linecap="round"/>
-        <line x1="8" y1="16.5" x2="20" y2="7" stroke="${t.elementosGraficos}" stroke-width="1.8" stroke-linecap="round"/>
-      </svg>
-    </div>
     ${viaAssistencia}
   </div>
 <script>

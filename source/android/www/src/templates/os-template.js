@@ -1,7 +1,6 @@
 // src/templates/os-template.js
-// PDF da Ordem de Serviço — Via do Cliente e Via da Assistência LADO A LADO
-// Folha A4 paisagem (50/50). Estilo escuro com cabeçalhos pretos, texto compacto
-// para caber todos os termos. Linha tracejada central de recorte.
+// PDF da Ordem de Serviço — uma folha A4 retrato para cada via.
+// O cliente e a assistência recebem vias completas em páginas separadas.
 
 const { montarDadosEmpresa } = require('./empresa-compositor');
 const { resolverTemaPdf } = require('./tema-pdf');
@@ -230,31 +229,21 @@ function gerarHtmlOS(os, config) {
     font-family:'Arial','Helvetica Neue',sans-serif;
     color:#111;background:#fff;
     font-size:11px;line-height:1.4;
-    width:297mm;height:210mm;
+    width:210mm;min-height:297mm;
     --logo-h:${config.tamanhoLogoPdf||80}px;
     --fonte-termos:${resolverTamanhoFonteTermos(config)}pt;
   }
   .pagina{
-    position:relative;width:297mm;height:210mm;
-    display:flex;flex-direction:row;
-  }
-  .linha-corte{
-    position:absolute;top:0;bottom:0;left:50%;
-    width:0;border-left:1.5px dashed #6b7280;z-index:5;
-  }
-  .tesoura{
-    position:absolute;left:50%;top:8mm;
-    transform:translate(-50%,-50%);
-    background:#fff;display:flex;align-items:center;justify-content:center;
-    width:20px;height:20px;padding:2px;z-index:6;
+    position:relative;width:210mm;min-height:297mm;display:block;
   }
 
   /* VIA */
   .via{
-    width:50%;height:210mm;
-    padding:7mm 8mm 5mm;
-    display:flex;flex-direction:column;overflow:hidden;
+    width:210mm;min-height:297mm;padding:7mm 12mm 6mm;
+    display:flex;flex-direction:column;overflow:visible;
+    break-after:page;page-break-after:always;
   }
+  .via:last-child{break-after:auto;page-break-after:auto;}
 
   /* CABEÇALHO */
   .cabecalho{
@@ -296,8 +285,8 @@ function gerarHtmlOS(os, config) {
   }
 
   /* SEÇÕES */
-  .secoes{display:flex;flex-direction:column;gap:3.5px;flex:1;min-height:0;overflow:hidden;}
-  .secao{border:1px solid ${t.bordas};border-radius:3px;overflow:hidden;flex-shrink:0;}
+  .secoes{display:flex;flex-direction:column;gap:4px;flex:1;min-height:0;overflow:visible;}
+  .secao{border:1px solid ${t.bordas};border-radius:3px;overflow:visible;flex-shrink:0;break-inside:avoid;page-break-inside:avoid;}
   .secao-titulo{
     background:${t.cabecalhos};color:#fff;
     font-size:9px;font-weight:800;
@@ -324,18 +313,18 @@ function gerarHtmlOS(os, config) {
      font-size parte de --fonte-termos (ajustável em Configurações); o
      script de autofit no final do documento ainda pode reduzir a partir
      daí se o texto não couber na via impressa. */
-  .secao-termos{flex:1;min-height:0;display:flex;flex-direction:column;}
+  .secao-termos{flex:0 0 auto;display:flex;flex-direction:column;}
   .termos-texto{
     font-size:var(--fonte-termos,7.8pt);color:#1a1a1a;
     padding:4px 10px 5px;
     white-space:pre-wrap;word-break:break-word;
-    line-height:1.5;overflow:hidden;flex:1;text-align:justify;
+    line-height:1.5;overflow:visible;text-align:justify;
   }
 
   /* ASSINATURAS */
   .assinaturas{
     display:flex;justify-content:space-between;gap:14px;
-    margin-top:7px;padding-top:2px;flex-shrink:0;
+    margin-top:7px;padding-top:2px;flex-shrink:0;break-inside:avoid;page-break-inside:avoid;
   }
   .assinatura-bloco{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;}
   /* 56px = mesma altura mínima usada em js/assinatura-injetor.js
@@ -360,22 +349,12 @@ function gerarHtmlOS(os, config) {
     text-align:center;font-size:9px;color:#555;flex-shrink:0;
   }
 
-  @page{size:A4 landscape;margin:0;}
-  @media print{.pagina{page-break-inside:avoid;}}
+  @page{size:A4 portrait;margin:0;}
 </style>
 </head>
 <body>
   <div class="pagina">
     ${viaCliente}
-    <div class="linha-corte"></div>
-    <div class="tesoura">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="6" cy="6" r="2.4" stroke="${t.elementosGraficos}" stroke-width="1.8"/>
-        <circle cx="6" cy="18" r="2.4" stroke="${t.elementosGraficos}" stroke-width="1.8"/>
-        <line x1="8" y1="7.5" x2="20" y2="17" stroke="${t.elementosGraficos}" stroke-width="1.8" stroke-linecap="round"/>
-        <line x1="8" y1="16.5" x2="20" y2="7" stroke="${t.elementosGraficos}" stroke-width="1.8" stroke-linecap="round"/>
-      </svg>
-    </div>
     ${viaAssistencia}
   </div>
 <script>

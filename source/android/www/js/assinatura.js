@@ -21,6 +21,8 @@
   var ultimoY = 0;
   var callbackConfirmar = null;
   var aberturaAtual = 0;
+  var mudancaOrientacaoAtual = 0;
+  var temporizadoresOrientacao = [];
 
   function pluginOrientacao() {
     return window.Capacitor && window.Capacitor.Plugins
@@ -28,24 +30,58 @@
       : null;
   }
 
+  function limparTemporizadoresOrientacao() {
+    while (temporizadoresOrientacao.length) {
+      clearTimeout(temporizadoresOrientacao.pop());
+    }
+  }
+
   function bloquearOrientacao(orientacao) {
     var plugin = pluginOrientacao();
     if (plugin && typeof plugin.lock === 'function') {
-      return Promise.resolve(plugin.lock({ orientation: orientacao })).catch(function () {});
+      return Promise.resolve(plugin.lock({ orientation: orientacao }));
     }
     var orientacaoWeb = window.screen && window.screen.orientation;
     if (orientacaoWeb && typeof orientacaoWeb.lock === 'function') {
-      return Promise.resolve(orientacaoWeb.lock(orientacao)).catch(function () {});
+      return Promise.resolve(orientacaoWeb.lock(orientacao));
     }
     return Promise.resolve();
   }
 
   function orientarParaAssinar() {
-    return bloquearOrientacao('landscape');
+    limparTemporizadoresOrientacao();
+    mudancaOrientacaoAtual += 1;
+    return bloquearOrientacao('landscape-primary').catch(function () {
+      return bloquearOrientacao('landscape').catch(function () {});
+    });
   }
 
   function restaurarOrientacaoDoApp() {
-    return bloquearOrientacao('portrait');
+    limparTemporizadoresOrientacao();
+    mudancaOrientacaoAtual += 1;
+    var token = mudancaOrientacaoAtual;
+    var plugin = pluginOrientacao();
+
+    // Alguns aparelhos concluem a rotação para paisagem depois que o modal
+    // já foi fechado. Primeiro liberamos o bloqueio anterior e, em seguida,
+    // forçamos retrato primário. Duas verificações curtas cobrem a recriação
+    // tardia da Activity/WebView sem deixar o restante do aplicativo deitado.
+    var liberar = plugin && typeof plugin.unlock === 'function'
+      ? Promise.resolve(plugin.unlock()).catch(function () {})
+      : Promise.resolve();
+
+    function forcarRetrato() {
+      if (token !== mudancaOrientacaoAtual || !tela.hidden) return Promise.resolve();
+      return bloquearOrientacao('portrait-primary').catch(function () {
+        return bloquearOrientacao('portrait').catch(function () {});
+      });
+    }
+
+    return liberar.then(forcarRetrato).then(function () {
+      [180, 650].forEach(function (atraso) {
+        temporizadoresOrientacao.push(setTimeout(forcarRetrato, atraso));
+      });
+    });
   }
 
   function dimensionarCanvas() {
@@ -265,6 +301,7 @@
   }
 
   function abrir(aoConfirmar) {
+    limparTemporizadoresOrientacao();
     callbackConfirmar = aoConfirmar;
     aberturaAtual += 1;
     var token = aberturaAtual;
@@ -284,8 +321,17 @@
     tela.hidden = true;
     document.documentElement.classList.remove('assinatura-aberta');
     callbackConfirmar = null;
-    restaurarOrientacaoDoApp();
+    return restaurarOrientacaoDoApp();
   }
+
+  // Se o Android suspender e recriar a Activity durante a assinatura, garanta
+  // retrato assim que o app voltar a ficar visível e o modal já estiver fechado.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && tela.hidden) restaurarOrientacaoDoApp();
+  });
+  window.addEventListener('pageshow', function () {
+    if (tela.hidden) restaurarOrientacaoDoApp();
+  });
 
   window.SistemaOSAssinatura = { abrir: abrir, fechar: fechar };
 })();
