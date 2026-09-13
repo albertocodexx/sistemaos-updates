@@ -20,7 +20,8 @@
     el.className = 'desbloqueio-mensagem ' + (texto ? (erro ? 'erro' : 'ok') : '');
   }
   function formatarData(valor) {
-    const d = new Date(valor || '');
+    const texto = String(valor || '').trim();
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(texto) ? texto + 'T12:00:00' : texto);
     return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR');
   }
   function statusDo(item) {

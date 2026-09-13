@@ -290,6 +290,52 @@ async function executar() {
     assert.equal(exclusaoChamada, false);
   });
 
+  await teste('troca de conta durante o retry devolve a operação à fila original sem consumir tentativa', async () => {
+    const item = {
+      id: 'os:create:troca-conta', empresaId: 'empresa-a', usuarioId: 'usuario-a',
+      entidade: 'ordem_servico', operacao: 'insert', idExportacao: 'troca-conta',
+      dados: { cliente_nome_snapshot: 'Ana' }, status: 'pendente', tentativas: 0,
+      criadoEm: '2026-09-13T10:00:00Z'
+    };
+    let atual = { empresaId: 'empresa-a', usuarioId: 'usuario-a' };
+    let estadoOperacao = Object.assign({}, item);
+    let envioRemoto = false;
+    Object.defineProperty(global, 'navigator', { value: { onLine: true }, configurable: true });
+    global.SistemaOSSessao = {
+      obterEstado() {
+        return {
+          tipo: 'autenticado', usuario: { id: atual.usuarioId },
+          contexto: { empresa_id: atual.empresaId, usuario_id: atual.usuarioId }
+        };
+      },
+      async revalidar() { return this.obterEstado(); }
+    };
+    global.SistemaOSSupabaseOS = {
+      _dadosParaCriacao(d) { return d; }, _patchParaServidor(p) { return p; },
+      _classificarErro(e) { return e.tipo || 'servidor'; },
+      async criar() { envioRemoto = true; return { id: 'nao-deveria-enviar' }; }
+    };
+    global.SistemaOSHistorico = {
+      async listarOperacoesNuvemPendentes() {
+        return estadoOperacao.status === 'pendente' ? [Object.assign({}, estadoOperacao)] : [];
+      },
+      async atualizarOperacaoNuvem(id, patch) {
+        estadoOperacao = Object.assign({}, estadoOperacao, patch);
+        if (patch.status === 'enviando') atual = { empresaId: 'empresa-b', usuarioId: 'usuario-b' };
+        return estadoOperacao;
+      },
+      async enfileirarOperacaoNuvem(x) { return x; }
+    };
+    const sync = recarregar(caminhoSync);
+    const resultado = await sync.processarFila();
+    assert.equal(resultado.motivo, 'sessao-alterada');
+    assert.equal(envioRemoto, false, 'nenhuma escrita pode ocorrer sob a empresa recém-aberta');
+    assert.equal(estadoOperacao.status, 'pendente');
+    assert.equal(estadoOperacao.tentativas, 0);
+    assert.equal(estadoOperacao.ultimoErro, null);
+    assert.equal(estadoOperacao.proximaTentativaEm, null);
+  });
+
   await teste('IndexedDB preserva a operação até confirmação e grava número/revision no histórico', async () => {
     const dom = new JSDOM('<!doctype html><html></html>', { runScripts: 'outside-only', url: 'https://etapa5.local/' });
     dom.window.indexedDB = indexedDB;

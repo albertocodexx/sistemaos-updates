@@ -2570,12 +2570,10 @@
   }
 
   function formatarDataListagem(iso) {
-    try {
-      var d = new Date(iso);
-      return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    } catch (e) {
-      return iso;
-    }
+    var texto = String(iso || '').trim();
+    var d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(texto) ? texto + 'T12:00:00' : texto);
+    if (!texto || Number.isNaN(d.getTime())) return texto || '—';
+    return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   }
 
   var RESUMO_TIPO_DOCUMENTO = { os: 'OS', compra: 'Compra', venda: 'Venda', entrega: 'Entrega' };
@@ -2687,8 +2685,11 @@
       // (entrega-template.js, formatarDataSimples).
       var linhaGarantia = '';
       if (tipo === 'entrega' && Number(dados.garantiaDias) > 0) {
-        var dataLimiteFormatada = '';
-        try { dataLimiteFormatada = new Date(dados.dataLimiteGarantia).toLocaleDateString('pt-BR'); } catch (e) { dataLimiteFormatada = ''; }
+        var dataLimiteTexto = String(dados.dataLimiteGarantia || '').trim();
+        var dataLimite = new Date(/^\d{4}-\d{2}-\d{2}$/.test(dataLimiteTexto)
+          ? dataLimiteTexto + 'T12:00:00' : dataLimiteTexto);
+        var dataLimiteFormatada = dataLimiteTexto && !Number.isNaN(dataLimite.getTime())
+          ? dataLimite.toLocaleDateString('pt-BR') : 'data não informada';
         linhaGarantia = '<p class="item-historico-garantia">Garantia: ' +
           escaparHtml(String(dados.garantiaDias)) + ' dias (até ' +
           escaparHtml(dataLimiteFormatada) + ')</p>';

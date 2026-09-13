@@ -412,6 +412,9 @@ button[aria-disabled="true"] {
 .login-seguranca span { display: none !important; }
 
 .toast { background: var(--cor-card) !important; color: var(--cor-texto) !important; border: 1px solid var(--cor-borda-forte) !important; border-radius: 5px !important; box-shadow: var(--sombra-elevada) !important; }
+.toast.toast-erro { background: var(--acento-erro-fundo) !important; color: var(--acento-erro) !important; border-color: var(--acento-erro) !important; }
+.toast.toast-aviso { background: var(--acento-aviso-fundo) !important; color: var(--acento-aviso) !important; border-color: var(--acento-aviso) !important; }
+.toast.toast-sucesso { background: var(--acento-primario-fundo) !important; color: var(--acento-primario) !important; border-color: var(--acento-primario) !important; }
 
 /* Contrato global de contraste: qualquer controle preenchido pela cor
    principal recebe o texto inverso, inclusive ícones e estados ativos. */

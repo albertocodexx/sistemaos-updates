@@ -1,6 +1,6 @@
 /**
  * Consulta leve de OS no Supabase.
- * A view aplica RLS; empresa_id nunca é aceito como parâmetro do APK.
+ * A tabela aplica RLS; empresa_id nunca é aceito como parâmetro do APK.
  */
 (function (root, factory) {
   var api = factory(root);
@@ -9,15 +9,14 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
   'use strict';
 
-  var VIEW = 'vw_ordens_servico_leve';
+  var TABELA = 'ordens_servico';
   var CAMPOS_LEVES = [
-    'id', 'empresa_id', 'numero', 'cliente_nome_snapshot',
+    'id', 'empresa_id', 'numero', 'id_exportacao', 'cliente_id', 'cliente_nome_snapshot',
     'cliente_telefone_snapshot', 'aparelho', 'marca', 'modelo',
     'defeito_relatado', 'observacoes', 'status', 'prioridade', 'tecnico_id',
     'valor', 'forma_pagamento', 'status_pagamento', 'garantia_dias', 'data_abertura',
     'data_prevista', 'hora_prevista', 'data_conclusao', 'revision',
-    'created_at', 'updated_at', 'quantidade_arquivos',
-    'disponibilidades_arquivos'
+    'created_at', 'updated_at', 'dados_extras'
   ].join(',');
   // Painéis que não exibem arquivos não devem consultar a view de busca: ela
   // calcula metadados de anexos para cada OS. A tabela já possui RLS por
@@ -73,9 +72,10 @@
     var cliente = root.SupabaseClientApp.obterCliente();
     var numeroBuscado = texto(numero);
     var resposta = await cliente
-      .from(VIEW)
+      .from(TABELA)
       .select(CAMPOS_LEVES)
       .eq('numero', numeroBuscado)
+      .is('deleted_at', null)
       .maybeSingle();
     if (resposta.error) throw resposta.error;
     if (resposta.data || !numeroAlternativo(numeroBuscado) || numeroAlternativo(numeroBuscado) === numeroBuscado) {
@@ -83,9 +83,10 @@
     }
 
     resposta = await cliente
-      .from(VIEW)
+      .from(TABELA)
       .select(CAMPOS_LEVES)
       .eq('numero', numeroAlternativo(numeroBuscado))
+      .is('deleted_at', null)
       .maybeSingle();
     if (resposta.error) throw resposta.error;
     return resposta.data || null;
@@ -125,6 +126,11 @@
     if (!linha) return null;
     var extras = linha.dados_extras && typeof linha.dados_extras === 'object'
       ? linha.dados_extras : {};
+    var valorTotal = Number(extras.valor_total_servico ?? linha.valor ?? 0) || 0;
+    var valorRecebido = Number(extras.valor_recebido_confirmado ?? 0) || 0;
+    var valorRestante = Object.prototype.hasOwnProperty.call(extras, 'valor_restante_servico')
+      ? Number(extras.valor_restante_servico || 0)
+      : Math.max(0, valorTotal - valorRecebido);
     return {
       id: linha.id,
       empresaId: linha.empresa_id,
@@ -133,7 +139,7 @@
       cliente: {
         nome: linha.cliente_nome_snapshot,
         telefone: linha.cliente_telefone_snapshot,
-        clienteId: extras.cliente_id_numero || ''
+        clienteId: extras.cliente_id_numero || linha.cliente_id || ''
       },
       aparelho: {
         nome: linha.aparelho,
@@ -152,10 +158,10 @@
       statusAprovacao: extras.status_aprovacao
         || (linha.status_pagamento === 'Autorizado' ? 'Aprovado' : 'Pendente'),
       percentualPagamentoConfirmado: Number(extras.percentual_pagamento_confirmado || 0),
-      valorRecebidoConfirmado: Number(extras.valor_recebido_confirmado || 0),
+      valorRecebidoConfirmado: valorRecebido,
       percentualPagamentoAguardado: Number(extras.percentual_pagamento_aguardado || 0),
-      valorTotalServico: Number(extras.valor_total_servico || linha.valor || 0),
-      valorRestanteServico: Number(extras.valor_restante_servico || 0),
+      valorTotalServico: valorTotal,
+      valorRestanteServico: Math.max(0, Number(valorRestante || 0)),
       entrada50Paga: extras.entrada_50_paga === true,
       modalidadePagamentoAprovacao: extras.modalidade_pagamento_aprovacao || '',
       modalidadeParcela1: extras.modalidade_parcela_1 || '',

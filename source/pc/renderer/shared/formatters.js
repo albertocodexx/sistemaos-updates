@@ -11,7 +11,8 @@
         const [ano, mes, dia] = texto.split('-');
         return `${dia}/${mes}/${ano}`;
       }
-      return new Date(texto).toLocaleDateString('pt-BR');
+      const dataLocal = new Date(texto);
+      return Number.isNaN(dataLocal.getTime()) ? '' : dataLocal.toLocaleDateString('pt-BR');
     } catch {
       return '';
     }
@@ -20,6 +21,7 @@
   function dataHora(iso) {
     try {
       const dataLocal = new Date(iso);
+      if (Number.isNaN(dataLocal.getTime())) return '';
       return dataLocal.toLocaleDateString('pt-BR') + ' ' + dataLocal.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     } catch {
       return '';

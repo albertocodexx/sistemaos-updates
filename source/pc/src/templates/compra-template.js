@@ -19,7 +19,11 @@ function e(t) {
 }
 function fmtMoeda(v) { return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 function formatarData(iso) {
-  try { const d=new Date(iso); return d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); } catch { return iso||''; }
+  const texto = String(iso || '').trim();
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(texto) ? texto + 'T12:00:00' : texto);
+  return texto && !Number.isNaN(d.getTime())
+    ? d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})
+    : texto;
 }
 function campo(rotulo, valor) {
   if (!valor) return '';

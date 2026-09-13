@@ -20,7 +20,8 @@ function escapar(valor) {
 }
 
 function formatarData(valor) {
-  const data = new Date(valor || Date.now());
+  const texto = String(valor || '').trim();
+  const data = new Date(texto ? (/^\d{4}-\d{2}-\d{2}$/.test(texto) ? texto + 'T12:00:00' : texto) : Date.now());
   return Number.isNaN(data.getTime()) ? '—' : data.toLocaleDateString('pt-BR');
 }
 

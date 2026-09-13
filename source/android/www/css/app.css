@@ -822,6 +822,16 @@ legend {
   border-color: var(--acento-erro);
   color: var(--acento-erro);
 }
+.toast-aviso {
+  background: var(--acento-aviso-fundo);
+  border-color: var(--acento-aviso);
+  color: var(--acento-aviso);
+}
+.toast-sucesso {
+  background: var(--acento-primario-fundo);
+  border-color: var(--acento-primario);
+  color: var(--acento-primario);
+}
 .toast-entrando {
   opacity: 1;
   transform: translateY(0);

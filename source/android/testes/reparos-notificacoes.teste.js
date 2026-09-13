@@ -83,6 +83,10 @@ const Notificacoes = require(path.join(raiz, 'www', 'js', 'notificacoes.js'));
   assert.ok(/aviso: \d{2}\/\d{2}\/\d{4} às \d{2}:\d{2}/.test(agendada.body),
     'aviso de reparo deve manter data e hora visiveis');
   assert.ok(agendada.schedule && agendada.schedule.at instanceof Date);
+  assert.ok(agendada.schedule.at.getTime() > Date.now(),
+    'notificação imediata deve ser marcada alguns milissegundos no futuro para o Android não rejeitá-la');
+  assert.ok(agendada.id > 0 && agendada.id <= 0x7fffffff,
+    'id da notificação deve caber em um inteiro positivo do Android');
   const autorizada = await Notificacoes.notificarOSAutorizada({
     numero: 'OS-0100', aparelho: { marca: 'Apple', modelo: 'iPhone 15' }
   });

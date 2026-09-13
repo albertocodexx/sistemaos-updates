@@ -20,6 +20,10 @@ function criarCliente(respostas, chamadas) {
         chamadas[indiceChamada].valor = valor;
         return consulta;
       },
+      is(coluna, valor) {
+        chamadas[indiceChamada].exclusao = { coluna, valor };
+        return consulta;
+      },
       order(coluna, opcoes) {
         chamadas[indiceChamada].ordenacao = { coluna, opcoes };
         return consulta;
@@ -60,7 +64,7 @@ async function executar() {
   const caminhoEntrega = path.join(raiz, 'www/js/supabase/entrega-service.js');
   const caminhoCloudData = path.join(raiz, 'www/js/cloud-data.js');
 
-  await teste('OS consulta a view leve com colunas explícitas e sem empresa_id livre', async () => {
+  await teste('OS consulta a tabela protegida com dados essenciais, sem arquivos nem empresa_id livre', async () => {
     const chamadas = [];
     global.SupabaseClientApp = {
       obterCliente() {
@@ -73,21 +77,29 @@ async function executar() {
           garantia_dias: 90, data_abertura: '2026-07-17T10:00:00Z',
           data_prevista: null, hora_prevista: null, data_conclusao: null,
           revision: 2, created_at: '2026-07-17T10:00:00Z', updated_at: '2026-07-17T10:00:00Z',
-          quantidade_arquivos: 2, disponibilidades_arquivos: ['local', 'completa_nuvem']
+          cliente_id: '10003', dados_extras: {
+            cliente_id_numero: '10003', assinatura_pendente: true,
+            valor_total_servico: 150, valor_recebido_confirmado: 50
+          }
         }, error: null }], chamadas);
       }
     };
     const servico = limparModulo(caminhoOS);
     const dados = await servico.consultarPorNumero('3');
-    assert.equal(chamadas[0].tabela, 'vw_ordens_servico_leve');
+    assert.equal(chamadas[0].tabela, 'ordens_servico');
     assert.equal(chamadas[0].coluna, 'numero');
     assert.equal(chamadas[0].valor, '3');
     assert.equal(chamadas[0].campos.includes('*'), false);
     assert.equal(chamadas[0].campos.includes('senha_aparelho'), false);
     assert.equal(chamadas[0].campos.includes('imei'), false);
+    assert.equal(chamadas[0].campos.includes('dados_extras'), true);
+    assert.deepEqual(chamadas[0].exclusao, { coluna: 'deleted_at', valor: null });
     assert.equal(dados.cliente.nome, 'Ana');
+    assert.equal(dados.cliente.clienteId, '10003');
     assert.equal(dados.aparelho.defeitoRelatado, 'Tela');
-    assert.equal(dados.disponibilidadesArquivos, 'local, completa_nuvem');
+    assert.equal(dados.assinaturaPendente, true);
+    assert.equal(dados.valorRecebidoConfirmado, 50);
+    assert.equal(dados.valorRestanteServico, 100, 'quando o restante não foi persistido, calcula total menos recebido');
   });
 
   await teste('buscas repetidas da mesma OS compartilham uma única leitura leve', async () => {

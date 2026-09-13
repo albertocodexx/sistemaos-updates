@@ -9,6 +9,12 @@ Atualizações oficiais do Sistema OS para Windows e Android.
 
 Os dois links apontam sempre para os arquivos da atualização marcada como mais recente.
 
+## Atualização PC 40.5.6 / Android 20.5.8
+
+Esta atualização de manutenção corrige a consulta direta de OS no celular, alertas visuais, datas em documentos e a fila de sincronização ao trocar de conta. Também torna os avisos de cobrança mais compatíveis com Android.
+
+- [Detalhes da versão](release-notes-40.5.6.md)
+
 ## Atualização PC 40.5.3 / Android 20.5.5
 
 Esta versão corrige a tela de Reparos no celular, reforça a comunicação PC/Android, evita conflitos de sincronização e torna a atualização obrigatória na abertura.

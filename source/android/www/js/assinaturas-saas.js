@@ -20,7 +20,8 @@
 
   function data(valor) {
     if (!valor) return 'não informada';
-    var instante = new Date(valor);
+    var texto = String(valor).trim();
+    var instante = new Date(/^\d{4}-\d{2}-\d{2}$/.test(texto) ? texto + 'T12:00:00' : texto);
     return Number.isNaN(instante.getTime()) ? 'não informada' : instante.toLocaleDateString('pt-BR');
   }
 

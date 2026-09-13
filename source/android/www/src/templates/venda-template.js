@@ -51,9 +51,21 @@ const EQUIPAMENTO_CAMPOS_LABELS = {
 function e(t) {
   return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\n/g,'<br/>');
 }
-function fmtData(iso) { try { return new Date(iso).toLocaleDateString('pt-BR'); } catch { return iso||''; } }
+function criarDataLocal(valor) {
+  const texto = String(valor || '').trim();
+  if (!texto) return null;
+  // Datas de formulário não possuem fuso. Interpretá-las como UTC muda o
+  // dia em fusos negativos, inclusive no Brasil.
+  const data = new Date(/^\d{4}-\d{2}-\d{2}$/.test(texto) ? texto + 'T12:00:00' : texto);
+  return Number.isNaN(data.getTime()) ? null : data;
+}
+function fmtData(iso) {
+  const data = criarDataLocal(iso);
+  return data ? data.toLocaleDateString('pt-BR') : String(iso || '');
+}
 function fmtDataHora(iso) {
-  try { const d=new Date(iso); return d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); } catch { return iso||''; }
+  const d = criarDataLocal(iso);
+  return d ? d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : String(iso || '');
 }
 function fmtMoeda(v) { return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 function formatarGarantiaVenda(valor) {

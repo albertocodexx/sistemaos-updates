@@ -82,7 +82,9 @@
     for (var i = 0; i < texto.length; i++) {
       hash = ((hash << 5) - hash + texto.charCodeAt(i)) | 0;
     }
-    return Math.abs(hash) || 1;
+    // Mantém o identificador dentro do intervalo positivo de um `int` do
+    // Android. `Math.abs(-2147483648)` produz 2147483648, fora desse limite.
+    return (hash & 0x7fffffff) || 1;
   }
 
   // Agenda (ou substitui) uma notificação imediata para uma OS
@@ -115,7 +117,9 @@
         id: idNotificacaoParaOS(os.numero, tipoAlerta),
         title: titulo,
         body: corpo,
-        schedule: { at: new Date() } // imediata — o agendamento de "quando checar" é feito por quem chama (ver checarPendentesEAlertar)
+        // Alguns aparelhos recusam um agendamento cujo horário já ficou no
+        // passado entre a criação do Date e a chamada nativa.
+        schedule: { at: new Date(Date.now() + 500), allowWhileIdle: true }
       }]
     }).then(function () {
       return { agendada: true };

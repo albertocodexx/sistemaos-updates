@@ -548,7 +548,20 @@
         emitir('sistema-os:operacao-nuvem-concluida', { operacao: item, dados: remoto });
       } catch (erro) {
         var tipo = erro.tipo || servico()._classificarErro(erro);
-        if (tipo === 'conflito') {
+        if (tipo === 'sessao-alterada') {
+          // Trocar de conta enquanto uma rodada está começando não é falha
+          // de rede nem de servidor. Devolvemos a operação intacta à fila da
+          // identidade original, sem consumir tentativa/backoff e, sobretudo,
+          // sem permitir que seja executada sob a empresa recém-aberta.
+          await historico().atualizarOperacaoNuvem(item.id, {
+            status: 'pendente',
+            tentativas: Math.max(0, tentativas - 1),
+            ultimaTentativaEm: item.ultimaTentativaEm || null,
+            ultimoErro: null,
+            proximaTentativaEm: null
+          });
+          contagem.motivo = 'sessao-alterada';
+        } else if (tipo === 'conflito') {
           await historico().atualizarOperacaoNuvem(item.id, {
             status: 'conflito', ultimoErro: erro.message || String(erro), proximaTentativaEm: null
           });

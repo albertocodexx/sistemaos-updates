@@ -22,6 +22,7 @@
   var CHAVE_ANIM_SAIDA = 'toast-saindo';
   var DURACAO_PADRAO_MS = 3200;
   var DURACAO_ERRO_MS = 4200; // erros ficam um pouco mais para dar tempo de ler
+  var DURACAO_AVISO_MS = 4000;
   var DURACAO_ANIMACAO_SAIDA_MS = 220; // precisa bater com a transição no CSS
 
   var container = null;
@@ -44,12 +45,23 @@
   //     casos raros que precisem de mais tempo (não usado hoje, mas evita
   //     precisar mexer neste módulo se surgir a necessidade).
   function mostrar(mensagem, opcoes) {
-    opcoes = opcoes || {};
-    var ehErro = !!opcoes.ehErro;
-    var duracao = opcoes.duracaoMs || (ehErro ? DURACAO_ERRO_MS : DURACAO_PADRAO_MS);
+    // A API antiga do aplicativo usa mostrar(texto, 'erro'|'aviso'|'sucesso')
+    // em vários fluxos, enquanto os módulos novos usam um objeto. Aceitar os
+    // dois formatos num único ponto evita que um erro real seja exibido com a
+    // mesma aparência de uma confirmação de sucesso.
+    if (typeof opcoes === 'string') opcoes = { tipo: opcoes };
+    else if (typeof opcoes === 'boolean') opcoes = { ehErro: opcoes };
+    else opcoes = opcoes || {};
+
+    var tipo = String(opcoes.tipo || (opcoes.ehErro ? 'erro' : 'sucesso')).toLowerCase();
+    if (['erro', 'aviso', 'sucesso'].indexOf(tipo) === -1) tipo = opcoes.ehErro ? 'erro' : 'sucesso';
+    var duracaoPadrao = tipo === 'erro' ? DURACAO_ERRO_MS
+      : tipo === 'aviso' ? DURACAO_AVISO_MS : DURACAO_PADRAO_MS;
+    var duracao = opcoes.duracaoMs || duracaoPadrao;
 
     var el = document.createElement('div');
-    el.className = 'toast' + (ehErro ? ' toast-erro' : '');
+    el.className = 'toast toast-' + tipo;
+    if (tipo === 'erro') el.setAttribute('role', 'alert');
     el.textContent = mensagem;
 
     var pai = obterContainer();

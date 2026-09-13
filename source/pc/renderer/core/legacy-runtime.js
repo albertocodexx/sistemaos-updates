@@ -3213,8 +3213,10 @@ $('btnAdicionarLembreteCobranca')?.addEventListener('click', () => {
 // estão atrelados a esta OS. Direto e sem enrolação: busca as duas
 // (garantia:obterPorOS e entrega:obterPorOS, ambas já existentes),
 // mostra badge "atrelada" com a data, ou "—" se não houver nenhuma.
-function _fmtDataDocAtrelado(iso) {
-  try { return new Date(iso).toLocaleDateString('pt-BR'); } catch { return iso || ''; }
+  function _fmtDataDocAtrelado(iso) {
+  const texto = String(iso || '').trim();
+  const data = new Date(/^\d{4}-\d{2}-\d{2}$/.test(texto) ? texto + 'T12:00:00' : texto);
+  return texto && !Number.isNaN(data.getTime()) ? data.toLocaleDateString('pt-BR') : '';
 }
 async function _carregarDocsAtrelados(numeroOS) {
   const el = $('docsAtreladosConteudo');
@@ -12448,7 +12450,9 @@ window.reenviarWappEntregue = async function(numero) {
   // entrega-template.js, formatarDataSimples) para "VÁLIDA ATÉ": a hora
   // exata do limite de garantia não é relevante para o usuário do PC.
   function _fmtDataSimplesEntregas(iso) {
-    try { return new Date(iso).toLocaleDateString('pt-BR'); } catch { return iso || ''; }
+    const texto = String(iso || '').trim();
+    const data = new Date(/^\d{4}-\d{2}-\d{2}$/.test(texto) ? texto + 'T12:00:00' : texto);
+    return texto && !Number.isNaN(data.getTime()) ? data.toLocaleDateString('pt-BR') : '';
   }
 
   // Mesmo critério de omissão condicional usado no PDF e na spec: só
@@ -12906,7 +12910,9 @@ window.reenviarWappEntregue = async function(numero) {
   }
 
   function _fmtDataSimplesGarantia(iso) {
-    try { return new Date(iso).toLocaleDateString('pt-BR'); } catch { return iso || ''; }
+    const texto = String(iso || '').trim();
+    const data = new Date(/^\d{4}-\d{2}-\d{2}$/.test(texto) ? texto + 'T12:00:00' : texto);
+    return texto && !Number.isNaN(data.getTime()) ? data.toLocaleDateString('pt-BR') : '';
   }
 
   // O campo garNumeroOS só aceita dígitos (ver listener de input logo
