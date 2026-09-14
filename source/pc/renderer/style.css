@@ -2459,13 +2459,12 @@ body:not(.tema-escuro) .login-caixa {
 #iaChatCabecalho:active { cursor: default; }
 #iaChatCabecalho .iaChatMarca { display:flex; align-items:center; gap:10px; min-width:0; }
 #iaChatCabecalho .iaChatLogo { width:38px; height:38px; display:grid; place-items:center; color:#79b7ff; border:1px solid #2b86f6; border-radius:12px; background:linear-gradient(145deg,#16283f,#0d1724); box-shadow:0 0 20px rgba(35,133,255,.32); }
-#iaChatCabecalho .iaChatLogo svg { width:30px; height:30px; }
-#iaChatCabecalho .iaChatLogo svg,
+#iaChatCabecalho .iaChatLogo img { width:32px; height:32px; object-fit:contain; }
+#iaChatCabecalho .iaChatLogo img,
 #iaChatBotao > svg {
-  color: #8fc5ff !important;
   opacity: 1 !important;
   visibility: visible !important;
-  filter: drop-shadow(0 0 6px rgba(65, 150, 255, .7));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .4));
 }
 #iaChatCabecalho .iaChatTitulo { display:grid; gap:2px; min-width:0; }
 #iaChatCabecalho .iaChatTitulo strong { font-weight:750; font-size:13.5px; white-space:nowrap; }
@@ -2486,6 +2485,17 @@ body:not(.tema-escuro) .login-caixa {
   justify-content: center;
 }
 #iaChatCabecalho button:hover { background: var(--bg-input, var(--bg)); }
+
+.iaChatAcaoAviso {
+  margin: 8px 0 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  color: var(--texto-sec);
+  background: var(--bg-input, var(--bg));
+  font-size: 11px;
+  line-height: 1.45;
+}
 
 #iaChatMensagens {
   flex: 1;

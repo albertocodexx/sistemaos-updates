@@ -2929,10 +2929,19 @@ function registerLegacyHandlers(deps) {
   //   4) Toda ação é registrada na auditoria, identificando que a origem foi
   //      o assistente de IA.
   // ══════════════════════════════════════════════════════════════
-  ipcMain.handle('ia:executarAcao', async (_e, acao, usuario, autorizacaoExclusao) => {
+  ipcMain.handle('ia:executarAcao', async (_e, acao, usuario, autorizacaoExclusao, confirmacaoUsuario) => {
     const usuarioAutenticado = getUsuarioAutenticado?.();
     if (!require('../access-policy').podeAcaoIA(usuarioAutenticado, acao?.tipo)) {
       return { sucesso: false, erro: 'Seu usuário não possui permissão para esta ação.' };
+    }
+    // Toda escrita sugerida pela IA precisa vir do botão explícito do cartão
+    // de revisão. Consultas continuam somente leitura; nenhuma ação muda o
+    // sistema, envia mensagem ou afeta valores sem esta confirmação.
+    if (confirmacaoUsuario?.confirmado !== true || confirmacaoUsuario?.origem !== 'cartao_ia') {
+      auditoria.registrar('ia:executarAcao:semConfirmacao', {
+        tipo: acao?.tipo, numero: acao?.dados?.numero
+      }, usuarioAutenticado.id);
+      return { sucesso: false, erro: 'Revise a ação no assistente e confirme antes de continuar.' };
     }
     usuario = usuarioAutenticado.id;
     if (!acao || typeof acao !== 'object' || !acao.tipo) {

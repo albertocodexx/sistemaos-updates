@@ -362,7 +362,7 @@ tr:hover td { background: var(--ds-elevado) !important; }
 #iaChatBotao > img { width:44px !important;height:44px !important;object-fit:contain !important;filter:drop-shadow(0 2px 4px rgba(0,0,0,.38)) !important; }
 #iaChatBotao > svg,
 #iaChatCabecalho .iaChatLogo,
-#iaChatCabecalho .iaChatLogo svg {
+#iaChatCabecalho .iaChatLogo img {
   color: var(--ds-texto-invert) !important;
   background: transparent !important;
   border-color: currentColor !important;

@@ -12,6 +12,8 @@ const renderer = ler('renderer/core/legacy-runtime.js');
 const pagina = ler('renderer/index.html');
 const estilo = ler('renderer/style.css');
 const dominio = ler('src/database/domain.js');
+const ipc = ler('src/ipc/register-legacy.js');
+const preload = ler('src/preload/api.js');
 
 assert.ok(chat.includes("timeZone: 'America/Sao_Paulo'"), 'chat deve fornecer a hora do Brasil ao modelo');
 assert.ok(chat.includes('const respostaLocal = _respostaLocal(pergunta)'), 'hora e data devem funcionar sem depender da Groq');
@@ -53,8 +55,19 @@ assert.ok((renderer.match(/normalizarReferenciasOS\(String\(msg\)\)/g) || []).le
   'textos e Markdown devem remover repeticoes como OS OS-0019');
 assert.ok(pagina.includes('Assistente Sistema OS'), 'widget deve usar identidade profissional própria');
 assert.ok(pagina.includes('class="iaChatPulso"'), 'marca flutuante deve ter animação de presença');
-assert.ok(estilo.includes('#iaChatCabecalho .iaChatLogo svg') && estilo.includes('#iaChatBotao > svg'),
+assert.ok(pagina.match(/class="iaChatLogo"[\s\S]*?assets\/ia-assistente\.png/) &&
+  estilo.includes('#iaChatCabecalho .iaChatLogo img'),
   'logo da IA deve permanecer visivel na paleta escura');
+assert.ok(renderer.includes("window.api.supabaseintegracaoia('status', {})") &&
+  renderer.includes("remoto.origem_efetiva === 'global'"),
+  'abertura do chat deve reconhecer a configuração global protegida no servidor');
+assert.ok(renderer.includes("{ confirmado: true, origem: 'cartao_ia'") &&
+  renderer.includes('Nada será alterado ou enviado sem sua confirmação.'),
+  'toda ação sugerida pela IA deve exigir confirmação explícita no cartão de revisão');
+assert.ok(ipc.includes("confirmacaoUsuario?.confirmado !== true") &&
+  ipc.includes("confirmacaoUsuario?.origem !== 'cartao_ia'") &&
+  preload.includes("invocar('ia:executarAcao', acao, usuario, senhaExclusao, confirmacaoUsuario)"),
+  'processo principal também deve rejeitar ações da IA sem confirmação explícita');
 assert.ok(estilo.includes('background-color: #11161e !important'),
   'cards operacionais devem manter superficie escura de alto contraste');
 assert.ok(estilo.includes('@media (prefers-reduced-motion: reduce)'), 'animações devem respeitar acessibilidade');

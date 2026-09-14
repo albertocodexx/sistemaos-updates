@@ -9,6 +9,12 @@ Atualizações oficiais do Sistema OS para Windows e Android.
 
 Os dois links apontam sempre para os arquivos da atualização marcada como mais recente.
 
+## Atualização PC 40.5.10 / Android 20.5.9
+
+Corrige o falso aviso de IA não configurada quando a empresa usa a chave global protegida, aplica a identidade visual correta no cabeçalho do assistente e reforça a confirmação obrigatória de todas as ações propostas pela IA.
+
+- [Detalhes da versão](release-notes-40.5.10.md)
+
 ## Atualização PC 40.5.9 / Android 20.5.9
 
 Esta versão finaliza a ativação segura da IA global: a credencial Groq fica exclusivamente no cofre de segredos do Supabase, com a personalização por empresa desativada e limites econômicos por empresa e globais. A credencial anterior foi revogada antes da publicação.

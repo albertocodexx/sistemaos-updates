@@ -359,7 +359,8 @@ function criarApiPublica({ invocar, assinar, removerAssinatura }) {
   // v42 — chatbot: executa uma ação sobre OS (criar/alterar status/excluir)
   // SÓ depois que o usuário confirmou explicitamente na interface do chat.
   // senhaExclusao só é usada (e obrigatória) quando acao.tipo === 'excluir_os'.
-  iaexecutaracao:     (acao, usuario, senhaExclusao) => invocar('ia:executarAcao', acao, usuario, senhaExclusao),
+  iaexecutaracao:     (acao, usuario, senhaExclusao, confirmacaoUsuario) =>
+    invocar('ia:executarAcao', acao, usuario, senhaExclusao, confirmacaoUsuario),
 
   // ─── v40: Aba Conversas (classificação automática das respostas) ────────
   // Reaproveita listarConversasPorClassificacao / listarConversasNaoEntendidas /

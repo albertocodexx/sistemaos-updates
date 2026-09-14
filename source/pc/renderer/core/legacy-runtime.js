@@ -14700,11 +14700,29 @@ window.reenviarWappEntregue = async function(numero) {
         // v46: chatbot usa chave própria (possuiGroqChatKey), independente
         // da chave/toggle de classificação de pagamento do WhatsApp.
         const provedor = config?.iaChatProvider || 'groq';
-        const possuiChave = provedor === 'openai' ? config?.possuiOpenAIKey
+        let possuiChave = provedor === 'openai' ? config?.possuiOpenAIKey
           : provedor === 'anthropic' ? config?.possuiAnthropicKey
           : provedor === 'deepseek' ? config?.possuiDeepSeekKey
           : config?.possuiGroqChatKey || config?.possuiGroqKey;
-        if (!possuiChave) {
+        let statusRemotoConsultado = false;
+        // Contas Supabase podem usar a chave global protegida no servidor. O
+        // aviso antigo verificava apenas o cofre local e, por isso, dizia que
+        // a IA não estava configurada mesmo quando o chat remoto já estava
+        // ativo para toda a empresa.
+        if (!possuiChave && window.api?.supabaseintegracaoia &&
+            usuarioAtual?.origemAuth === 'supabase' && !usuarioAtual?.administradorGlobal) {
+          const remoto = await window.api.supabaseintegracaoia('status', {});
+          if (remoto?.sucesso) {
+            statusRemotoConsultado = true;
+            integracaoIAContextoCache = remoto;
+            integracaoIAEmpresaCache = remoto.integracao || null;
+            possuiChave = remoto.origem_efetiva === 'global'
+              ? remoto.configuracao_global?.status === 'conectada'
+              : remoto.origem_efetiva === 'empresa' &&
+                remoto.integracao?.status === 'conectada' && remoto.possui_chave === true;
+          }
+        }
+        if (!possuiChave && (usuarioAtual?.origemAuth !== 'supabase' || statusRemotoConsultado)) {
           adicionarMensagem(`${ICONE_ALERTA} A IA ainda não está configurada. Vá em Configurações → Integração IA — Assistente de Chat para ativar o assistente.`, 'erro');
         }
       } catch (e) { /* não bloqueia o chat por falha ao checar configuração */ }
@@ -14894,6 +14912,11 @@ window.reenviarWappEntregue = async function(numero) {
       linhas.forEach(l => { const li = document.createElement('li'); li.textContent = l; ul.appendChild(li); });
       cartao.appendChild(ul);
 
+      const avisoConfirmacao = document.createElement('div');
+      avisoConfirmacao.className = 'iaChatAcaoAviso';
+      avisoConfirmacao.textContent = 'Revise os dados. Nada será alterado ou enviado sem sua confirmação.';
+      cartao.appendChild(avisoConfirmacao);
+
       // Para propostas de mensagem WhatsApp, o texto sugerido pela IA fica
       // num textarea editável — o usuário pode ajustar livremente antes de
       // confirmar o envio (a IA nunca envia direto, só sugere o texto).
@@ -14954,7 +14977,12 @@ window.reenviarWappEntregue = async function(numero) {
         btnConfirmar.textContent = 'Processando...';
 
         try {
-          const r = await window.api.iaexecutaracao(acaoParaEnviar, usuarioAtual?.nome || usuarioAtual?.login || 'não identificado', autorizacaoExclusao);
+          const r = await window.api.iaexecutaracao(
+            acaoParaEnviar,
+            usuarioAtual?.nome || usuarioAtual?.login || 'não identificado',
+            autorizacaoExclusao,
+            { confirmado: true, origem: 'cartao_ia', confirmadoEm: new Date().toISOString() }
+          );
           acoesEl.remove();
           const status = document.createElement('div');
           if (r?.sucesso) {
