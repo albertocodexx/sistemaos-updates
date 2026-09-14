@@ -16,6 +16,7 @@ const CHAVE_TROCA_CONTA_ERRO = '__sistema_os_troca_conta_erro_v1__';
 const TAMANHO_PAGINA_OS = 500;
 const SOBREPOSICAO_CURSOR_OS_MS = 10000;
 const INTERVALO_RECONCILIACAO_OS_COMPLETA_MS = 6 * 60 * 60 * 1000;
+const INTERVALO_RECONCILIACAO_PDF_COMERCIAL_MS = 10 * 60 * 1000;
 
 const CAMPOS_PULL_OS = [
   'id', 'numero', 'numero_sequencial', 'id_exportacao',
@@ -1568,6 +1569,50 @@ class DesktopSupabaseRuntime {
     return resultado;
   }
 
+  async _catalogarPdfComercialLocal(tipo, linha) {
+    if (!linha?.id || !linha?.id_exportacao || !this.fileService?.catalogarPdfDocumentoComercial) return false;
+    const registro = tipo === 'venda'
+      ? this.db?.listarEstoque?.().find((item) => item.origemIdExportacao === linha.id_exportacao)
+      : this.db?.listarCompras?.().find((item) => item.origemIdExportacao === linha.id_exportacao);
+    const caminho = tipo === 'venda' ? registro?.pdfVendaPath : registro?.pdfPath;
+    if (!registro || !caminho) return false;
+    const resultado = await this.fileService.catalogarPdfDocumentoComercial(tipo, caminho, linha);
+    return resultado?.registrado === true || resultado?.existente === true;
+  }
+
+  async _reconciliarPdfsComerciaisLocais() {
+    if (!this.client || !this.db || !this.fileService?.catalogarPdfDocumentoComercial) return 0;
+    const estado = this.stateStore?.obter?.() || {};
+    const ultima = Date.parse(estado.ultimaReconciliacaoPdfComercialEm || '');
+    if (Number.isFinite(ultima) && Date.now() - ultima < INTERVALO_RECONCILIACAO_PDF_COMERCIAL_MS) return 0;
+    const grupos = [
+      {
+        tipo: 'compra', tabela: 'compras',
+        registros: (this.db.listarCompras?.() || []).filter((item) => item?.origemIdExportacao && item?.pdfPath)
+      },
+      {
+        tipo: 'venda', tabela: 'vendas',
+        registros: (this.db.listarEstoque?.() || []).filter((item) => item?.origemIdExportacao && item?.pdfVendaPath)
+      }
+    ];
+    let confirmados = 0;
+    for (const grupo of grupos) {
+      const ids = [...new Set(grupo.registros.map((item) => item.origemIdExportacao))].slice(0, 500);
+      if (!ids.length) continue;
+      const resposta = await this.client.from(grupo.tabela)
+        .select('id,id_exportacao,updated_at')
+        .in('id_exportacao', ids)
+        .is('deleted_at', null)
+        .limit(500);
+      if (resposta.error) throw resposta.error;
+      for (const linha of (resposta.data || [])) {
+        if (await this._catalogarPdfComercialLocal(grupo.tipo, linha)) confirmados += 1;
+      }
+    }
+    this.stateStore?.alterar?.((s) => { s.ultimaReconciliacaoPdfComercialEm = new Date().toISOString(); });
+    return confirmados;
+  }
+
   async _baixarDocumentosComerciais() {
     if (!this.processadorDocumentoComercialRemoto) return 0;
     // Versoes antigas do APK enviavam Compra/Venda antes de anexar a
@@ -1688,6 +1733,9 @@ class DesktopSupabaseRuntime {
           itens: [{ idExportacao: linha.id_exportacao, tipoDocumento: item.tipo, dados }]
         });
         if (!resultado?.sucesso) throw new Error(resultado?.erro || `Não foi possível importar ${item.tipo} do celular.`);
+        if (item.tipo === 'compra' || item.tipo === 'venda') {
+          await this._catalogarPdfComercialLocal(item.tipo, linha);
+        }
         if (item.tipo === 'entrega') this.aftercareService?.recebeuEntrega(dados.numeroOS, linha);
         for (const pendente of arquivos.paraConsumo) {
           await this.fileService.confirmarConsumoMobile(pendente.arquivo, pendente.bytes);
@@ -1701,6 +1749,10 @@ class DesktopSupabaseRuntime {
       if (linha.updated_at && linha.updated_at > maiorData) maiorData = linha.updated_at;
     }
     if (alteracoes.length) this.stateStore.alterar((s) => { s.ultimoPullComercialEm = maiorData; });
+    // Recupera inclusive documentos antigos já processados pelo PC, mas cujo
+    // PDF ficou apenas no disco antes desta correção (caso observado em
+    // vendas consultadas no Android).
+    await this._reconciliarPdfsComerciaisLocais();
     return aplicadas;
   }
 

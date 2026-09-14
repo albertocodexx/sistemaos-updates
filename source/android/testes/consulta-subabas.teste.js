@@ -21,6 +21,8 @@ async function esperar(fn) { for (let i=0;i<80;i++) { if(fn())return; await tick
   w.SistemaOSCompartilhar={compartilharPdfPorUrl:async(...args)=>{share=args;return{}},mensagemResultado:()=> 'Pronto'};
   w.SistemaOSDesbloqueiosMobile={visualizar:()=>abrir++,compartilhar:async()=>{share=['desbloqueio']}};
   w.eval(ler('js/consulta.js'));
+  const vendaLegada=w.SistemaOSConsultasBusca.normalizar('venda',{id:'v-1',numero:'VD-0001',dados_extras:{documento_mobile:{compradorNome:'Alberto Parma Couto'}}});
+  assert.equal(vendaLegada.clienteNome,'Alberto Parma Couto','nome legado da venda deve participar da busca parcial');
   get('consulta-cliente-termo').value='Gabriela'; get('btn-consultar-cliente').click();
   await esperar(()=>d.querySelector('.consulta-busca-documento'));
   assert.equal(chamadas[0].table,'vw_ordens_servico_leve');

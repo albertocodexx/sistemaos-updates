@@ -13,7 +13,20 @@
     entrega: { view: 'vw_entregas_leve', campos: ['numero_os_snapshot','cliente_nome_snapshot','retirado_por','marca_snapshot','modelo_snapshot'], numero: 'numero_os_snapshot', prefixo: 'OS', servico: 'SistemaOSSupabaseEntrega' },
     garantia: { view: 'vw_garantias_leve', campos: ['numero_os_snapshot','cliente_nome_snapshot','marca_snapshot','modelo_snapshot'], numero: 'numero_os_snapshot', prefixo: 'OS', servico: 'SistemaOSSupabaseGarantia' },
     compra: { view: 'vw_compras_leve', campos: ['numero','fornecedor_nome','descricao'], numero: 'numero', prefixo: 'CP' },
-    venda: { view: 'vw_vendas_leve', campos: ['numero','cliente_nome_snapshot'], numero: 'numero', prefixo: 'VD' },
+    // Consulta a tabela protegida por RLS para também localizar vendas
+    // antigas cujo nome ficou somente no documento_mobile/itens. A view
+    // leve continua útil nos painéis, mas não expõe esses campos legados e
+    // fazia "Alberto" não encontrar "Alberto Parma Couto" nesses registros.
+    venda: {
+      view: 'vendas',
+      select: 'id,numero,cliente_id,cliente_nome_snapshot,itens,valor_total,forma_pagamento,status,data_venda,revision,created_at,updated_at,dados_extras',
+      campos: [
+        'numero', 'cliente_nome_snapshot',
+        'dados_extras->documento_mobile->>compradorNome',
+        'itens->0->>compradorNome'
+      ],
+      numero: 'numero', prefixo: 'VD', excluir: true
+    },
     desbloqueio: { view: 'desbloqueios', campos: ['numero','cliente_nome_snapshot','cliente_telefone_snapshot','cliente_cpf_snapshot','marca','modelo','cor'], numero: 'numero', prefixo: 'DES' }
   };
   var CAMPOS_DESBLOQUEIO = 'id,numero,cliente_numero_snapshot,cliente_nome_snapshot,cliente_telefone_snapshot,cliente_cpf_snapshot,marca,modelo,cor,assinatura_estado,created_at,updated_at,revision';
@@ -26,12 +39,19 @@
   function normalizar(tipo, linha) {
     var servico = root[TIPOS[tipo].servico];
     if (servico && servico._normalizar) return servico._normalizar(linha);
+    var extras = linha.dados_extras && typeof linha.dados_extras === 'object' ? linha.dados_extras : {};
+    var documentoMobile = extras.documento_mobile && typeof extras.documento_mobile === 'object'
+      ? extras.documento_mobile : {};
+    var primeiroItem = Array.isArray(linha.itens) && linha.itens[0] && typeof linha.itens[0] === 'object'
+      ? linha.itens[0] : {};
     return {
       id: linha.id, numero: linha.numero, revision: linha.revision,
-      clienteNome: linha.cliente_nome_snapshot || linha.fornecedor_nome,
+      clienteNome: linha.cliente_nome_snapshot || documentoMobile.compradorNome || primeiroItem.compradorNome || linha.fornecedor_nome,
       clienteId: linha.cliente_numero_snapshot,
       clienteTelefone: linha.cliente_telefone_snapshot, clienteCpf: linha.cliente_cpf_snapshot,
-      aparelhoMarca: linha.marca, aparelhoModelo: linha.modelo, cor: linha.cor,
+      aparelhoMarca: linha.marca || documentoMobile.marca || primeiroItem.marca,
+      aparelhoModelo: linha.modelo || documentoMobile.modelo || primeiroItem.modelo,
+      cor: linha.cor || documentoMobile.cor || primeiroItem.cor,
       descricao: linha.descricao, valor: linha.valor_total, formaPagamento: linha.forma_pagamento,
       status: linha.status, estadoAssinatura: linha.assinatura_estado === 'assinado' ? 'Assinado'
         : linha.assinatura_estado === 'aguardando' ? 'Aguardando assinatura' : tipo === 'desbloqueio' ? 'Não assinado' : '',
@@ -44,8 +64,8 @@
     if (!termo || termo.length > 120) throw new Error('Informe um nome ou número com até 120 caracteres.');
     var config = TIPOS[tipo];
     var client = root.SupabaseClientApp.obterCliente();
-    var q = client.from(config.view).select(tipo === 'desbloqueio' ? CAMPOS_DESBLOQUEIO : '*');
-    if (tipo === 'desbloqueio') q = q.is('deleted_at', null);
+    var q = client.from(config.view).select(tipo === 'desbloqueio' ? CAMPOS_DESBLOQUEIO : (config.select || '*'));
+    if (tipo === 'desbloqueio' || config.excluir) q = q.is('deleted_at', null);
     var numero = termo.match(/^(?:(?:OS|CP|VD|VEN|DES)[-\s]*)?(\d+)$/i);
     var filtros = config.campos.map(function (campo) { return campo + '.ilike.' + literal(padrao(termo)); });
     if (numero) filtros.push(config.numero + '.eq.' + literal(config.prefixo + '-' + String(Number(numero[1])).padStart(4, '0')));

@@ -116,7 +116,34 @@
       : tipo === 'entrega' ? dados.assinaturaRetirouBase64
       : dados.assinaturaClienteBase64;
     return !!((Array.isArray(dados.fotos) && dados.fotos.length) ||
-      assinaturaParte || dados.assinaturaAssistenciaBase64);
+      assinaturaParte || dados.assinaturaAssistenciaBase64 || dados.documentoPdfBase64);
+  }
+
+  function gravarPdfDocumento(id, pdfBase64, nomeArquivo) {
+    if (!id || !/^data:application\/pdf;base64,/i.test(String(pdfBase64 || ''))) {
+      return Promise.reject(new Error('PDF local inválido.'));
+    }
+    return abrirBanco().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(NOME_LOJA, 'readwrite');
+        var loja = tx.objectStore(NOME_LOJA);
+        var pedido = loja.get(id);
+        var atualizado = null;
+        pedido.onsuccess = function () {
+          if (!pedido.result) return;
+          atualizado = pedido.result;
+          atualizado.os = Object.assign({}, atualizado.os || {}, {
+            documentoPdfBase64: pdfBase64,
+            documentoPdfNome: String(nomeArquivo || 'documento.pdf')
+          });
+          atualizado.arquivosSincronizadosSupabase = false;
+          atualizado.arquivosSincronizadosEm = null;
+          loja.put(atualizado);
+        };
+        tx.oncomplete = function () { resolve(atualizado); };
+        tx.onerror = function () { reject(tx.error || new Error('Falha ao guardar o PDF no histórico local.')); };
+      });
+    });
   }
 
   // Salva uma cópia independente de `dados` (já com assinatura embutida).
@@ -943,6 +970,7 @@
     atualizarOperacaoNuvem: atualizarOperacaoNuvem,
     gravarEstadoSupabase: gravarEstadoSupabase,
     marcarArquivosSupabaseSincronizados: marcarArquivosSupabaseSincronizados,
+    gravarPdfDocumento: gravarPdfDocumento,
     // Exposto só para js/backup.js — dá acesso à MESMA conexão de banco
     // (promessaDb, com cache) usada por todo o resto deste arquivo, para
     // que exportar/restaurar/apagar backup completo não abra uma segunda

@@ -82,6 +82,7 @@ const testes = [
   'teste-configuracao-compartilhada-mobile.js',
   'teste-isolamento-multiempresa-erros.js',
   'teste-comercial-supabase.js',
+  'teste-pdf-comercial-nuvem.js',
   'teste-assinaturas-saas-automaticas.js',
   'teste-lembretes-assinatura-baileys.js',
   'teste-telefones-empresa-cobranca.js',

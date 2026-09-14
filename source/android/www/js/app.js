@@ -470,6 +470,85 @@
     );
   }
 
+  function nomePdfPorTipo(tipo, dados) {
+    dados = dados || {};
+    var numero = String(dados.numeroOSAtribuido || dados.numeroVenda || dados.numeroCompra ||
+      dados.numeroOS || dados.numero || dados.id || tipo || 'documento').trim();
+    var prefixo = tipo === 'compra' ? 'contrato-de-compra'
+      : tipo === 'venda' ? 'comprovante-de-venda'
+      : tipo === 'entrega' ? 'entrega' : 'ordem-de-servico';
+    return prefixo + '-' + numero + '.pdf';
+  }
+
+  function htmlDocumentoSalvo(tipo, dados) {
+    if (tipo === 'compra') return aplicarAssinaturasNaCompra(gerarHtmlCompra(dados, obterConfigEmpresaAtual()), dados);
+    if (tipo === 'venda') return aplicarAssinaturasNaVenda(gerarHtmlVenda(dados, obterConfigEmpresaAtual()), dados);
+    if (tipo === 'entrega') return aplicarAssinaturasNaEntrega(gerarHtmlEntrega(dados, obterConfigEmpresaAtual()), dados);
+    return aplicarAssinaturasNaOS(gerarHtmlOS(dados, obterConfigEmpresaAtual()), dados);
+  }
+
+  function prepararPdfAtualParaSincronizacao() {
+    if (!osAtual || !window.SistemaOSCompartilhar || !window.SistemaOSCompartilhar.gerarPdfHtml) {
+      return Promise.resolve(false);
+    }
+    return carregamentoModulos.then(function () {
+      return window.SistemaOSCompartilhar.gerarPdfHtml(
+        htmlDocumentoSalvo(documentoAtualTipo, osAtual),
+        nomePdfPorTipo(documentoAtualTipo, osAtual)
+      );
+    }).then(function (pdf) {
+      // Fora do APK não existe o gerador nativo; o histórico web continua
+      // utilizável e o PC gera o PDF quando importar o documento.
+      if (!pdf) return false;
+      osAtual.documentoPdfBase64 = pdf.dataUrl;
+      osAtual.documentoPdfNome = pdf.nomeArquivo;
+      return true;
+    });
+  }
+
+  // Repara sob demanda documentos antigos que foram sincronizados antes de
+  // o APK enviar o PDF. A Consulta chama esta rotina somente quando não
+  // encontra um PDF remoto. Se a venda ainda existir neste aparelho, ela é
+  // reconstruída com a assinatura original, enviada e consultada novamente.
+  window.SistemaOSPDFLocal = {
+    garantirPdfConsultado: function (dadosRemotos, tipo) {
+      if (!dadosRemotos || !dadosRemotos.id || !window.SistemaOSHistorico ||
+          !window.SistemaOSCompartilhar || !window.SistemaOSCompartilhar.gerarPdfHtml) {
+        return Promise.resolve(false);
+      }
+      return carregamentoModulos.then(function () {
+        return window.SistemaOSHistorico.listarTodos();
+      }).then(function (registros) {
+        var numeroRemoto = String(dadosRemotos.numero || dadosRemotos.numeroOS || '').trim();
+        var registro = (registros || []).find(function (item) {
+          if ((item.tipoDocumento || 'os') !== tipo) return false;
+          if (String(item.supabaseId || '') === String(dadosRemotos.id)) return true;
+          return numeroRemoto && String(item.numeroOSAtribuido || item.os?.numeroOSAtribuido || '').trim() === numeroRemoto;
+        });
+        if (!registro || !registro.os) return false;
+        var gerar = registro.os.documentoPdfBase64
+          ? Promise.resolve({ dataUrl: registro.os.documentoPdfBase64, nomeArquivo: registro.os.documentoPdfNome })
+          : window.SistemaOSCompartilhar.gerarPdfHtml(
+              htmlDocumentoSalvo(tipo, registro.os),
+              nomePdfPorTipo(tipo, Object.assign({}, registro.os, { numeroOSAtribuido: numeroRemoto }))
+            );
+        return gerar.then(function (pdf) {
+          if (!pdf) return false;
+          return window.SistemaOSHistorico.gravarPdfDocumento(registro.id, pdf.dataUrl, pdf.nomeArquivo)
+            .then(function () {
+              return window.SistemaOSSupabaseArquivo.enfileirarArquivosDocumento(registro.id, {
+                id: dadosRemotos.id,
+                revision: dadosRemotos.revision || registro.supabaseRevision || 1,
+                numero: numeroRemoto
+              }, tipo);
+            })
+            .then(function () { return window.CloudData.processarFila(); })
+            .then(function (resultado) { return !resultado || Number(resultado.falhas || 0) === 0; });
+        });
+      });
+    }
+  };
+
   if (btnCompartilharPdf) {
     btnCompartilharPdf.addEventListener('click', function () {
       if (!osAtual) {
@@ -2054,17 +2133,20 @@
     btnSalvarHistorico.disabled = true;
     var eraNovaOS = documentoAtualTipo === 'os' && !emEdicaoHistorico;
 
-    // Bloco 4: rota de atualização (edição) vs criação de item novo.
-    var promessaSalvar;
-    if (emEdicaoHistorico && idEmEdicaoHistorico) {
-      // Atualiza o registro existente — preserva id e idExportacaoOriginal.
-      promessaSalvar = window.SistemaOSHistorico.editarRegistro(idEmEdicaoHistorico, osAtual)
-        .then(function (registro) {
-          return registro || { id: idEmEdicaoHistorico };
-        });
-    } else {
-      promessaSalvar = salvarDocumentoAtualNoHistorico();
-    }
+    // Gera o PDF assinado antes de fotografar o registro no IndexedDB. Sem
+    // esta etapa a fila enviava assinatura e dados, mas a Consulta jamais
+    // encontrava um arquivo PDF da venda.
+    var promessaSalvar = prepararPdfAtualParaSincronizacao().then(function () {
+      // Bloco 4: rota de atualização (edição) vs criação de item novo.
+      if (emEdicaoHistorico && idEmEdicaoHistorico) {
+        // Atualiza o registro existente — preserva id e idExportacaoOriginal.
+        return window.SistemaOSHistorico.editarRegistro(idEmEdicaoHistorico, osAtual)
+          .then(function (registro) {
+            return registro || { id: idEmEdicaoHistorico };
+          });
+      }
+      return salvarDocumentoAtualNoHistorico();
+    });
 
     promessaSalvar
       .then(function (registro) {

@@ -221,6 +221,27 @@
     });
   }
 
+  // Gera o mesmo PDF claro usado no compartilhamento, mas devolve os bytes
+  // para a fila privada do Supabase. Assim assinar/salvar uma Venda não
+  // sincroniza apenas os campos e a imagem da assinatura: o PDF oficial
+  // também fica disponível na Consulta em qualquer aparelho da empresa.
+  function gerarPdfHtml(html, nomeArquivo) {
+    var impressao = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Impressao;
+    if (!impressao || typeof impressao.gerarPdf !== 'function') {
+      return Promise.resolve(null);
+    }
+    return impressao.gerarPdf({
+      html: String(html || ''),
+      nomeArquivo: nomeArquivoSeguro(nomeArquivo, 'pdf')
+    }).then(function (resultado) {
+      var dataUrl = String(resultado && resultado.dataUrl || '');
+      if (!/^data:application\/pdf;base64,/i.test(dataUrl)) {
+        throw new Error('O aplicativo não devolveu um PDF válido.');
+      }
+      return { dataUrl: dataUrl, nomeArquivo: resultado.nomeArquivo || nomeArquivoSeguro(nomeArquivo, 'pdf') };
+    });
+  }
+
   window.SistemaOSCompartilhar = {
     mensagemResultado: function (resultado) {
       return resultado && resultado.mensagemCopiada
@@ -230,6 +251,7 @@
     compartilharOuBaixarArquivo: compartilharOuBaixarArquivo,
     compartilharBlob: compartilharBlob,
     compartilharPdfPorUrl: compartilharPdfPorUrl,
-    compartilharPdfHtml: compartilharPdfHtml
+    compartilharPdfHtml: compartilharPdfHtml,
+    gerarPdfHtml: gerarPdfHtml
   };
 })();

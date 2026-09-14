@@ -404,7 +404,7 @@
           await window.SistemaOSDesbloqueiosMobile.compartilhar(dados.id);
           return;
         }
-        var lista = arquivo ? [arquivo] : await window.CloudData.listarArquivos(ENTIDADE_ARQUIVO_POR_TIPO[tipo], dados.id);
+        var lista = arquivo ? [arquivo] : await listarArquivosComReparo(dados, tipo);
         if (versao !== versaoConsultaCliente) return;
         var pdf = lista.find(function (a) { return a.mimeType === 'application/pdf' || /\.pdf$/i.test(a.nomeArquivo || ''); });
         if (!pdf) throw new Error('Ainda não há PDF disponível. Gere o documento e aguarde a sincronização.');
@@ -422,6 +422,18 @@
       } finally { botao.disabled = false; botao.textContent = 'Compartilhar PDF'; }
     });
     return botao;
+  }
+
+  async function listarArquivosComReparo(dados, tipo) {
+    var lista = await window.CloudData.listarArquivos(ENTIDADE_ARQUIVO_POR_TIPO[tipo], dados.id);
+    var temPdf = lista.some(function (a) {
+      return a.mimeType === 'application/pdf' || /\.pdf$/i.test(a.nomeArquivo || '');
+    });
+    if (temPdf || !window.SistemaOSPDFLocal || !window.SistemaOSPDFLocal.garantirPdfConsultado ||
+        ['os', 'compra', 'venda', 'entrega'].indexOf(tipo) === -1) return lista;
+    var reparado = await window.SistemaOSPDFLocal.garantirPdfConsultado(dados, tipo);
+    if (!reparado) return lista;
+    return window.CloudData.listarArquivos(ENTIDADE_ARQUIVO_POR_TIPO[tipo], dados.id);
   }
 
   function renderizarArquivosSobDemanda(lista, container, dados, tipo) {
@@ -501,7 +513,7 @@
       lista.hidden = false;
       botao.disabled = true;
       lista.textContent = 'Carregando metadados…';
-      window.CloudData.listarArquivos(ENTIDADE_ARQUIVO_POR_TIPO[tipo], dados.id)
+      listarArquivosComReparo(dados, tipo)
         .then(function (arquivos) {
           botao.textContent = 'Ver arquivos (' + arquivos.length + ')';
           renderizarArquivosSobDemanda(arquivos, lista, dados, tipo);

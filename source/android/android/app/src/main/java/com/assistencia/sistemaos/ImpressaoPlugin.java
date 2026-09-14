@@ -14,6 +14,7 @@ import android.view.View;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.util.Base64;
 
 import androidx.core.app.ShareCompat;
 import androidx.core.content.FileProvider;
@@ -25,6 +26,8 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.ByteArrayOutputStream;
 
 @CapacitorPlugin(name = "Impressao")
 public class ImpressaoPlugin extends Plugin {
@@ -127,6 +130,26 @@ public class ImpressaoPlugin extends Plugin {
         }
     }
 
+    private JSObject lerPdfComoResultado(File arquivo, String nomeArquivo) throws Exception {
+        if (arquivo == null || !arquivo.isFile() || arquivo.length() <= 0) {
+            throw new IllegalStateException("O PDF gerado está vazio.");
+        }
+        if (arquivo.length() > 25L * 1024L * 1024L) {
+            throw new IllegalStateException("O PDF excede o limite de 25 MB.");
+        }
+        ByteArrayOutputStream saida = new ByteArrayOutputStream((int) arquivo.length());
+        try (FileInputStream entrada = new FileInputStream(arquivo)) {
+            byte[] bloco = new byte[16384];
+            int lidos;
+            while ((lidos = entrada.read(bloco)) != -1) saida.write(bloco, 0, lidos);
+        }
+        JSObject resultado = new JSObject();
+        resultado.put("sucesso", true);
+        resultado.put("nomeArquivo", nomeArquivo);
+        resultado.put("dataUrl", "data:application/pdf;base64," + Base64.encodeToString(saida.toByteArray(), Base64.NO_WRAP));
+        return resultado;
+    }
+
     @PluginMethod
     public void imprimir(PluginCall call) {
         final String html = call.getString("html", "");
@@ -192,6 +215,48 @@ public class ImpressaoPlugin extends Plugin {
                     @Override public void pronto(File arquivo) {
                         gerandoPdf = false;
                         compartilharArquivoPdf(arquivo, nomeArquivo, titulo, mensagem, call);
+                    }
+                    @Override public void falhou(String mensagemErro) {
+                        gerandoPdf = false;
+                        call.reject(mensagemErro);
+                    }
+                }).gerar(html);
+            } catch (Exception erro) {
+                gerandoPdf = false;
+                call.reject("Não foi possível preparar o PDF: " + erro.getMessage(), erro);
+            }
+        });
+    }
+
+    /**
+     * Gera o PDF no cache privado e devolve uma Data URL para a fila offline.
+     * Não abre o seletor de compartilhamento: este método é usado ao salvar
+     * documentos para que o PDF acompanhe os dados e a assinatura na nuvem.
+     */
+    @PluginMethod
+    public void gerarPdf(PluginCall call) {
+        final String html = call.getString("html", "");
+        final String nomeArquivo = nomePdfSeguro(call.getString("nomeArquivo", "documento-sistema-os.pdf"));
+        if (html.trim().isEmpty()) {
+            call.reject("O documento está vazio.");
+            return;
+        }
+
+        getActivity().runOnUiThread(() -> {
+            if (gerandoPdf) { call.reject("Aguarde o documento atual terminar de ser gerado."); return; }
+            gerandoPdf = true;
+            try {
+                File pasta = new File(getContext().getCacheDir(), "documentos-sincronizacao");
+                if (!pasta.exists() && !pasta.mkdirs()) throw new IllegalStateException("Pasta temporária indisponível.");
+                File pdf = new File(pasta, java.util.UUID.randomUUID() + "-" + nomeArquivo);
+                new PdfCompartilhavel(getActivity(), html, pdf, new PdfCompartilhavel.Resultado() {
+                    @Override public void pronto(File arquivo) {
+                        gerandoPdf = false;
+                        try {
+                            call.resolve(lerPdfComoResultado(arquivo, nomeArquivo));
+                        } catch (Exception erro) {
+                            call.reject("Não foi possível ler o PDF gerado: " + erro.getMessage(), erro);
+                        }
                     }
                     @Override public void falhou(String mensagemErro) {
                         gerandoPdf = false;

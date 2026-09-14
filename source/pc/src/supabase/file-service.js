@@ -158,6 +158,54 @@ class SupabaseFileService {
     return { registrados, erros };
   }
 
+  async catalogarPdfDocumentoComercial(tipo, caminhoPdf, linhaRemota) {
+    const contexto = this.getContext();
+    const tipoSeguro = tipo === 'compra' ? 'compra' : tipo === 'venda' ? 'venda' : '';
+    if (!tipoSeguro || !contexto?.empresa_id || !linhaRemota?.id || !caminhoPdf ||
+        !fs.existsSync(caminhoPdf) || !fs.statSync(caminhoPdf).isFile()) {
+      return { registrado: false, motivo: 'arquivo-ausente' };
+    }
+    const buffer = fs.readFileSync(caminhoPdf);
+    if (!buffer.length) return { registrado: false, motivo: 'arquivo-vazio' };
+    const sha = checksum(buffer);
+    const cliente = this.getClient();
+    // Evita reenviar o mesmo PDF em toda reconciliação. Uma nova assinatura
+    // gera outro checksum e, portanto, uma nova versão atual do documento.
+    const existente = await cliente.from('arquivos')
+      .select('id,checksum_sha256,arquivo_nuvem_path')
+      .eq('entidade_tipo', tipoSeguro)
+      .eq('entidade_id', linhaRemota.id)
+      .eq('categoria', 'pdf')
+      .eq('checksum_sha256', sha)
+      .is('deleted_at', null)
+      .limit(1)
+      .maybeSingle();
+    if (existente.error) throw existente.error;
+    if (existente.data?.arquivo_nuvem_path) return { registrado: false, existente: true, arquivo: existente.data };
+
+    const nome = nomeSeguro(path.basename(caminhoPdf));
+    const remoto = `${contexto.empresa_id}/comerciais/${tipoSeguro}/${linhaRemota.id}/${sha}/${nome}`;
+    const upload = await cliente.storage.from(BUCKET_PDFS)
+      .upload(remoto, buffer, { contentType: 'application/pdf', upsert: true });
+    if (upload.error) throw upload.error;
+    const dados = {
+      categoria: 'pdf', nome_arquivo: nome, mime_type: 'application/pdf',
+      tamanho_bytes: buffer.length, storage_bucket: BUCKET_PDFS,
+      arquivo_nuvem_path: remoto, disponibilidade: 'completa_nuvem', checksum_sha256: sha
+    };
+    const resposta = await cliente.rpc('registrar_arquivo_comercial_mobile', {
+      p_entidade_tipo: tipoSeguro,
+      p_entidade_id: linhaRemota.id,
+      p_idempotency_key: `desktop:comercial:${tipoSeguro}:${linhaRemota.id}:pdf:${sha}`,
+      p_dados: dados,
+      // A RPC aceita origem nula para o desktop autenticado. Passar o ID do
+      // PC aqui seria rejeitado corretamente como se fosse um Android falso.
+      p_origem_dispositivo_id: null
+    });
+    if (resposta.error) throw resposta.error;
+    return { registrado: true, arquivo: resposta.data, checksumSha256: sha };
+  }
+
   async baixarArquivosOS(entidadeId, numero) {
     const cliente = this.getClient();
     const estado = this.stateStore.obter();

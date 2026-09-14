@@ -233,6 +233,12 @@
     })[mimeType] || 'bin';
   }
 
+  function nomeArquivoComExtensao(nomeArquivo, mimeType) {
+    var ext = extensao(mimeType);
+    var nome = texto(nomeArquivo) || 'arquivo';
+    return new RegExp('\\.' + ext + '$', 'i').test(nome) ? nome : nome + '.' + ext;
+  }
+
   function criarMiniatura(dataUrl) {
     if (!root.document || typeof root.Image !== 'function') return Promise.resolve(null);
     return new Promise(function (resolve) {
@@ -390,6 +396,11 @@
     var dados = registro && registro.os ? registro.os : {};
     var tipo = registro && registro.tipoDocumento ? registro.tipoDocumento : 'os';
     var itens = [];
+    if (/^data:application\/pdf;base64,/i.test(texto(dados.documentoPdfBase64))) itens.push({
+      chave: 'pdf', categoria: 'pdf',
+      nomeArquivo: texto(dados.documentoPdfNome) || ('documento-' + tipo),
+      base64: dados.documentoPdfBase64
+    });
     (Array.isArray(dados.fotos) ? dados.fotos.slice(0, 10) : []).forEach(function (foto, indice) {
       if (foto && foto.base64) itens.push({
         chave: 'foto:' + indice, categoria: 'foto', nomeArquivo: 'foto-entrada-' + (indice + 1), base64: foto.base64
@@ -532,7 +543,7 @@
 
     var dadosRpc = {
       categoria: item.categoria,
-      nome_arquivo: item.nomeArquivo + '.' + extensao(info.mimeType),
+      nome_arquivo: nomeArquivoComExtensao(item.nomeArquivo, info.mimeType),
       mime_type: info.mimeType,
       tamanho_bytes: info.tamanho,
       largura: miniatura ? miniatura.largura : null,
@@ -605,6 +616,7 @@
     _normalizar: normalizar,
     _infoDataUrl: infoDataUrl,
     _itensDoRegistro: itensDoRegistro,
+    _nomeArquivoComExtensao: nomeArquivoComExtensao,
     _classificarErro: classificarErro
   };
 });

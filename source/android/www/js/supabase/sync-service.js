@@ -123,6 +123,8 @@
     delete seguro.assinaturaCompradorBase64;
     delete seguro.assinaturaRetirouBase64;
     delete seguro.assinaturaAssistenciaBase64;
+    delete seguro.documentoPdfBase64;
+    delete seguro.documentoPdfNome;
     var bruto = tipo === 'compra' ? dados && dados.dadosCompra && dados.dadosCompra.valor
       : tipo === 'venda' ? dados && dados.valorVenda
       : dados && dados.valorReparo;

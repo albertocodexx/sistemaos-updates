@@ -9,6 +9,12 @@ Atualizações oficiais do Sistema OS para Windows e Android.
 
 Os dois links apontam sempre para os arquivos da atualização marcada como mais recente.
 
+## Atualização PC 40.5.7 / Android 20.5.9
+
+Esta versão corrige a busca de vendas por parte do nome e garante que o PDF final assinado seja registrado como arquivo oficial da venda e sincronizado entre celular, nuvem e PC. Documentos antigos com PDF apenas local também recebem reparo automático na sincronização.
+
+- [Detalhes da versão](release-notes-40.5.7.md)
+
 ## Atualização PC 40.5.6 / Android 20.5.8
 
 Esta atualização de manutenção corrige a consulta direta de OS no celular, alertas visuais, datas em documentos e a fila de sincronização ao trocar de conta. Também torna os avisos de cobrança mais compatíveis com Android.
