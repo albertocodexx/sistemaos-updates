@@ -197,12 +197,14 @@ Deno.serve(async (req) => {
     }
     const somenteAdministradorGeral = new Set([
       'salvar_plano', 'excluir_plano', 'definir_senha_exclusao', 'decidir_exclusao', 'definir_papel_suporte',
-      'configurar_fiscal_empresa'
+      'configurar_fiscal_empresa',
+      'obter_integracao_ia_global', 'configurar_integracao_ia_global', 'desconectar_integracao_ia_global',
+      'definir_personalizacao_ia_global', 'definir_personalizacao_ia_empresa',
+      'obter_integracao_ia_empresa', 'configurar_integracao_ia_empresa', 'desconectar_integracao_ia_empresa'
     ]);
     const exigeGerencia = new Set([
       'criar_empresa', 'atualizar_licenca', 'confirmar_pagamento',
       'alterar_telefones_empresa',
-      'obter_integracao_ia_empresa', 'configurar_integracao_ia_empresa', 'desconectar_integracao_ia_empresa',
       'configurar_troca_rapida_empresa', 'criar_usuario_empresa',
       'atualizar_usuario_empresa', 'resetar_senha', 'excluir_usuario_empresa'
     ]);
@@ -1138,10 +1140,113 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (acao === 'obter_integracao_ia_empresa' || acao === 'configurar_integracao_ia_empresa' || acao === 'desconectar_integracao_ia_empresa') {
+    if (acao === 'obter_integracao_ia_global' || acao === 'configurar_integracao_ia_global' ||
+        acao === 'desconectar_integracao_ia_global' || acao === 'definir_personalizacao_ia_global') {
+      const buscarGlobal = async () => {
+        const { data, error } = await admin.from('integracoes_plataforma')
+          .select('id,tipo,status,provedor,conta_mascarada,conectado_em,ultima_verificacao_em,ultimo_erro,metadados,updated_at')
+          .eq('tipo', 'ia').maybeSingle();
+        if (error) throw error;
+        return data;
+      };
+      const carregarSegredoGlobal = async (integracaoId: string) => {
+        const { data, error } = await admin.from('integracoes_plataforma_segredos')
+          .select('iv_base64,segredo_cifrado_base64').eq('integracao_id', integracaoId).maybeSingle();
+        if (error) throw error;
+        return data ? decifrarChaveIA(data.iv_base64, data.segredo_cifrado_base64) : '';
+      };
+      const existente = await buscarGlobal();
+      const metadadosAtuais = existente?.metadados && typeof existente.metadados === 'object'
+        ? existente.metadados as Record<string, unknown> : {};
+      const respostaSanitizada = async () => ({
+        integracao: await buscarGlobal(),
+        possui_chave: existente ? Boolean(await carregarSegredoGlobal(existente.id)) : false
+      });
+      if (acao === 'obter_integracao_ia_global') return resposta(200, await respostaSanitizada());
+
+      if (acao === 'definir_personalizacao_ia_global') {
+        const ativa = dados.ativa === true;
+        const agora = new Date().toISOString();
+        const { error } = await admin.from('integracoes_plataforma').upsert({
+          tipo: 'ia', status: existente?.status || 'desconectada', provedor: existente?.provedor || 'groq',
+          conta_mascarada: existente?.conta_mascarada || null,
+          metadados: { ...metadadosAtuais, personalizacao_empresas_ativa: ativa },
+          atualizado_por: sessao.user.id, updated_at: agora
+        }, { onConflict: 'tipo' });
+        if (error) throw error;
+        await admin.from('auditoria_comercial').insert({
+          autor_id: sessao.user.id, acao: 'personalizacao_ia_global_alterada', entidade: 'integracoes_plataforma',
+          entidade_id: existente?.id || null, metadados: { ativa }
+        });
+        return resposta(200, { sucesso: true, ativa, mensagem: ativa
+          ? 'As empresas autorizadas agora podem usar uma chave própria.'
+          : 'A personalização foi desativada. Todas as empresas passam a usar a chave global.' });
+      }
+
+      if (acao === 'desconectar_integracao_ia_global') {
+        if (existente) {
+          const { error: segredoErro } = await admin.from('integracoes_plataforma_segredos').delete().eq('integracao_id', existente.id);
+          if (segredoErro) throw segredoErro;
+          const { error: integracaoErro } = await admin.from('integracoes_plataforma').update({
+            status: 'desconectada', conta_mascarada: null, conectado_em: null, ultimo_erro: null,
+            atualizado_por: sessao.user.id, updated_at: new Date().toISOString()
+          }).eq('id', existente.id);
+          if (integracaoErro) throw integracaoErro;
+        }
+        await admin.from('auditoria_comercial').insert({
+          autor_id: sessao.user.id, acao: 'integracao_ia_global_desconectada', entidade: 'integracoes_plataforma',
+          entidade_id: existente?.id || null
+        });
+        return resposta(200, { sucesso: true, mensagem: 'Chave global de IA desconectada.' });
+      }
+
+      const { provedor, modelo } = validarIAEmpresa(dados.provedor, dados.modelo);
+      const chaveNova = texto(dados.apiKey);
+      const provedorAlterado = Boolean(existente?.provedor && existente.provedor !== provedor);
+      const apiKey = chaveNova || (!provedorAlterado && existente ? await carregarSegredoGlobal(existente.id) : '');
+      if (!apiKey) return resposta(400, { erro: 'Informe a chave da API do provedor escolhido.' });
+      await testarChaveIAEmpresa(provedor, modelo, apiKey);
+      const limitar = (valor: unknown, minimo: number, maximo: number, padrao: number) => {
+        const numero = Number(valor);
+        return Number.isInteger(numero) ? Math.max(minimo, Math.min(maximo, numero)) : padrao;
+      };
+      const metadados = {
+        ...metadadosAtuais,
+        provedor,
+        modelo,
+        personalizacao_empresas_ativa: dados.personalizacaoEmpresasAtiva === true,
+        limite_minuto_empresa: limitar(dados.limiteMinutoEmpresa, 1, 20, 3),
+        limite_mensal_empresa: limitar(dados.limiteMensalEmpresa, 10, 10000, 300),
+        limite_minuto_global: limitar(dados.limiteMinutoGlobal, 1, 300, 30),
+        limite_mensal_global: limitar(dados.limiteMensalGlobal, 100, 500000, 10000),
+        max_tokens: limitar(dados.maxTokens, 100, 2000, 600)
+      };
+      const agora = new Date().toISOString();
+      const { data: integracao, error: integracaoErro } = await admin.from('integracoes_plataforma').upsert({
+        tipo: 'ia', status: 'conectada', provedor, conta_mascarada: `${provedor} · ${modelo}`,
+        conectado_em: existente?.conectado_em || agora, ultima_verificacao_em: agora, ultimo_erro: null,
+        metadados, criado_por: existente ? undefined : sessao.user.id, atualizado_por: sessao.user.id, updated_at: agora
+      }, { onConflict: 'tipo' }).select('id,tipo,status,provedor,conta_mascarada,conectado_em,ultima_verificacao_em,ultimo_erro,metadados,updated_at').single();
+      if (integracaoErro || !integracao) throw integracaoErro || new Error('Não foi possível salvar a IA global.');
+      if (chaveNova || provedorAlterado || !existente) {
+        const segredo = await cifrarChaveIA(apiKey);
+        const { error: segredoErro } = await admin.from('integracoes_plataforma_segredos').upsert({
+          integracao_id: integracao.id, iv_base64: segredo.iv, segredo_cifrado_base64: segredo.cifra, atualizado_em: agora
+        });
+        if (segredoErro) throw segredoErro;
+      }
+      await admin.from('auditoria_comercial').insert({
+        autor_id: sessao.user.id, acao: 'integracao_ia_global_configurada', entidade: 'integracoes_plataforma',
+        entidade_id: integracao.id, metadados: { provedor, modelo, limites: metadados }
+      });
+      return resposta(200, { integracao, possui_chave: true, mensagem: 'Assistente global validado e salvo no cofre da nuvem.' });
+    }
+
+    if (acao === 'obter_integracao_ia_empresa' || acao === 'configurar_integracao_ia_empresa' ||
+        acao === 'desconectar_integracao_ia_empresa' || acao === 'definir_personalizacao_ia_empresa') {
       const empresaId = texto(dados.empresaId);
       if (!empresaId) return resposta(400, { erro: 'Empresa inválida.' });
-      const { data: empresa, error: empresaErro } = await admin.from('empresas').select('id,nome_fantasia,codigo').eq('id', empresaId).maybeSingle();
+      const { data: empresa, error: empresaErro } = await admin.from('empresas').select('id,nome_fantasia,codigo,recursos_habilitados').eq('id', empresaId).maybeSingle();
       if (empresaErro) throw empresaErro;
       if (!empresa) return resposta(404, { erro: 'Empresa não encontrada.' });
       const buscar = async () => {
@@ -1158,8 +1263,31 @@ Deno.serve(async (req) => {
         return data ? decifrarChaveIA(data.iv_base64, data.segredo_cifrado_base64) : '';
       };
       const existente = await buscar();
+      const { data: globalIA, error: globalIAErro } = await admin.from('integracoes_plataforma')
+        .select('status,provedor,conta_mascarada,metadados').eq('tipo', 'ia').maybeSingle();
+      if (globalIAErro) throw globalIAErro;
+      const personalizacaoGlobalAtiva = globalIA?.metadados?.personalizacao_empresas_ativa === true;
+      const personalizacaoEmpresaPermitida = empresa.recursos_habilitados?.ia_personalizacao_permitida === true;
       if (acao === 'obter_integracao_ia_empresa') {
-        return resposta(200, { empresa, integracao: existente, possui_chave: existente ? Boolean(await carregarSegredo(existente.id)) : false });
+        return resposta(200, {
+          empresa, integracao: existente, possui_chave: existente ? Boolean(await carregarSegredo(existente.id)) : false,
+          personalizacao_global_ativa: personalizacaoGlobalAtiva,
+          personalizacao_empresa_permitida: personalizacaoEmpresaPermitida,
+          configuracao_global: globalIA ? { status: globalIA.status, provedor: globalIA.provedor, conta_mascarada: globalIA.conta_mascarada } : null
+        });
+      }
+      if (acao === 'definir_personalizacao_ia_empresa') {
+        const permitida = dados.permitida === true;
+        const recursos = { ...(empresa.recursos_habilitados || {}), ia_personalizacao_permitida: permitida };
+        const { error } = await admin.from('empresas').update({ recursos_habilitados: recursos }).eq('id', empresaId);
+        if (error) throw error;
+        await admin.from('auditoria_comercial').insert({
+          empresa_id: empresaId, autor_id: sessao.user.id, acao: 'personalizacao_ia_empresa_alterada',
+          entidade: 'empresa', entidade_id: empresaId, metadados: { permitida }
+        });
+        return resposta(200, { sucesso: true, permitida, mensagem: permitida
+          ? 'A empresa pode configurar uma chave própria enquanto a personalização global estiver ativa.'
+          : 'A chave própria foi desativada para esta empresa; será usada a configuração global.' });
       }
       if (acao === 'desconectar_integracao_ia_empresa') {
         if (existente) {
@@ -1168,6 +1296,11 @@ Deno.serve(async (req) => {
         }
         await admin.from('auditoria_comercial').insert({ empresa_id: empresaId, autor_id: sessao.user.id, acao: 'integracao_ia_desconectada_suporte', entidade: 'integracoes_empresa', entidade_id: existente?.id || null });
         return resposta(200, { sucesso: true, mensagem: 'Assistente de IA desconectado da empresa.' });
+      }
+      if (!personalizacaoGlobalAtiva || !personalizacaoEmpresaPermitida) {
+        return resposta(403, { erro: !personalizacaoGlobalAtiva
+          ? 'A personalização de chaves está desativada globalmente.'
+          : 'Autorize primeiro uma chave própria para esta empresa.' });
       }
       const { provedor, modelo } = validarIAEmpresa(dados.provedor, dados.modelo);
       const chaveNova = texto(dados.apiKey);

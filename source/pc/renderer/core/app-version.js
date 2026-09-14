@@ -13,7 +13,7 @@
 
     const rodape = document.querySelector('.login-brand-footer');
     if (rodape) {
-      rodape.innerHTML = `&copy; 2026 Sistema OS v${versao} &mdash; Assistência Técnica &amp; Gestão`;
+      rodape.innerHTML = `&copy; 2026 Sistema OS v${versao} &mdash; by Aurevion Tecnologia`;
     }
   }).catch(() => {});
 })();

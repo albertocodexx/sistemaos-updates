@@ -253,6 +253,7 @@ function criarApiPublica({ invocar, assinar, removerAssinatura }) {
   pagabrircomp:        (p)               => invocar('pag:abrirComprovante', p),
   paggerarpdf:         (id)              => invocar('pag:gerarComprovantePDF', id),
   paggerarpdfsilencioso: (id)            => invocar('pag:gerarComprovantePDFSilencioso', id),
+  pagimprimirtermico:  (id)              => invocar('pag:imprimirTermico', id),
   // Fase 6: confirmar pagamento presencial (botão na tela de edição da OS,
   // visível quando statusPagamento === 'Aguardando Pagamento na Retirada')
   osconfirmarpagamentopresencial: apiOS.confirmarPagamentoPresencial,

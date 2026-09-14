@@ -27,6 +27,7 @@ const testes = [
   'teste-clientes-renderizacao-segura.js',
   'teste-login-clean.js',
   'teste-identidade-monocromatica.js',
+  'teste-sobre-aurevion.js',
   'teste-contraste-interface.js',
   'teste-troca-conta-sem-travar.js',
   'teste-ia-empresa-notificacoes-assinatura.js',

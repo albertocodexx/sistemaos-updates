@@ -2692,6 +2692,22 @@
         <p id="updateStatus" class="campo-desc" style="margin-top:10px;"></p>
       </div>
 
+      <div class="config-secao" id="sobreAurevion">
+        <div class="config-secao-titulo">Sobre o Sistema OS</div>
+        <div class="sobre-aurevion-card">
+          <div class="sobre-aurevion-logo"><img src="assets/aurevion-logo.png" alt="Aurevion Tecnologia"></div>
+          <div class="sobre-aurevion-conteudo">
+            <strong>Sistema OS by Aurevion Tecnologia</strong>
+            <p>Desenvolvido para organizar assistências técnicas com segurança, clareza e sincronização entre computador e celular.</p>
+            <p class="sobre-aurevion-copyright">© 2026 Aurevion Tecnologia. Todos os direitos reservados.</p>
+            <div class="linha-acoes">
+              <button type="button" id="btnAurevionSite" class="botao botao-secundario botao-pequeno">aureviontecnologia.vercel.app</button>
+              <button type="button" id="btnAurevionEmail" class="botao botao-fantasma botao-pequeno">aureviontecnologia@gmail.com</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="modal-rodape">
         <button id="btnSalvarConfig" class="botao botao-primario"><span class="icone-svg"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg></span> Salvar Configurações</button>
         <button class="botao botao-fantasma" data-fechar="modalConfig"><span class="icone-svg"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg></span> Cancelar</button>
@@ -3646,6 +3662,20 @@
       </div>
     </div>
 
+  <div id="modalDetalhePagamento" class="modal-fundo escondido">
+    <div class="modal-caixa" style="max-width:620px;width:95%;">
+      <div class="modal-cabecalho">
+        <h2><span id="detalhePagamentoTitulo">Detalhes do pagamento</span></h2>
+        <button class="botao-fechar" data-fechar="modalDetalhePagamento"><span class="icone-svg"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg></span></button>
+      </div>
+      <div id="detalhePagamentoConteudo" class="modal-corpo"></div>
+      <div class="modal-rodape">
+        <button type="button" id="btnDetalhePagamentoArquivo" class="botao botao-secundario" hidden>Abrir arquivo anexado</button>
+        <button type="button" class="botao botao-fantasma" data-fechar="modalDetalhePagamento">Fechar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modalDetalheOS" class="modal-fundo escondido">
     <div class="modal-caixa modal-grande modal-detalhe-os">
       <div class="modal-cabecalho">
@@ -4016,7 +4046,7 @@
         <button id="iaChatEnviar" title="Enviar mensagem" aria-label="Enviar mensagem"><span>Enviar</span><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-exportar-seta"/></svg></button>
       </div>
     </div>
-    <button id="iaChatBotao" title="Assistente IA" aria-label="Abrir assistente IA" aria-controls="iaChatPainel" aria-expanded="false"><span class="iaChatPulso"></span><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="m24 5 5.6 12 13 1.6-9.5 9 2.6 12.8L24 34l-11.7 6.4 2.6-12.8-9.5-9 13-1.6L24 5Z" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/></svg></button>
+    <button id="iaChatBotao" title="Assistente IA" aria-label="Abrir assistente IA" aria-controls="iaChatPainel" aria-expanded="false"><span class="iaChatPulso"></span><img src="assets/ia-assistente.png" alt="" aria-hidden="true"></button>
   </div>
 
   <script src="shared/dom.js"></script>

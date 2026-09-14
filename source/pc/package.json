@@ -1,6 +1,6 @@
 {
   "name": "sistema-os-at",
-  "version": "40.5.7",
+  "version": "40.5.8",
   "packageManager": "pnpm@11.16.0",
   "description": "Sistema de Ordens de Serviço para Assistências Técnicas",
   "main": "main.js",
@@ -22,9 +22,9 @@
     "qrcode": "^1.5.4"
   },
   "author": {
-    "name": "Assistência Técnica & Gestão",
-    "email": "",
-    "url": ""
+    "name": "Aurevion Tecnologia",
+    "email": "aureviontecnologia@gmail.com",
+    "url": "https://aureviontecnologia.vercel.app/"
   },
   "license": "UNLICENSED",
   "devDependencies": {
@@ -39,7 +39,7 @@
   "build": {
     "appId": "com.sistemaos.assistencia",
     "productName": "Sistema OS",
-    "copyright": "© 2026 Assistência Técnica & Gestão. Todos os direitos reservados.",
+    "copyright": "© 2026 Aurevion Tecnologia. Todos os direitos reservados.",
     "files": [
       "**/*",
       "!node_modules/electron-builder",

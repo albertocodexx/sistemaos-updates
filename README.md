@@ -9,6 +9,12 @@ Atualizações oficiais do Sistema OS para Windows e Android.
 
 Os dois links apontam sempre para os arquivos da atualização marcada como mais recente.
 
+## Atualização PC 40.5.8 / Android 20.5.9
+
+Esta versão reforça o isolamento e os backups multiempresa, centraliza a configuração segura e econômica da IA no suporte e identifica oficialmente o produto como “Sistema OS by Aurevion Tecnologia”. Também inclui correções no licenciamento, histórico de pagamentos e sincronização de clientes do celular.
+
+- [Detalhes da versão](release-notes-40.5.8.md)
+
 ## Atualização PC 40.5.7 / Android 20.5.9
 
 Esta versão corrige a busca de vendas por parte do nome e garante que o PDF final assinado seja registrado como arquivo oficial da venda e sincronizado entre celular, nuvem e PC. Documentos antigos com PDF apenas local também recebem reparo automático na sincronização.

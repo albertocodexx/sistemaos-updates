@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { contextoUsuarioAtivo, licencaPermiteOperacao, temPermissao } from '../_shared/access.ts';
+import { contextoUsuarioAtivo, ehAdministradorEmpresa, licencaPermiteOperacao, temPermissao } from '../_shared/access.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -154,24 +154,93 @@ Deno.serve(async (req) => {
         return String(await decifrar(data.iv_base64, data.segredo_cifrado_base64));
       };
 
+      const buscarIntegracaoGlobal = async () => {
+        const { data, error } = await admin.from('integracoes_plataforma')
+          .select('id,status,provedor,conta_mascarada,conectado_em,ultima_verificacao_em,ultimo_erro,metadados')
+          .eq('tipo', 'ia').maybeSingle();
+        if (error) throw error;
+        return data;
+      };
+      const carregarCredencialGlobal = async (integracaoId: string) => {
+        const { data, error } = await admin.from('integracoes_plataforma_segredos')
+          .select('iv_base64,segredo_cifrado_base64').eq('integracao_id', integracaoId).maybeSingle();
+        if (error) throw error;
+        if (!data) return '';
+        return String(await decifrar(data.iv_base64, data.segredo_cifrado_base64));
+      };
+      const global = await buscarIntegracaoGlobal();
+      const metadadosGlobal = global?.metadados && typeof global.metadados === 'object' ? global.metadados : {};
+      const personalizacaoGlobalAtiva = metadadosGlobal.personalizacao_empresas_ativa === true;
+      const personalizacaoEmpresaPermitida = personalizacaoGlobalAtiva &&
+        atual.recursos_habilitados?.ia_personalizacao_permitida === true;
+      const resumoGlobal = {
+        status: global?.status || 'desconectada',
+        provedor: String(metadadosGlobal.provedor || global?.provedor || 'groq'),
+        modelo: String(metadadosGlobal.modelo || ''),
+        personalizacao_empresas_ativa: personalizacaoGlobalAtiva,
+        personalizacao_empresa_permitida: personalizacaoEmpresaPermitida,
+        limite_minuto_empresa: Number(metadadosGlobal.limite_minuto_empresa) || 3,
+        limite_mensal_empresa: Number(metadadosGlobal.limite_mensal_empresa) || 300,
+        max_tokens: Number(metadadosGlobal.max_tokens) || 600
+      };
+
       if (acao === 'status') {
         const integracao = await buscarIntegracao();
         const possuiChave = integracao ? Boolean(await carregarCredencial(integracao.id)) : false;
-        return resposta(200, { integracao, possui_chave: possuiChave });
+        const usaPersonalizada = personalizacaoEmpresaPermitida && integracao?.status === 'conectada' && possuiChave;
+        return resposta(200, {
+          integracao,
+          possui_chave: possuiChave,
+          configuracao_global: resumoGlobal,
+          origem_efetiva: usaPersonalizada ? 'empresa' : (global?.status === 'conectada' ? 'global' : 'nenhuma')
+        });
       }
 
       if (acao === 'chat') {
-        if (atual.administrador_global) return resposta(403, { erro: 'Entre em uma empresa para usar o assistente.' });
-        const integracao = await buscarIntegracao();
-        if (!integracao || integracao.status !== 'conectada') return resposta(409, { erro: 'O assistente de IA ainda não foi configurado para esta empresa.' });
-        const { provedor, modelo } = validarConfiguracaoIA(integracao.metadados?.provedor, integracao.metadados?.modelo);
-        const apiKey = await carregarCredencial(integracao.id);
-        if (!apiKey) return resposta(409, { erro: 'A chave segura da IA não foi encontrada. Configure novamente.' });
-        const retorno = await chamarProvedorIA(provedor, modelo, apiKey, corpo.dados?.mensagens, corpo.dados?.opcoes || {});
-        return resposta(200, { resposta: retorno, provedor, modelo });
+        const integracaoEmpresa = personalizacaoEmpresaPermitida ? await buscarIntegracao() : null;
+        const chaveEmpresa = integracaoEmpresa?.status === 'conectada'
+          ? await carregarCredencial(integracaoEmpresa.id)
+          : '';
+        const usarEmpresa = Boolean(chaveEmpresa);
+        const integracaoEfetiva = usarEmpresa ? integracaoEmpresa : global;
+        const apiKey = usarEmpresa
+          ? chaveEmpresa
+          : (global?.status === 'conectada' ? await carregarCredencialGlobal(global.id) : '');
+        if (!integracaoEfetiva || !apiKey) {
+          return resposta(409, { erro: 'O assistente de IA ainda não foi ativado para esta empresa.' });
+        }
+        const metadadosEfetivos = integracaoEfetiva.metadados && typeof integracaoEfetiva.metadados === 'object'
+          ? integracaoEfetiva.metadados
+          : {};
+        const { provedor, modelo } = validarConfiguracaoIA(
+          metadadosEfetivos.provedor || integracaoEfetiva.provedor,
+          metadadosEfetivos.modelo
+        );
+        const limiteMinutoEmpresa = Math.max(1, Math.min(60, Number(metadadosGlobal.limite_minuto_empresa) || 3));
+        const limiteMensalEmpresa = Math.max(1, Math.min(100000, Number(metadadosGlobal.limite_mensal_empresa) || 300));
+        const limiteMinutoGlobal = Math.max(1, Math.min(1000, Number(metadadosGlobal.limite_minuto_global) || 30));
+        const limiteMensalGlobal = Math.max(1, Math.min(1000000, Number(metadadosGlobal.limite_mensal_global) || 10000));
+        const { data: cota, error: cotaErro } = await admin.rpc('consumir_cota_ia', {
+          p_empresa_id: atual.empresa_id,
+          p_limite_minuto_empresa: limiteMinutoEmpresa,
+          p_limite_mensal_empresa: limiteMensalEmpresa,
+          p_limite_minuto_global: limiteMinutoGlobal,
+          p_limite_mensal_global: limiteMensalGlobal
+        });
+        if (cotaErro) return resposta(429, { erro: cotaErro.message || 'Limite econômico do assistente atingido.' });
+        const opcoesRecebidas = corpo.dados?.opcoes && typeof corpo.dados.opcoes === 'object' ? corpo.dados.opcoes : {};
+        const maxTokensConfigurado = Math.max(64, Math.min(1500, Number(metadadosGlobal.max_tokens) || 600));
+        const opcoesEconomicas = {
+          ...opcoesRecebidas,
+          maxTokens: Math.min(maxTokensConfigurado, Math.max(64, Number(opcoesRecebidas.maxTokens) || maxTokensConfigurado))
+        };
+        const retorno = await chamarProvedorIA(provedor, modelo, apiKey, corpo.dados?.mensagens, opcoesEconomicas);
+        return resposta(200, { resposta: retorno, provedor, modelo, origem: usarEmpresa ? 'empresa' : 'global', cota });
       }
 
-      if (!podeAdministrar) return resposta(403, { erro: 'Apenas administradores podem alterar o assistente de IA.' });
+      if (!ehAdministradorEmpresa(atual)) {
+        return resposta(403, { erro: 'Apenas o Administrador da empresa pode alterar a chave própria de IA.' });
+      }
 
       if (acao === 'desconectar') {
         const { data: integracao, error } = await admin.from('integracoes_empresa').upsert({
@@ -181,6 +250,14 @@ Deno.serve(async (req) => {
         if (error) throw error;
         await admin.from('integracoes_segredos').delete().eq('integracao_id', integracao.id);
         return resposta(200, { integracao, mensagem: 'Assistente de IA desconectado desta empresa.' });
+      }
+
+      if (!personalizacaoEmpresaPermitida) {
+        return resposta(403, {
+          erro: personalizacaoGlobalAtiva
+            ? 'O suporte ainda não liberou uma chave própria para esta empresa.'
+            : 'A personalização de chaves está desativada pelo Administrador Geral. A empresa usa a chave global.'
+        });
       }
 
       const dadosIA = corpo.dados && typeof corpo.dados === 'object' ? corpo.dados : {};

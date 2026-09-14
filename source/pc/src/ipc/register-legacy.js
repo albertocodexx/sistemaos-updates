@@ -18,15 +18,18 @@ function registerLegacyHandlers(deps) {
       return { sucesso: false, erro: 'Link inválido.' };
     }
     const host = destino.hostname.toLowerCase();
-    const permitido = destino.protocol === 'https:' && (
+    const emailAurevion = destino.protocol === 'mailto:' &&
+      destino.pathname.toLowerCase() === 'aureviontecnologia@gmail.com';
+    const permitido = emailAurevion || (destino.protocol === 'https:' && (
       host === 'mercadopago.com' || host.endsWith('.mercadopago.com') ||
       host === 'mercadopago.com.br' || host.endsWith('.mercadopago.com.br') ||
       host === 'mercadolivre.com' || host.endsWith('.mercadolivre.com') ||
       host === 'mercadolivre.com.br' || host.endsWith('.mercadolivre.com.br') ||
       host === 'mercadolibre.com' || host.endsWith('.mercadolibre.com') ||
-      host === 'mercadolibre.com.br' || host.endsWith('.mercadolibre.com.br')
-    );
-    if (!permitido) return { sucesso: false, erro: 'Esse link de pagamento não é permitido.' };
+      host === 'mercadolibre.com.br' || host.endsWith('.mercadolibre.com.br') ||
+      host === 'aureviontecnologia.vercel.app'
+    ));
+    if (!permitido) return { sucesso: false, erro: 'Esse destino não é permitido.' };
     await shell.openExternal(destino.toString());
     return { sucesso: true };
   });
@@ -2739,6 +2742,59 @@ function registerLegacyHandlers(deps) {
   // para ser anexado à mensagem de WhatsApp de confirmação.
   ipcMain.handle('pag:gerarComprovantePDFSilencioso', async (_e, pagamentoId) => {
     return gerarComprovantePagamentoPDF(pagamentoId);
+  });
+
+  ipcMain.handle('pag:imprimirTermico', async (_e, pagamentoId) => {
+    const pag = db.obterPagamento(pagamentoId);
+    if (!pag) return { sucesso: false, erro: 'Pagamento não encontrado.' };
+    const config = db.obterConfig();
+    const osPagamento = db.obterOSPorNumero(pag.osNumero) || {};
+    const esc = valor => String(valor == null ? '' : valor)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const moeda = valor => 'R$ ' + Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const pagamentosOS = (db.listarPagamentos ? db.listarPagamentos() : [])
+      .filter(item => item.osNumero === pag.osNumero);
+    const totalRecebido = pagamentosOS.reduce((soma, item) => soma + (Number(item.valor) || 0), 0);
+    const totalOS = Number(pag.valorTotalServico)
+      || Number(osPagamento.valorTotalServico)
+      || Number(osPagamento.diagnosticoTecnico?.valorEstimado)
+      || Number(pag.valor) || 0;
+    const restante = Math.max(0, Number(pag.valorRestanteAposPagamento) || totalOS - totalRecebido);
+    const empresa = config.nomeEmpresa || config.nomeFantasia || 'Assistência Técnica';
+    const contato = [config.telefonePrincipal, config.email].filter(Boolean).join(' · ');
+    const linha = (rotulo, valor) => valor === '' || valor == null ? ''
+      : `<div class="linha"><span>${esc(rotulo)}</span><strong>${esc(valor)}</strong></div>`;
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>
+      *,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}
+      .bobina{width:80mm;padding:4mm 3mm 7mm;font-size:10px;line-height:1.32}.topo{text-align:center;border-bottom:2px solid #000;padding-bottom:7px;margin-bottom:7px}
+      h1{font-size:15px;margin:0 0 2px}.contato{font-size:8px}.titulo{text-align:center;font-size:12px;font-weight:800;margin:8px 0}.numero{text-align:center;font-size:18px;font-weight:900;margin-bottom:8px}
+      .linha{display:flex;gap:7px;align-items:flex-start;border-top:1px dashed #777;padding:4px 0}.linha span{flex:0 0 38%;text-transform:uppercase;font-size:8px}.linha strong{flex:1;overflow-wrap:anywhere}
+      .valor{border:2px solid #000;text-align:center;margin:9px 0;padding:8px}.valor small{display:block;font-size:8px;text-transform:uppercase}.valor b{display:block;font-size:22px}
+      .rodape{text-align:center;border-top:1px dashed #777;margin-top:9px;padding-top:7px;font-size:8px}@page{size:80mm auto;margin:0}
+    </style></head><body><main class="bobina"><header class="topo"><h1>${esc(empresa)}</h1><div class="contato">${esc(contato)}</div></header>
+      <div class="titulo">COMPROVANTE DE PAGAMENTO</div><div class="numero">${esc(pag.osNumero || '')}</div>
+      ${linha('Cliente', pag.clienteNome || '—')}${linha('Aparelho', pag.aparelho || '—')}${linha('Data', new Date(pag.dataPagamento).toLocaleString('pt-BR'))}
+      ${linha('Forma', pag.metodo || 'Não informada')}${linha('Canal', pag.origem || 'manual')}
+      <div class="valor"><small>Valor recebido</small><b>${esc(moeda(pag.valor))}</b></div>
+      ${totalOS > 0 ? linha('Total da OS', moeda(totalOS)) : ''}${linha('Total recebido', moeda(totalRecebido))}${restante > 0 ? linha('Saldo restante', moeda(restante)) : linha('Situação', 'Quitado')}
+      ${pag.observacao ? linha('Observação', pag.observacao) : ''}<footer class="rodape">${esc(pag.id)}<br>Documento emitido pelo Sistema OS</footer>
+    </main></body></html>`;
+    const tmpPath = path.join(app.getPath('temp'), `pagamento-termico-${Date.now()}.html`);
+    fs.writeFileSync(tmpPath, html, 'utf8');
+    const janela = new BrowserWindow({ show: false, width: 420, height: 900,
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } });
+    try {
+      await janela.loadFile(tmpPath);
+      return await new Promise(resolve => {
+        janela.webContents.print({ silent: false, printBackground: true, margins: { marginType: 'none' } }, (sucesso, motivo) => {
+          resolve(sucesso ? { sucesso: true } : { sucesso: false, cancelado: /cancel/i.test(String(motivo || '')), erro: motivo || 'A impressão não foi concluída.' });
+        });
+      });
+    } finally {
+      janela.destroy();
+      fs.unlink(tmpPath, () => {});
+    }
   });
   
   // ══════════════════════════════════════════════════════════════

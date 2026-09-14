@@ -2,6 +2,8 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   let integracoes = [];
+  let integracaoIAGlobal = null;
+  let possuiChaveIAGlobal = false;
   let monitorBaileys = null;
 
   function criar() {
@@ -40,7 +42,26 @@
           </div>
           <div class="linha-acoes" style="margin-top:10px"><button type="button" id="btnDesconectarWhatsPlataforma" class="botao botao-perigo botao-pequeno" hidden>Desconectar canal</button></div>
         </div>
-      </div><p id="statusIntegracoesPlataforma" class="campo-desc" role="status"></p>`;
+      </div>
+      <div class="suporte-integracao-card suporte-ia-global-card">
+        <div><strong>Assistente IA global</strong><p id="statusIAGlobal" class="campo-desc">Consultando o cofre seguro…</p></div>
+        <p class="campo-desc">Esta chave atende todas as empresas sem ser enviada ao PC ou ao celular. Somente o Administrador Geral pode alterá-la.</p>
+        <div class="grade-2">
+          <div class="campo"><label for="iaGlobalProvedor">Provedor</label><select id="iaGlobalProvedor"><option value="groq">Groq</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic / Claude</option><option value="deepseek">DeepSeek</option></select></div>
+          <div class="campo"><label for="iaGlobalModelo">Modelo</label><input id="iaGlobalModelo" maxlength="100" value="openai/gpt-oss-20b" autocomplete="off"></div>
+        </div>
+        <div class="campo"><label for="iaGlobalChave">Chave global da API</label><input id="iaGlobalChave" type="password" autocomplete="new-password" placeholder="Cole a chave somente para cadastrar ou substituir"></div>
+        <label class="suporte-chave-toggle"><input id="iaGlobalPersonalizacao" type="checkbox"><span><strong>Permitir personalização por empresa</strong><small>Desativado: todas usam a chave global. Ativado: apenas empresas liberadas individualmente podem usar chave própria.</small></span></label>
+        <details class="suporte-limites-ia"><summary>Limites econômicos de uso</summary><div class="grade-2">
+          <div class="campo"><label for="iaLimiteMinutoEmpresa">Por empresa / minuto</label><input id="iaLimiteMinutoEmpresa" type="number" min="1" max="20" value="3"></div>
+          <div class="campo"><label for="iaLimiteMensalEmpresa">Por empresa / mês</label><input id="iaLimiteMensalEmpresa" type="number" min="10" max="10000" value="300"></div>
+          <div class="campo"><label for="iaLimiteMinutoGlobal">Global / minuto</label><input id="iaLimiteMinutoGlobal" type="number" min="1" max="300" value="30"></div>
+          <div class="campo"><label for="iaLimiteMensalGlobal">Global / mês</label><input id="iaLimiteMensalGlobal" type="number" min="100" max="500000" value="10000"></div>
+          <div class="campo"><label for="iaMaxTokensGlobal">Máximo por resposta</label><input id="iaMaxTokensGlobal" type="number" min="100" max="2000" value="600"></div>
+        </div></details>
+        <div class="linha-acoes"><button type="button" id="btnSalvarIAGlobal" class="botao botao-primario botao-pequeno">Validar e salvar</button><button type="button" id="btnDesconectarIAGlobal" class="botao botao-perigo botao-pequeno" hidden>Desconectar chave</button></div>
+      </div>
+      <p id="statusIntegracoesPlataforma" class="campo-desc" role="status"></p>`;
     const metricas = $('metricasSuporteGlobal');
     if (metricas) metricas.before(secao); else painel.appendChild(secao);
     $('btnConectarMpPlataforma').addEventListener('click', conectarMp);
@@ -49,7 +70,89 @@
     $('btnDesconectarWhatsPlataforma').addEventListener('click', () => desconectar('whatsapp'));
     $('btnAbrirBaileysPlataforma').addEventListener('click', abrirBaileys);
     $('btnUsarBaileysPlataforma').addEventListener('click', usarBaileys);
+    $('btnSalvarIAGlobal').addEventListener('click', salvarIAGlobal);
+    $('btnDesconectarIAGlobal').addEventListener('click', desconectarIAGlobal);
+    $('iaGlobalPersonalizacao').addEventListener('change', salvarPersonalizacaoIAGlobal);
     document.querySelectorAll('input[name="whatsModoPlataforma"]').forEach((radio) => radio.addEventListener('change', atualizarModoWhats));
+  }
+
+  function desenharIAGlobal() {
+    const meta = integracaoIAGlobal?.metadados || {};
+    const conectada = integracaoIAGlobal?.status === 'conectada' && possuiChaveIAGlobal;
+    $('statusIAGlobal').textContent = conectada
+      ? `Ativa: ${integracaoIAGlobal.conta_mascarada || 'credencial protegida no servidor'}`
+      : 'Nenhuma chave global ativa.';
+    $('iaGlobalProvedor').value = meta.provedor || integracaoIAGlobal?.provedor || 'groq';
+    $('iaGlobalModelo').value = meta.modelo || 'openai/gpt-oss-20b';
+    $('iaGlobalChave').value = '';
+    $('iaGlobalChave').placeholder = conectada ? 'Chave protegida — deixe vazio para manter' : 'Cole a chave do provedor';
+    $('iaGlobalPersonalizacao').checked = meta.personalizacao_empresas_ativa === true;
+    $('iaLimiteMinutoEmpresa').value = Number(meta.limite_minuto_empresa) || 3;
+    $('iaLimiteMensalEmpresa').value = Number(meta.limite_mensal_empresa) || 300;
+    $('iaLimiteMinutoGlobal').value = Number(meta.limite_minuto_global) || 30;
+    $('iaLimiteMensalGlobal').value = Number(meta.limite_mensal_global) || 10000;
+    $('iaMaxTokensGlobal').value = Number(meta.max_tokens) || 600;
+    $('btnDesconectarIAGlobal').hidden = !conectada;
+  }
+
+  async function carregarIAGlobal() {
+    const resposta = await window.api.supabaseadministracaoglobal?.('obter_integracao_ia_global', {});
+    if (!resposta?.sucesso) {
+      $('statusIAGlobal').textContent = resposta?.erro || 'Não foi possível consultar a IA global.';
+      return;
+    }
+    integracaoIAGlobal = resposta.integracao || null;
+    possuiChaveIAGlobal = resposta.possui_chave === true;
+    desenharIAGlobal();
+  }
+
+  async function salvarIAGlobal() {
+    const botao = $('btnSalvarIAGlobal');
+    const status = $('statusIAGlobal');
+    const chave = $('iaGlobalChave').value.trim();
+    if (!possuiChaveIAGlobal && !chave) {
+      status.textContent = 'Informe a chave global antes de salvar.';
+      $('iaGlobalChave').focus();
+      return;
+    }
+    botao.disabled = true;
+    status.textContent = 'Validando diretamente com o provedor…';
+    const resposta = await window.api.supabaseadministracaoglobal?.('configurar_integracao_ia_global', {
+      provedor: $('iaGlobalProvedor').value,
+      modelo: $('iaGlobalModelo').value.trim(),
+      apiKey: chave,
+      personalizacaoEmpresasAtiva: $('iaGlobalPersonalizacao').checked,
+      limiteMinutoEmpresa: Number($('iaLimiteMinutoEmpresa').value),
+      limiteMensalEmpresa: Number($('iaLimiteMensalEmpresa').value),
+      limiteMinutoGlobal: Number($('iaLimiteMinutoGlobal').value),
+      limiteMensalGlobal: Number($('iaLimiteMensalGlobal').value),
+      maxTokens: Number($('iaMaxTokensGlobal').value)
+    });
+    botao.disabled = false;
+    if (!resposta?.sucesso) { status.textContent = resposta?.erro || 'Não foi possível salvar a IA global.'; return; }
+    status.textContent = resposta.mensagem || 'IA global salva.';
+    await carregarIAGlobal();
+  }
+
+  async function salvarPersonalizacaoIAGlobal() {
+    const controle = $('iaGlobalPersonalizacao');
+    controle.disabled = true;
+    const resposta = await window.api.supabaseadministracaoglobal?.('definir_personalizacao_ia_global', { ativa: controle.checked });
+    controle.disabled = false;
+    if (!resposta?.sucesso) {
+      $('statusIAGlobal').textContent = resposta?.erro || 'Não foi possível alterar a personalização.';
+      await carregarIAGlobal();
+      return;
+    }
+    $('statusIAGlobal').textContent = resposta.mensagem || 'Preferência atualizada.';
+    await carregarIAGlobal();
+  }
+
+  async function desconectarIAGlobal() {
+    if (!window.confirm('Desconectar a chave global? O assistente ficará indisponível para empresas sem chave própria autorizada.')) return;
+    const resposta = await window.api.supabaseadministracaoglobal?.('desconectar_integracao_ia_global', {});
+    $('statusIAGlobal').textContent = resposta?.sucesso ? 'Chave global desconectada.' : (resposta?.erro || 'Não foi possível desconectar.');
+    await carregarIAGlobal();
   }
 
   function porTipo(tipo) { return integracoes.find((item) => item.tipo === tipo); }
@@ -133,9 +236,13 @@
   async function carregar() {
     criar();
     const resposta = await window.api.supabaseassinaturassaas?.('listar_integracoes_plataforma', {});
-    if (!resposta?.sucesso) { $('statusIntegracoesPlataforma').textContent = resposta?.erro || ''; return; }
-    integracoes = resposta.integracoes || [];
-    desenhar();
+    if (!resposta?.sucesso) {
+      $('statusIntegracoesPlataforma').textContent = resposta?.erro || '';
+    } else {
+      integracoes = resposta.integracoes || [];
+      desenhar();
+    }
+    await carregarIAGlobal();
   }
 
   async function conectarMp() {

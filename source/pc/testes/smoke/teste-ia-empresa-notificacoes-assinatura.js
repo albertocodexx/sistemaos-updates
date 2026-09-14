@@ -12,6 +12,8 @@ const runtime = fs.readFileSync(path.join(raiz, 'src', 'supabase', 'desktop-runt
 const integracoes = fs.readFileSync(path.join(raiz, 'supabase', 'functions', 'integracoes-empresa', 'index.ts'), 'utf8');
 const admin = fs.readFileSync(path.join(raiz, 'supabase', 'functions', 'admin-global', 'index.ts'), 'utf8');
 const migracao = fs.readFileSync(path.join(raiz, 'supabase', 'migrations', '20260905000100_integracao_ia_por_empresa.sql'), 'utf8');
+const migracaoGlobal = fs.readFileSync(path.join(raiz, 'supabase', 'migrations', '20260914000200_ia_global_cotas_e_personalizacao.sql'), 'utf8');
+const suporteIntegracoes = fs.readFileSync(path.join(raiz, 'renderer', 'modules', 'suporte', 'integracoes-plataforma.js'), 'utf8');
 
 assert.match(html, /id="iaChatProviderConfig"/);
 assert.match(html, /id="iaChatModelConfig"[^>]*><\/select>/);
@@ -36,5 +38,13 @@ assert.match(integracoes, /integracao_ia_configurada/);
 assert.match(admin, /configurar_integracao_ia_empresa/);
 assert.match(admin, /integracao_ia_configurada_suporte/);
 assert.match(migracao, /'ia'/);
+assert.match(admin, /somenteAdministradorGeral[\s\S]*obter_integracao_ia_global/);
+assert.match(admin, /definir_personalizacao_ia_empresa/);
+assert.match(integracoes, /consumir_cota_ia/);
+assert.match(integracoes, /origem_efetiva/);
+assert.match(migracaoGlobal, /personalizacao_empresas_ativa', false/);
+assert.match(migracaoGlobal, /revoke all on table public\.ia_cotas_empresa from public, anon, authenticated/);
+assert.match(suporteIntegracoes, /id="iaGlobalChave"/);
+assert.match(suporteIntegracoes, /Somente o Administrador Geral pode alterá-la/);
 
-console.log('OK: IA por empresa, cobrança SaaS em meses e notificações isoladas por conta estão protegidas por regressão.');
+console.log('OK: IA global e por empresa, cotas, cobrança SaaS e notificações isoladas estão protegidas por regressão.');

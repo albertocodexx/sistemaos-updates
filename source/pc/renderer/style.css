@@ -2389,19 +2389,19 @@ body:not(.tema-escuro) .login-caixa {
   width: 56px;
   height: 56px;
   border-radius: 18px;
-  border: 1px solid color-mix(in srgb, var(--cor-botoes) 70%, #fff 30%);
-  background: linear-gradient(145deg, color-mix(in srgb, var(--cor-botoes) 78%, #fff 22%), var(--cor-botoes) 52%, color-mix(in srgb, var(--cor-botoes) 70%, #000 30%));
-  color: var(--ds-texto-invert);
+  border: 1px solid #62656a;
+  background: linear-gradient(145deg, #303236, #151619);
+  color: #fff;
   font-size: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 10px 30px rgba(0,0,0,.38), 0 0 0 1px color-mix(in srgb, var(--cor-botoes) 30%, transparent);
+  box-shadow: 0 10px 30px rgba(0,0,0,.38), 0 0 0 1px rgba(255,255,255,.1);
   transition: filter .2s, transform .16s, box-shadow .2s;
   touch-action: none;
 }
-#iaChatBotao > svg { width: 34px; height: 34px; position: relative; z-index: 2; filter: drop-shadow(0 2px 5px rgba(0,0,0,.28)); }
+#iaChatBotao > img { width: 44px; height: 44px; object-fit: contain; position: relative; z-index: 2; filter: drop-shadow(0 2px 5px rgba(0,0,0,.34)); pointer-events:none; }
 #iaChatBotao:hover { filter: brightness(1.08); transform: translateY(-2px); box-shadow: 0 14px 36px rgba(0,0,0,.42), 0 0 22px color-mix(in srgb, var(--cor-botoes) 38%, transparent); }
 #iaChatBotao:active { cursor: pointer; transform: scale(0.96); }
 
@@ -2692,7 +2692,7 @@ body.modo-suporte-global #btnCargos,
 body.modo-suporte-global #iaChatWidget {
   display: none !important;
 }
-body.modo-suporte-global #modalConfig .config-secao:not(#painelGlobalSistema):not(#sessaoUsuarioConfig),
+body.modo-suporte-global #modalConfig .config-secao:not(#painelGlobalSistema):not(#sessaoUsuarioConfig):not(#sobreAurevion),
 body.modo-suporte-global #modalConfig .modal-rodape {
   display: none !important;
 }
@@ -3023,6 +3023,21 @@ body.modo-suporte-global #painelGlobalSistema {
 .suporte-recursos-resumo { display:flex;flex-wrap:wrap;gap:7px; }
 .suporte-recursos-resumo span { padding:5px 9px;border:1px solid color-mix(in srgb,var(--primario) 55%,var(--borda));border-radius:999px;color:var(--primario);font-size:11px;font-weight:750; }
 .suporte-integracao-card { padding:14px;border:1px solid var(--borda);border-radius:10px;background:var(--bg); }
+.suporte-ia-global-card { margin-top:14px;display:grid;gap:12px; }
+.suporte-chave-toggle { display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid var(--borda);border-radius:10px;background:var(--bg-card);cursor:pointer; }
+.suporte-chave-toggle input { margin-top:3px; }
+.suporte-chave-toggle span { display:grid;gap:3px; }
+.suporte-chave-toggle small { color:var(--texto-sec);line-height:1.4; }
+.suporte-limites-ia { border-top:1px solid var(--borda);padding-top:10px; }
+.suporte-limites-ia summary { cursor:pointer;font-weight:700;color:var(--texto);margin-bottom:10px; }
+.sobre-aurevion-card { display:grid;grid-template-columns:minmax(170px,230px) 1fr;gap:22px;align-items:center;padding:18px;border:1px solid var(--borda);border-radius:14px;background:var(--bg-card); }
+.sobre-aurevion-logo { min-height:135px;display:grid;place-items:center;background:#050505;border-radius:10px;overflow:hidden; }
+.sobre-aurevion-logo img { width:100%;height:135px;object-fit:contain; }
+.sobre-aurevion-conteudo { display:grid;gap:9px;min-width:0; }
+.sobre-aurevion-conteudo > strong { font-size:1.12rem;color:var(--texto); }
+.sobre-aurevion-conteudo p { margin:0;color:var(--texto-sec);line-height:1.5; }
+.sobre-aurevion-copyright { font-size:.83rem; }
+@media (max-width:680px) { .sobre-aurevion-card { grid-template-columns:1fr; }.sobre-aurevion-logo { min-height:110px; }.sobre-aurevion-logo img { height:110px; } }
 .suporte-whatsapp-modos { display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0; }
 .suporte-whatsapp-modos label { display:flex;align-items:flex-start;gap:9px;padding:11px;border:1px solid var(--borda);border-radius:10px;background:var(--bg-card);cursor:pointer; }
 .suporte-whatsapp-modos label:has(input:checked) { border-color:var(--primario);background:color-mix(in srgb,var(--bg-card) 88%,var(--primario) 12%); }

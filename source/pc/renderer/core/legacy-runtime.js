@@ -11,6 +11,16 @@
 const { porId: $ } = window.RendererDom;
 const { data: fmtData, dataHora: fmtDataHora, moeda: fmtMoeda } = window.RendererFormatters;
 
+document.addEventListener('click', async (evento) => {
+  const botao = evento.target.closest?.('#btnAurevionSite, #btnAurevionEmail');
+  if (!botao) return;
+  const destino = botao.id === 'btnAurevionSite'
+    ? 'https://aureviontecnologia.vercel.app/'
+    : 'mailto:aureviontecnologia@gmail.com';
+  const resultado = await window.api.sistemaabrirlinkseguro?.(destino);
+  if (resultado && resultado.sucesso === false) toast(resultado.erro || 'Não foi possível abrir o contato.', 'erro');
+});
+
 window.api.onModoSegundoPlano?.((estado) => {
   const ativo = estado?.ativo === true;
   window.__SISTEMA_OS_MODO_SEGUNDO_PLANO__ = ativo;
@@ -953,6 +963,7 @@ const PROVEDORES_IA_CONFIG = Object.freeze({
   }
 });
 let integracaoIAEmpresaCache = null;
+let integracaoIAContextoCache = null;
 
 function preencherModelosIA(select, provedor, modeloAtual = '') {
   if (!select) return;
@@ -975,6 +986,10 @@ function atualizarFluxoIAConfig(config = configAtual || {}, integracao = integra
   if (!provedorEl || !modeloEl || !chaveEl) return;
   const provedor = provedorEl.value in PROVEDORES_IA_CONFIG ? provedorEl.value : 'groq';
   const definicao = PROVEDORES_IA_CONFIG[provedor];
+  const contaNuvem = usuarioAtual?.origemAuth === 'supabase' && !usuarioAtual?.administradorGlobal;
+  const personalizacaoPermitida = integracaoIAContextoCache?.configuracao_global?.personalizacao_empresas_ativa === true &&
+    integracaoIAContextoCache?.configuracao_global?.personalizacao_empresa_permitida === true;
+  const podeEditar = !contaNuvem || (usuarioAtual?.admin === true && personalizacaoPermitida);
   const remotoMesmoProvedor = integracao?.status === 'conectada' && integracao?.metadados?.provedor === provedor;
   const possuiLocal = config?.[definicao.flagLocal] === true;
   $('labelChaveIAConfig').textContent = `3. Chave da API ${definicao.nome}`;
@@ -985,15 +1000,30 @@ function atualizarFluxoIAConfig(config = configAtual || {}, integracao = integra
   $('ajudaChaveIAConfig').textContent = remotoMesmoProvedor
     ? 'O suporte ou o administrador já configurou esta integração. Digite uma nova chave somente para substituí-la.'
     : 'A chave informada será validada e protegida; ela não volta a aparecer em texto aberto.';
+  provedorEl.disabled = !podeEditar;
+  modeloEl.disabled = !podeEditar;
+  chaveEl.disabled = !podeEditar;
+  $('btnTestarGroqChat').disabled = !podeEditar;
+  if (contaNuvem && !podeEditar) {
+    const usaGlobal = integracaoIAContextoCache?.origem_efetiva === 'global';
+    $('ajudaChaveIAConfig').textContent = usuarioAtual?.admin !== true
+      ? 'A configuração da IA é administrada para toda a empresa pelo Administrador.'
+      : (usaGlobal
+          ? 'Esta empresa usa a chave global protegida pelo Sistema OS. O suporte não liberou uma chave própria.'
+          : 'A personalização de chaves está desativada pelo Administrador Geral do Sistema OS.');
+    exibirChipChaveSalva('chipIAConfig', 'chipIAConfigValor', usaGlobal ? 'Configuração global protegida no servidor' : 'Gerenciada pelo suporte');
+  }
 }
 
 async function carregarIntegracaoIAEmpresa(config = configAtual || {}) {
   if (!window.api?.supabaseintegracaoia || usuarioAtual?.administradorGlobal) return null;
   const resposta = await window.api.supabaseintegracaoia('status', {});
   if (!resposta?.sucesso) return null;
+  integracaoIAContextoCache = resposta;
   integracaoIAEmpresaCache = resposta.integracao || null;
-  const provedorRemoto = integracaoIAEmpresaCache?.metadados?.provedor;
-  const modeloRemoto = integracaoIAEmpresaCache?.metadados?.modelo;
+  const globalEfetiva = resposta.origem_efetiva === 'global' ? resposta.configuracao_global : null;
+  const provedorRemoto = integracaoIAEmpresaCache?.metadados?.provedor || globalEfetiva?.provedor;
+  const modeloRemoto = integracaoIAEmpresaCache?.metadados?.modelo || globalEfetiva?.modelo;
   if (provedorRemoto && PROVEDORES_IA_CONFIG[provedorRemoto]) $('iaChatProviderConfig').value = provedorRemoto;
   preencherModelosIA($('iaChatModelConfig'), $('iaChatProviderConfig').value, modeloRemoto || config.iaChatModel || '');
   atualizarFluxoIAConfig(config, integracaoIAEmpresaCache);
@@ -1698,7 +1728,8 @@ $('btnSalvarConfig').addEventListener('click', async () => {
   nova.iaChatModel = $('iaChatModelConfig')?.value || PROVEDORES_IA_CONFIG[nova.iaChatProvider].modelos[0][0];
   const chaveIANova = chaveIASave?.value?.trim() || '';
   const definicaoIASave = PROVEDORES_IA_CONFIG[nova.iaChatProvider];
-  if (chaveIANova) nova[definicaoIASave.campoLocal] = chaveIANova;
+  const iaUsaContaNuvem = usuarioAtual?.origemAuth === 'supabase' && !usuarioAtual?.administradorGlobal;
+  if (chaveIANova && !iaUsaContaNuvem) nova[definicaoIASave.campoLocal] = chaveIANova;
   // v25.3: Link de avaliação do Google (mensagem de entrega)
   const linkGoogleSave = document.getElementById('linkGoogleAvaliacaoConfig');
   if (linkGoogleSave) nova.linkGoogleAvaliacao = linkGoogleSave.value.trim();
@@ -1725,7 +1756,10 @@ $('btnSalvarConfig').addEventListener('click', async () => {
   if (Object.keys(supabaseCampos).length) nova.supabaseConfig = supabaseCampos;
   const supabaseAtivoSave = document.getElementById('supabaseAtivoConfig');
   if (supabaseAtivoSave) nova.supabaseAtivo = supabaseAtivoSave.checked;
-  if (chaveIANova || integracaoIAEmpresaCache?.status === 'conectada') {
+  const personalizacaoIANuvemPermitida = integracaoIAContextoCache?.configuracao_global?.personalizacao_empresas_ativa === true &&
+    integracaoIAContextoCache?.configuracao_global?.personalizacao_empresa_permitida === true;
+  if (iaUsaContaNuvem && usuarioAtual?.admin === true && personalizacaoIANuvemPermitida &&
+      (chaveIANova || integracaoIAEmpresaCache?.status === 'conectada')) {
     const nuvemIA = await window.api.supabaseintegracaoia?.('configurar', {
       provedor: nova.iaChatProvider, modelo: nova.iaChatModel, apiKey: chaveIANova
     });
@@ -5947,6 +5981,7 @@ async function abrirIntegracaoIAEmpresaGlobal(empresa) {
   caixa.innerHTML = `
     <div class="modal-cabecalho"><div><h2>Assistente IA — ${_escHtml(empresa.nome_fantasia || empresa.codigo)}</h2><p class="campo-desc">Configure uma credencial exclusiva para esta empresa. A chave fica no cofre da nuvem.</p></div><button type="button" class="botao-fechar" data-fechar-ia>×</button></div>
     <div style="padding:20px 24px;display:grid;gap:16px">
+      <label class="suporte-chave-toggle"><input id="suporteIAPermitirPropria" type="checkbox"><span><strong>Permitir chave própria para esta empresa</strong><small id="suporteIAPermitirAjuda">A configuração global continua sendo usada enquanto esta opção estiver desligada.</small></span></label>
       <div class="grade-2">
         <div class="campo"><label for="suporteIAProvedor">1. Provedor</label><select id="suporteIAProvedor">${Object.entries(PROVEDORES_IA_CONFIG).map(([valor, item]) => `<option value="${valor}">${_escHtml(item.nome)}</option>`).join('')}</select></div>
         <div class="campo"><label for="suporteIAModelo">2. Modelo</label><select id="suporteIAModelo"></select></div>
@@ -5962,6 +5997,7 @@ async function abrirIntegracaoIAEmpresaGlobal(empresa) {
   const chaveEl = caixa.querySelector('#suporteIAChave');
   const ajudaEl = caixa.querySelector('#suporteIAAjuda');
   const statusEl = caixa.querySelector('#suporteIAStatus');
+  const permitirEl = caixa.querySelector('#suporteIAPermitirPropria');
   let integracaoAtual = null;
   let possuiChave = false;
   const fechar = () => overlay.remove();
@@ -5990,10 +6026,33 @@ async function abrirIntegracaoIAEmpresaGlobal(empresa) {
     const provedorAtual = integracaoAtual?.metadados?.provedor;
     if (provedorAtual && PROVEDORES_IA_CONFIG[provedorAtual]) provedorEl.value = provedorAtual;
     atualizar(integracaoAtual?.metadados?.modelo || '');
+    permitirEl.checked = consulta.personalizacao_empresa_permitida === true;
+    permitirEl.disabled = consulta.personalizacao_global_ativa !== true;
+    caixa.querySelector('#suporteIAPermitirAjuda').textContent = consulta.personalizacao_global_ativa === true
+      ? 'Ligado: o Administrador da empresa pode cadastrar uma chave própria. Desligado: usa a chave global.'
+      : 'A personalização está desativada globalmente. Ative-a primeiro na configuração da IA global.';
+    [provedorEl, modeloEl, chaveEl, caixa.querySelector('#suporteIASalvar')].forEach((el) => { el.disabled = !permitirEl.checked; });
     statusEl.textContent = integracaoAtual?.status === 'conectada'
       ? `Ativa: ${integracaoAtual.conta_mascarada || 'configuração protegida'}.`
       : 'Nenhuma integração de IA ativa para esta empresa.';
   }
+  permitirEl.addEventListener('change', async () => {
+    permitirEl.disabled = true;
+    statusEl.textContent = 'Atualizando permissão…';
+    const resposta = await window.api.supabaseadministracaoglobal?.('definir_personalizacao_ia_empresa', {
+      empresaId: empresa.id, permitida: permitirEl.checked
+    });
+    if (!resposta?.sucesso) {
+      permitirEl.checked = !permitirEl.checked;
+      statusEl.textContent = resposta?.erro || 'Não foi possível atualizar a permissão.';
+      statusEl.style.color = 'var(--perigo)';
+    } else {
+      statusEl.textContent = resposta.mensagem || 'Permissão atualizada.';
+      statusEl.style.color = '';
+    }
+    permitirEl.disabled = consulta.personalizacao_global_ativa !== true;
+    [provedorEl, modeloEl, chaveEl, caixa.querySelector('#suporteIASalvar')].forEach((el) => { el.disabled = !permitirEl.checked; });
+  });
   caixa.addEventListener('submit', async (evento) => {
     evento.preventDefault();
     const mudouProvedor = integracaoAtual?.metadados?.provedor && integracaoAtual.metadados.provedor !== provedorEl.value;
@@ -6128,8 +6187,10 @@ function renderizarEmpresasGlobais(empresas) {
     if (suportePodeGerenciar() && !empresaInternaSuporte) {
       const trocaRapidaAtiva = empresa.recursos_habilitados?.troca_rapida_contas === true;
       const fiscalAtivo = empresa.recursos_habilitados?.fiscal_habilitado === true;
+      if (suporteEhAdministradorGeral()) {
+        acoes.append(criarBotaoSuporte('Assistente IA', 'botao-secundario', () => abrirIntegracaoIAEmpresaGlobal(empresa)));
+      }
       acoes.append(
-        criarBotaoSuporte('Assistente IA', 'botao-secundario', () => abrirIntegracaoIAEmpresaGlobal(empresa)),
         criarBotaoSuporte('Plano e acesso', 'botao-secundario', () => editarLicencaGlobal(empresa)),
         criarBotaoSuporte('Pagamento', 'botao-secundario', () => confirmarPagamentoGlobal(empresa)),
         criarBotaoSuporte('Adicionar dias', 'botao-secundario', () => adicionarDiasLicencaGlobal(empresa)),
@@ -10917,11 +10978,10 @@ async function carregarPagamentos(query) {
       <td style="padding:8px 10px;font-size:12px;color:var(--texto-sec);">${fmtD(p.dataPagamento)}</td>
       <td style="padding:8px 10px;">
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          ${p.caminhoComprovante
-            ? `<button class="botao botao-secundario" style="font-size:11px;padding:3px 8px;" onclick="abrirComprovanteExt('${p.caminhoComprovante.replace(/'/g,"\\'")}','${String(p.id || '').replace(/'/g,"\\'")}')">${ICONE_CLIPE} Ver</button>`
-            : `<button class="botao botao-fantasma" style="font-size:11px;padding:3px 8px;" onclick="anexarComprovanteExt('${p.id}')">${ICONE_PASTA} Anexar</button>`
-          }
+          <button class="botao botao-secundario" style="font-size:11px;padding:3px 8px;" onclick="verDetalhesPagamentoExt('${p.id}')">${ICONE_OLHO} Ver</button>
           <button class="botao botao-fantasma" style="font-size:11px;padding:3px 8px;" onclick="gerarComprovantePDF('${p.id}')">${ICONE_IMPRESSORA} PDF</button>
+          <button class="botao botao-fantasma" style="font-size:11px;padding:3px 8px;" onclick="imprimirComprovanteTermicoPagamento('${p.id}')">${ICONE_DOCUMENTO} Térmico</button>
+          ${!p.caminhoComprovante ? `<button class="botao botao-fantasma" style="font-size:11px;padding:3px 8px;" onclick="anexarComprovanteExt('${p.id}')">${ICONE_PASTA} Anexar</button>` : ''}
           <button class="botao botao-fantasma" style="font-size:11px;padding:3px 8px;border-color:#dc2626;color:#dc2626;" onclick="excluirPagamentoExt('${p.id}')">${ICONE_LIXEIRA} Excluir</button>
         </div>
       </td>
@@ -10950,6 +11010,46 @@ async function carregarPagamentos(query) {
   if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') carregarPagamentos(); });
   if (btn) btn.addEventListener('click', () => carregarPagamentos());
 })();
+
+async function verDetalhesPagamentoExt(pagId) {
+  try {
+    const p = await window.api.pagobter(pagId);
+    if (!p) return toast('Pagamento não encontrado.', 'erro');
+    const moeda = valor => 'R$ ' + Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const dataHora = valor => {
+      const data = new Date(valor || 0);
+      return Number.isNaN(data.getTime()) ? '—' : data.toLocaleString('pt-BR');
+    };
+    const origem = p.origem === 'mercadopago' ? 'Mercado Pago'
+      : p.origem === 'presencial' ? 'Presencial'
+      : p.origem === 'pix' ? 'Pix' : 'Manual';
+    const percentual = Number(p.percentualQuitado || 0);
+    const conteudo = $('detalhePagamentoConteudo');
+    $('detalhePagamentoTitulo').textContent = `Pagamento — ${p.osNumero || p.id}`;
+    conteudo.innerHTML = `
+      <div class="detalhe-grade">
+        <div class="detalhe-secao"><div class="detalhe-titulo">Identificação</div>
+          <p><b>ID:</b> ${_escHtml(p.id || '—')}</p><p><b>OS:</b> ${_escHtml(p.osNumero || '—')}</p>
+          <p><b>Cliente:</b> ${_escHtml(p.clienteNome || '—')}</p><p><b>Aparelho:</b> ${_escHtml(p.aparelho || '—')}</p>
+        </div>
+        <div class="detalhe-secao"><div class="detalhe-titulo">Pagamento</div>
+          <p><b>Valor recebido:</b> ${moeda(p.valor)}</p><p><b>Forma:</b> ${_escHtml(p.metodo || 'Não informada')}</p>
+          <p><b>Canal:</b> ${_escHtml(origem)}</p><p><b>Data:</b> ${_escHtml(dataHora(p.dataPagamento))}</p>
+          ${percentual ? `<p><b>Percentual quitado:</b> ${percentual}%</p>` : ''}
+          ${Number(p.valorTotalServico) > 0 ? `<p><b>Total da OS:</b> ${moeda(p.valorTotalServico)}</p>` : ''}
+          ${Number(p.valorRestanteAposPagamento) > 0 ? `<p><b>Saldo restante:</b> ${moeda(p.valorRestanteAposPagamento)}</p>` : ''}
+          ${p.observacao ? `<p><b>Observação:</b> ${_escHtml(p.observacao)}</p>` : ''}
+        </div>
+      </div>`;
+    const btnArquivo = $('btnDetalhePagamentoArquivo');
+    btnArquivo.hidden = !p.caminhoComprovante;
+    btnArquivo.onclick = p.caminhoComprovante
+      ? () => abrirComprovanteExt(p.caminhoComprovante, p.id) : null;
+    $('modalDetalhePagamento').classList.remove('escondido');
+  } catch (e) {
+    toast('Erro ao abrir os detalhes: ' + e.message, 'erro');
+  }
+}
 
 async function abrirComprovanteExt(caminho, pagamentoId = '') {
   try {
@@ -10999,6 +11099,7 @@ async function excluirPagamentoExt(pagId) {
 window.anexarComprovanteExt      = anexarComprovanteExt;
 window.abrirComprovanteExt       = abrirComprovanteExt;
 window.excluirPagamentoExt       = excluirPagamentoExt;
+window.verDetalhesPagamentoExt   = verDetalhesPagamentoExt;
 
 async function gerarComprovantePDF(pagId) {
   try {
@@ -11007,6 +11108,17 @@ async function gerarComprovantePDF(pagId) {
     else toast('Erro: ' + r.erro, 'erro');
   } catch(e) { toast('Erro: ' + e.message, 'erro'); }
 }
+
+async function imprimirComprovanteTermicoPagamento(pagId) {
+  try {
+    const r = await window.api.pagimprimirtermico(pagId);
+    if (r?.sucesso) toast('Comprovante térmico enviado para impressão.', 'sucesso');
+    else if (!r?.cancelado) toast('Erro: ' + (r?.erro || 'Não foi possível imprimir.'), 'erro');
+  } catch (e) {
+    toast('Erro ao imprimir: ' + e.message, 'erro');
+  }
+}
+window.imprimirComprovanteTermicoPagamento = imprimirComprovanteTermicoPagamento;
 
 // Autoriza manualmente o reparo sem registrar um pagamento inexistente.
 // O valor permanece a receber e será confirmado somente na retirada.

@@ -11,5 +11,8 @@ const renderer = fs.readFileSync(path.join(raiz, 'renderer', 'core', 'legacy-run
 assert.ok(ipc.includes("path.join(db.getRootDir(), 'Comprovantes')"));
 assert.ok(renderer.includes("window.api.paggerarpdf(pagamentoId)"));
 assert.ok(renderer.includes("abrirComprovanteExt(caminho, pagamentoId = '')"));
+assert.ok(renderer.includes("verDetalhesPagamentoExt('${p.id}')"), 'Ver deve abrir os dados, não repetir o PDF');
+assert.ok(renderer.includes("imprimirComprovanteTermicoPagamento('${p.id}')"), 'histórico deve oferecer impressão térmica');
+assert.ok(ipc.includes("ipcMain.handle('pag:imprimirTermico'"));
 
-console.log('OK: comprovante legado é recuperado dentro do diretório seguro.');
+console.log('OK: detalhes, PDF e impressão térmica de pagamento têm ações distintas.');
