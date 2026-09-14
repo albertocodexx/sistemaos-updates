@@ -1150,10 +1150,17 @@ Deno.serve(async (req) => {
         return data;
       };
       const carregarSegredoGlobal = async (integracaoId: string) => {
+        const segredoAmbiente = String(Deno.env.get('GROQ_API_KEY_GLOBAL') || '').trim();
         const { data, error } = await admin.from('integracoes_plataforma_segredos')
           .select('iv_base64,segredo_cifrado_base64').eq('integracao_id', integracaoId).maybeSingle();
         if (error) throw error;
-        return data ? decifrarChaveIA(data.iv_base64, data.segredo_cifrado_base64) : '';
+        if (!data) return segredoAmbiente;
+        try {
+          return decifrarChaveIA(data.iv_base64, data.segredo_cifrado_base64);
+        } catch (erro) {
+          if (segredoAmbiente) return segredoAmbiente;
+          throw erro;
+        }
       };
       const existente = await buscarGlobal();
       const metadadosAtuais = existente?.metadados && typeof existente.metadados === 'object'

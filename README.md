@@ -9,6 +9,12 @@ Atualizações oficiais do Sistema OS para Windows e Android.
 
 Os dois links apontam sempre para os arquivos da atualização marcada como mais recente.
 
+## Atualização PC 40.5.9 / Android 20.5.9
+
+Esta versão finaliza a ativação segura da IA global: a credencial Groq fica exclusivamente no cofre de segredos do Supabase, com a personalização por empresa desativada e limites econômicos por empresa e globais. A credencial anterior foi revogada antes da publicação.
+
+- [Detalhes da versão](release-notes-40.5.9.md)
+
 ## Atualização PC 40.5.8 / Android 20.5.9
 
 Esta versão reforça o isolamento e os backups multiempresa, centraliza a configuração segura e econômica da IA no suporte e identifica oficialmente o produto como “Sistema OS by Aurevion Tecnologia”. Também inclui correções no licenciamento, histórico de pagamentos e sincronização de clientes do celular.
