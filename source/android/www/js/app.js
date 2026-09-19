@@ -593,6 +593,111 @@
     return el ? el.value.trim() : '';
   }
 
+  // Sugestões leves de clientes da empresa atual. A consulta direta fica
+  // protegida pela RLS de clientes e traz somente os campos necessários para
+  // preencher a OS, sem baixar documentos ou dados de outras empresas.
+  var timerBuscaClienteOS = null;
+  var sequenciaBuscaClienteOS = 0;
+  var clientesSugeridosOS = [];
+
+  function ocultarSugestoesClienteOS() {
+    var lista = document.getElementById('cliente-sugestoes-os');
+    if (!lista) return;
+    lista.hidden = true;
+    lista.innerHTML = '';
+  }
+
+  function limparVinculoClienteOS() {
+    var id = document.getElementById('cliente-id');
+    var numero = document.getElementById('cliente-numero');
+    if (id) id.value = '';
+    if (numero) numero.value = '';
+  }
+
+  function selecionarClienteOS(indice) {
+    var cliente = clientesSugeridosOS[indice];
+    if (!cliente) return;
+    var nome = document.getElementById('cliente-nome');
+    if (nome) {
+      nome.value = cliente.nome || '';
+      nome.dataset.nomeSelecionado = cliente.nome || '';
+    }
+    var id = document.getElementById('cliente-id');
+    var numero = document.getElementById('cliente-numero');
+    if (id) id.value = cliente.id || '';
+    if (numero) numero.value = cliente.numero_cliente || '';
+    var semNumero = document.getElementById('cliente-sem-numero');
+    var telefone = document.getElementById('cliente-telefone');
+    if (semNumero) semNumero.checked = !cliente.telefone;
+    if (telefone) {
+      telefone.disabled = !cliente.telefone;
+      telefone.value = cliente.telefone || '';
+      telefone.placeholder = cliente.telefone ? '(00) 00000-0000' : 'Não informado';
+    }
+    var cpf = document.getElementById('cliente-cpf');
+    var email = document.getElementById('cliente-email');
+    if (cpf) cpf.value = cliente.cpf || '';
+    if (email) email.value = cliente.email || '';
+    ocultarSugestoesClienteOS();
+    rascunhoOSConcluido = false;
+    salvarRascunhoOS(false);
+  }
+
+  function mostrarSugestoesClienteOS(clientes) {
+    var lista = document.getElementById('cliente-sugestoes-os');
+    if (!lista) return;
+    clientesSugeridosOS = Array.isArray(clientes) ? clientes : [];
+    if (!clientesSugeridosOS.length) return ocultarSugestoesClienteOS();
+    lista.innerHTML = clientesSugeridosOS.map(function (cliente, indice) {
+      var contato = [cliente.telefone, cliente.numero_cliente ? 'ID ' + cliente.numero_cliente : ''].filter(Boolean).join(' · ');
+      return '<button type="button" role="option" data-cliente-indice="' + indice + '">' +
+        '<strong>' + escaparHtml(cliente.nome || 'Cliente') + '</strong>' +
+        (contato ? '<small>' + escaparHtml(contato) + '</small>' : '') + '</button>';
+    }).join('');
+    lista.hidden = false;
+  }
+
+  function buscarSugestoesClienteOS(termo) {
+    var atual = ++sequenciaBuscaClienteOS;
+    var clienteSupabase = window.SupabaseClientApp && window.SupabaseClientApp.obterCliente
+      ? window.SupabaseClientApp.obterCliente() : null;
+    if (!clienteSupabase || termo.length < 2) return ocultarSugestoesClienteOS();
+    clienteSupabase.from('clientes')
+      .select('id,numero_cliente,nome,telefone,cpf,email')
+      .is('deleted_at', null)
+      .ilike('nome', '%' + termo + '%')
+      .order('nome', { ascending: true })
+      .limit(8)
+      .then(function (resposta) {
+        if (atual !== sequenciaBuscaClienteOS) return;
+        if (resposta.error) throw resposta.error;
+        mostrarSugestoesClienteOS(resposta.data || []);
+      })
+      .catch(function () {
+        if (atual === sequenciaBuscaClienteOS) ocultarSugestoesClienteOS();
+      });
+  }
+
+  (function inicializarBuscaClienteOS() {
+    var nome = document.getElementById('cliente-nome');
+    var lista = document.getElementById('cliente-sugestoes-os');
+    if (!nome || !lista) return;
+    nome.addEventListener('input', function () {
+      if (nome.value.trim() !== String(nome.dataset.nomeSelecionado || '').trim()) limparVinculoClienteOS();
+      clearTimeout(timerBuscaClienteOS);
+      var termo = nome.value.trim();
+      if (termo.length < 2) return ocultarSugestoesClienteOS();
+      timerBuscaClienteOS = setTimeout(function () { buscarSugestoesClienteOS(termo); }, 250);
+    });
+    lista.addEventListener('click', function (evento) {
+      var botao = evento.target.closest('[data-cliente-indice]');
+      if (botao) selecionarClienteOS(Number(botao.dataset.clienteIndice));
+    });
+    document.addEventListener('click', function (evento) {
+      if (evento.target !== nome && !lista.contains(evento.target)) ocultarSugestoesClienteOS();
+    });
+  })();
+
   // Os templates já priorizam o termo salvo no próprio documento. Este
   // bloco torna essa capacidade visível no celular e resolve o mesmo texto
   // que sairia da configuração (customizado > padrão do usuário > fábrica),
@@ -704,9 +809,20 @@
   function rascunhoOSPossuiConteudo(rascunho) {
     if (!rascunho) return false;
     if (Array.isArray(rascunho.fotos) && rascunho.fotos.length) return true;
+    var valoresIniciais = {
+      'aparelho-tipo-equipamento': 'Smartphone',
+      'os-status': 'Aguardando análise',
+      'os-prioridade': 'Normal'
+    };
     return Object.keys(rascunho.campos || {}).some(function (id) {
       var valor = rascunho.campos[id];
-      if (id === 'os-termos' && String(valor || '').trim() === String(termosPadraoAtual.os || '').trim()) return false;
+      // Termos e identificadores internos são preenchidos automaticamente.
+      // Se o texto-padrão mudar numa atualização, o valor antigo não pode
+      // fazer o aplicativo anunciar um rascunho que o usuário nunca iniciou.
+      // Quando houver qualquer dado realmente digitado, esses campos ainda
+      // serão restaurados junto com o restante do rascunho.
+      if (id === 'os-termos' || id === 'cliente-id' || id === 'cliente-numero') return false;
+      if (Object.prototype.hasOwnProperty.call(valoresIniciais, id) && String(valor || '').trim() === valoresIniciais[id]) return false;
       return valor !== '' && valor !== false && valor !== null && valor !== undefined;
     });
   }
@@ -761,7 +877,12 @@
     if (!window.SistemaOSHistorico?.obterRascunho || !form) return;
     window.SistemaOSHistorico.obterRascunho(RASCUNHO_OS_ID).then(function (registro) {
       var rascunho = registro && registro.dados;
-      if (!rascunhoOSPossuiConteudo(rascunho)) return;
+      if (!rascunhoOSPossuiConteudo(rascunho)) {
+        if (registro && window.SistemaOSHistorico.removerRascunho) {
+          window.SistemaOSHistorico.removerRascunho(RASCUNHO_OS_ID).catch(function () {});
+        }
+        return;
+      }
       restaurandoRascunhoOS = true;
       var campos = rascunho.campos || {};
       Object.keys(campos).forEach(function (id) {
@@ -836,6 +957,8 @@
       valor: texto('os-valor'),
       diagnosticoTecnico: Object.assign({}, emEdicaoHistorico && osAtual ? osAtual.diagnosticoTecnico : {}, { valorEstimado: texto('os-valor') }),
       cliente: {
+        id: texto('cliente-id'),
+        clienteId: texto('cliente-numero'),
         nome: texto('cliente-nome'),
         cpf: texto('cliente-cpf'),
         email: texto('cliente-email'),
@@ -3083,6 +3206,8 @@
 
         // Preenche o formulário correspondente ao tipo do documento.
         if (tipo === 'os') {
+          setarValor('cliente-id', dados.cliente && dados.cliente.id);
+          setarValor('cliente-numero', dados.cliente && dados.cliente.clienteId);
           setarValor('cliente-nome', dados.cliente && dados.cliente.nome);
           setarValor('cliente-cpf', dados.cliente && dados.cliente.cpf);
           setarValor('cliente-email', dados.cliente && dados.cliente.email);

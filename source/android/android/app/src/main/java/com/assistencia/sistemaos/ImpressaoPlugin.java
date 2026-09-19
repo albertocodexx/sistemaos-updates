@@ -28,6 +28,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.ByteArrayOutputStream;
+import java.util.Locale;
 
 @CapacitorPlugin(name = "Impressao")
 public class ImpressaoPlugin extends Plugin {
@@ -51,6 +52,7 @@ public class ImpressaoPlugin extends Plugin {
         webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
         webView.setWebViewClient(cliente);
         String regrasDocumentoClaro =
+            "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data: blob: https:; style-src 'unsafe-inline'; font-src data: https:\">" +
             "<meta name=\"color-scheme\" content=\"light only\">" +
             "<style>html,body{background:#fff!important;color-scheme:light only!important;" +
             "-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}</style>";
@@ -73,7 +75,7 @@ public class ImpressaoPlugin extends Plugin {
             .replaceAll("[^A-Za-z0-9._-]", "-")
             .replaceAll("-+", "-");
         if (seguro.isEmpty()) seguro = "documento-sistema-os.pdf";
-        if (!seguro.toLowerCase().endsWith(".pdf")) seguro += ".pdf";
+        if (!seguro.toLowerCase(Locale.ROOT).endsWith(".pdf")) seguro += ".pdf";
         return seguro;
     }
 

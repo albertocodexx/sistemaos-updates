@@ -15,6 +15,11 @@ assert.match(sessao, /tempo_limite_servidor/, 'sessao deve tratar o limite como 
 assert.match(app, /var operacaoRascunhoOS = Promise\.resolve/, 'gravações do rascunho devem ser serializadas');
 assert.match(app, /function finalizarRascunhoOS\(\)/, 'salvamento definitivo deve concluir o rascunho');
 assert.match(app, /return conclusaoRascunho;/, 'conclusão deve ser aguardada antes de liberar o salvamento');
+assert.match(app, /'aparelho-tipo-equipamento': 'Smartphone'/, 'valores padrão não podem virar rascunho fantasma');
+assert.match(app, /id === 'os-termos' \|\| id === 'cliente-id' \|\| id === 'cliente-numero'/,
+  'termos antigos e IDs automáticos não podem virar rascunho fantasma');
+assert.match(app, /removerRascunho\(RASCUNHO_OS_ID\)/, 'rascunho fantasma antigo deve ser removido');
+assert.match(app, /\.from\('clientes'\)[\s\S]*?\.ilike\('nome'/, 'nome digitado deve sugerir clientes da empresa');
 assert.match(historico, /function concluirRascunho\(id\)[\s\S]*?concluidoEm:[\s\S]*?dados:\s*\{\}/, 'rascunho concluído deve virar marcador vazio atômico');
 assert.doesNotMatch(estoque, /item\.status !== 'Pronto para venda'/, 'celular deve mostrar também aparelhos em reparo/análise');
 assert.match(estoque, /esc\(status\)/, 'card móvel deve exibir o status real do aparelho');

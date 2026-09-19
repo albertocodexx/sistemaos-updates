@@ -67,7 +67,7 @@
     } catch (_) {}
     // Ultimo recurso para execucao fora do Android. Este valor acompanha o
     // versionName do APK e evita oferecer a propria versao como atualizacao.
-    return normalizarVersao(global.SistemaOSVersaoAPK || '20.5.10');
+    return normalizarVersao(global.SistemaOSVersaoAPK || '20.5.11');
   }
 
   function lerCache() {

@@ -31,6 +31,8 @@
 (function () {
   'use strict';
 
+  var TEMPO_LIMITE_DOWNLOAD_PDF_MS = 20000;
+
   function baixarArquivo(blob, nomeArquivo) {
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -184,10 +186,12 @@
 
   function compartilharPdfPorUrl(url, nomeArquivo, titulo, textoCompartilhar) {
     var mensagemCopiada = false;
+    var controle = typeof AbortController === 'function' ? new AbortController() : null;
+    var temporizador = controle ? setTimeout(function () { controle.abort(); }, TEMPO_LIMITE_DOWNLOAD_PDF_MS) : null;
     var copiar = navigator.clipboard && typeof navigator.clipboard.writeText === 'function'
       ? navigator.clipboard.writeText(String(textoCompartilhar || '')).then(function () { mensagemCopiada = true; }).catch(function () {})
       : Promise.resolve();
-    return fetch(String(url || '')).then(function (resposta) {
+    return fetch(String(url || ''), controle ? { signal: controle.signal } : undefined).then(function (resposta) {
       if (!resposta.ok) throw new Error('O PDF não pôde ser baixado agora.');
       return resposta.blob();
     }).then(function (blob) {
@@ -200,6 +204,13 @@
         resultado.mensagemCopiada = mensagemCopiada;
         return resultado;
       });
+    }).catch(function (erro) {
+      if (erro && erro.name === 'AbortError') {
+        throw new Error('O download do PDF demorou demais. Confira a internet e tente novamente.');
+      }
+      throw erro;
+    }).finally(function () {
+      if (temporizador) clearTimeout(temporizador);
     });
   }
 

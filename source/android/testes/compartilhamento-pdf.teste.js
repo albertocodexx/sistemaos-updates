@@ -94,7 +94,11 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
     assert.match(java, /ClipboardManager/);
     assert.match(java, /ClipDescription/);
     assert.match(java, /color-scheme/);
+    assert.match(java, /Content-Security-Policy/,
+      'HTML de documento não pode executar scripts ou manipuladores fornecidos pelo conteúdo');
     assert.match(java, /mensagemCopiada/);
+    assert.match(ler('android/app/src/main/java/com/assistencia/sistemaos/PdfCompartilhavel.java'), /Content-Security-Policy/,
+      'PDF rasterizado também deve bloquear scripts vindos do HTML');
 
     const app = ler('www/js/app.js');
     const garantia = ler('www/js/garantia-tela.js');
@@ -115,6 +119,8 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
     assert.match(garantia, /compartilharPdfHtml/);
     assert.match(desbloqueio, /compartilharPdfHtml/);
     assert.match(consulta, /compartilharPdfPorUrl/);
+    assert.match(ler('www/js/compartilhar-arquivo.js'), /TEMPO_LIMITE_DOWNLOAD_PDF_MS/,
+      'download do PDF remoto deve ter limite para não deixar o botão preso indefinidamente');
 
     console.log('OK: OS, compra, venda, entrega, garantia e desbloqueio compartilham PDF com mensagem pronta no Android.');
   } finally {

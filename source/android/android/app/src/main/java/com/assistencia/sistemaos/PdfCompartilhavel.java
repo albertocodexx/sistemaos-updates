@@ -112,7 +112,8 @@ final class PdfCompartilhavel {
                     })));
                 }
             });
-            String regras = "<meta name=\"viewport\" content=\"width=" + largura + ",initial-scale=1\">" +
+            String regras = "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data: blob: https:; style-src 'unsafe-inline'; font-src data: https:\">" +
+                "<meta name=\"viewport\" content=\"width=" + largura + ",initial-scale=1\">" +
                 "<meta name=\"color-scheme\" content=\"light only\">" +
                 "<style>html,body{background:#fff!important;color-scheme:light only!important;" +
                 "-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}" +
