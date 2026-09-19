@@ -1644,6 +1644,7 @@ function registerLegacyHandlers(deps) {
           hostname: 'api.mercadopago.com',
           path: '/checkout/preferences',
           method: 'POST',
+          timeout: 20000,
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
@@ -1660,6 +1661,7 @@ function registerLegacyHandlers(deps) {
             } catch(e) { reject(new Error('Erro ao parsear resposta: ' + data.slice(0,200))); }
           });
         });
+        req.on('timeout', () => req.destroy(new Error('Tempo limite ao gerar o link do Mercado Pago.')));
         req.on('error', reject);
         req.write(body);
         req.end();
@@ -1749,6 +1751,7 @@ function registerLegacyHandlers(deps) {
         linkML = await new Promise((resolve, reject) => {
           const req = https.request({
             hostname: 'api.mercadopago.com', path: '/checkout/preferences', method: 'POST',
+            timeout: 20000,
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'Content-Length': Buffer.byteLength(body) }
           }, res => {
             let data = '';
@@ -1760,6 +1763,7 @@ function registerLegacyHandlers(deps) {
               } catch(e) { reject(e); }
             });
           });
+          req.on('timeout', () => req.destroy(new Error('Tempo limite ao gerar o link do Mercado Pago.')));
           req.on('error', reject);
           req.write(body);
           req.end();

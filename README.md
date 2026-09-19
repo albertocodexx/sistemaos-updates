@@ -9,6 +9,12 @@ Atualizações oficiais do Sistema OS para Windows e Android.
 
 Os dois links apontam sempre para os arquivos da atualização marcada como mais recente.
 
+## Atualização PC 40.5.12 / Android 20.5.11
+
+Evita carregamentos infinitos nas funções de nuvem, aplica timeout aos links do Mercado Pago e reforça a renderização segura de usuários, cargos, notificações e respostas da IA.
+
+- [Detalhes da versão](release-notes-40.5.12.md)
+
 ## Atualização PC 40.5.11 / Android 20.5.10
 
 Corrige a listagem de OS autorizadas, adiciona cobranças de OS e vendas sincronizadas entre PC e celular e reorganiza o financeiro móvel para exibir valores, mês e ano sem cortes.

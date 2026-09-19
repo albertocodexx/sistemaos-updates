@@ -11,6 +11,9 @@ const auth = ler('src', 'auth.js');
 const webhook = ler('supabase', 'functions', 'mercado-pago-saas-webhook', 'index.ts');
 const login = ler('supabase', 'functions', 'auth-login', 'index.ts');
 const integracoes = ler('supabase', 'functions', 'integracoes-empresa', 'index.ts');
+const renderer = ler('renderer', 'core', 'legacy-runtime.js');
+const ipcLegado = ler('src', 'ipc', 'register-legacy.js');
+const whatsapp = ler('src', 'whatsapp.js');
 const pacote = require('../../package.json');
 
 assert.match(main, /setWindowOpenHandler\(\(\) => \(\{ action: 'deny' \}\)\)/);
@@ -63,6 +66,12 @@ assert.match(integracoes, /valor > valorMaximo/);
 assert.match(integracoes, /host\.endsWith\('\.mercadopago\.com\.br'\)/);
 assert.equal(pacote.dependencies['electron-updater'], '6.8.9');
 assert.equal(pacote.build.asar, true);
+assert.match(renderer, /const idArgumento = _argJsUri\(u\.id\)/);
+assert.match(renderer, /_escHtml\(u\.usuario\)/);
+assert.doesNotMatch(renderer, /<td[^>]*>\$\{u\.usuario\}<\/td>/);
+assert.match(renderer, /const tiposPermitidos = \['pagamento_confirmado', 'mensagem_enviada', 'cobranca', 'erro', 'sistema'\]/);
+assert.match(ipcLegado, /path: '\/checkout\/preferences'[\s\S]{0,180}timeout: 20000/);
+assert.match(whatsapp, /path: '\/checkout\/preferences'[\s\S]{0,180}timeout: 20000/);
 for (const exclusao of ['!supabase/**', '!tmp/**', '!.env*', '!**/*.pfx', '!**/*.p12', '!**/*.pem', '!**/*.key']) {
   assert(pacote.build.files.includes(exclusao), `pacote precisa excluir ${exclusao}`);
 }

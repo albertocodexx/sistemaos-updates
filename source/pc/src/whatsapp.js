@@ -676,6 +676,7 @@ async function _gerarLinkMercadoPagoExistente(os, opcoes = {}) {
         hostname: 'api.mercadopago.com',
         path: '/checkout/preferences',
         method: 'POST',
+        timeout: 20000,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
@@ -698,6 +699,7 @@ async function _gerarLinkMercadoPagoExistente(os, opcoes = {}) {
           }
         });
       });
+      req.on('timeout', () => req.destroy(new Error('Tempo limite ao gerar o link do Mercado Pago.')));
       req.on('error', (erro) => reject(erro));
       req.write(body);
       req.end();

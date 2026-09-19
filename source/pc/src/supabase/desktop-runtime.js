@@ -45,11 +45,14 @@ function primeiraLinha(data) {
 }
 
 function mensagemErro(erro) {
-  if (typeof erro === 'string' && erro.trim()) return erro.trim();
+  const humanizar = (valor) => /^TEMPO_LIMITE(?:_|$)/i.test(String(valor || '').trim())
+    ? 'O servidor demorou para responder. Tente novamente em alguns instantes.'
+    : String(valor || '').trim();
+  if (typeof erro === 'string' && erro.trim()) return humanizar(erro);
   if (erro && typeof erro === 'object') {
     for (const chave of ['erro', 'mensagem', 'message', 'error_description', 'details', 'hint']) {
       const valor = erro[chave];
-      if (typeof valor === 'string' && valor.trim()) return valor.trim();
+      if (typeof valor === 'string' && valor.trim()) return humanizar(valor);
     }
     try {
       const serializado = JSON.stringify(erro);
@@ -58,7 +61,7 @@ function mensagemErro(erro) {
   }
   const texto = String(erro || '').trim();
   return texto && texto !== '[object Object]' && texto !== '{}'
-    ? texto
+    ? humanizar(texto)
     : 'Não foi possível concluir a operação. Tente novamente.';
 }
 
@@ -80,6 +83,14 @@ function comTempoLimite(promessa, limiteMs = 20000, codigo = 'TEMPO_LIMITE_SERVI
       temporizador = setTimeout(() => rejeitar(new Error(codigo)), limiteMs);
     })
   ]).finally(() => clearTimeout(temporizador));
+}
+
+function invocarFuncaoComTempoLimite(client, nome, opcoes, limiteMs = 30000) {
+  return comTempoLimite(
+    client.functions.invoke(nome, opcoes),
+    limiteMs,
+    `TEMPO_LIMITE_FUNCAO_${String(nome || 'REMOTA').toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
+  );
 }
 
 function traduzirErroLogin(mensagem) {
@@ -1758,7 +1769,7 @@ class DesktopSupabaseRuntime {
 
   async _baixarRespostasAssinatura() {
     if (!this.processadorRespostaAssinatura) return 0;
-    const { data, error } = await this.client.functions.invoke('assinaturas-remotas', {
+    const { data, error } = await invocarFuncaoComTempoLimite(this.client, 'assinaturas-remotas', {
       body: { acao: 'buscar_respostas', dados: {} }
     });
     if (error) {
@@ -1774,7 +1785,7 @@ class DesktopSupabaseRuntime {
       if (!resposta || !solicitacao?.id) continue;
       const resultado = await this.processadorRespostaAssinatura(resposta);
       if (!resultado?.sucesso) continue;
-      const confirmacao = await this.client.functions.invoke('assinaturas-remotas', {
+      const confirmacao = await invocarFuncaoComTempoLimite(this.client, 'assinaturas-remotas', {
         body: { acao: 'confirmar_resposta', dados: { solicitacaoId: solicitacao.id } }
       });
       if (confirmacao.error) throw new Error(await erroDaEdgeFunction(confirmacao.error));
@@ -1978,7 +1989,7 @@ class DesktopSupabaseRuntime {
   async gerenciarIntegracaoMercadoPago(acao, accessToken) {
     if (!this.client || !this.contexto) return { sucesso: false, erro: 'Entre para administrar as integrações.' };
     try {
-      const { data, error } = await this.client.functions.invoke('integracoes-empresa', {
+      const { data, error } = await invocarFuncaoComTempoLimite(this.client, 'integracoes-empresa', {
         body: {
           tipo: 'mercado_pago',
           acao: String(acao || ''),
@@ -2008,7 +2019,7 @@ class DesktopSupabaseRuntime {
       return { sucesso: false, erro: 'Entre em uma empresa para gerar o link do Mercado Pago.' };
     }
     try {
-      const { data, error } = await this.client.functions.invoke('integracoes-empresa', {
+      const { data, error } = await invocarFuncaoComTempoLimite(this.client, 'integracoes-empresa', {
         body: {
           tipo: 'mercado_pago',
           acao: 'criar_preferencia',
@@ -2035,7 +2046,7 @@ class DesktopSupabaseRuntime {
       return { sucesso: false, erro: 'Entre em uma empresa para consultar os pagamentos do Mercado Pago.' };
     }
     try {
-      const { data, error } = await this.client.functions.invoke('integracoes-empresa', {
+      const { data, error } = await invocarFuncaoComTempoLimite(this.client, 'integracoes-empresa', {
         body: {
           tipo: 'mercado_pago',
           acao: 'consultar_pagamentos',
@@ -2058,7 +2069,7 @@ class DesktopSupabaseRuntime {
       return { sucesso: false, erro: 'Entre novamente para consultar sua assinatura.' };
     }
     try {
-      const { data, error } = await this.client.functions.invoke('assinaturas-saas', {
+      const { data, error } = await invocarFuncaoComTempoLimite(this.client, 'assinaturas-saas', {
         body: { acao: String(acao || ''), dados: dados && typeof dados === 'object' ? dados : {} }
       });
       if (error) throw new Error(await erroDaEdgeFunction(error));
@@ -2074,7 +2085,7 @@ class DesktopSupabaseRuntime {
       return { sucesso: false, erro: 'Entre em uma empresa para usar a nota fiscal.' };
     }
     try {
-      const { data, error } = await this.client.functions.invoke('fiscal-documentos', {
+      const { data, error } = await invocarFuncaoComTempoLimite(this.client, 'fiscal-documentos', {
         body: { acao: String(acao || ''), dados: dados && typeof dados === 'object' ? dados : {} }
       });
       if (error) throw new Error(await erroDaEdgeFunction(error));
@@ -2092,7 +2103,7 @@ class DesktopSupabaseRuntime {
     try {
       const corpo = { tipo: 'whatsapp', acao: String(acao || ''), dados: dados && typeof dados === 'object' ? dados : {} };
       if (dados?.accessToken) corpo.accessToken = String(dados.accessToken);
-      const { data, error } = await this.client.functions.invoke('integracoes-empresa', { body: corpo });
+      const { data, error } = await invocarFuncaoComTempoLimite(this.client, 'integracoes-empresa', { body: corpo });
       if (error) throw new Error(await erroDaEdgeFunction(error));
       if (data?.erro) throw new Error(data.erro);
       return Object.assign({ sucesso: true }, data || {});
@@ -2106,7 +2117,7 @@ class DesktopSupabaseRuntime {
       return { sucesso: false, erro: 'Entre em uma empresa para configurar o assistente de IA.' };
     }
     try {
-      const { data, error } = await this.client.functions.invoke('integracoes-empresa', {
+      const { data, error } = await invocarFuncaoComTempoLimite(this.client, 'integracoes-empresa', {
         body: { tipo: 'ia', acao: String(acao || ''), dados: dados && typeof dados === 'object' ? dados : {} }
       });
       if (error) throw new Error(await erroDaEdgeFunction(error));
@@ -2153,7 +2164,7 @@ class DesktopSupabaseRuntime {
       if (data?.erro) throw new Error(data.erro);
       return { sucesso: true, solicitacao: data?.solicitacao || data || null, mensagem: 'Documento enviado ao celular.' };
     }
-    const { data, error } = await this.client.functions.invoke('assinaturas-remotas', {
+    const { data, error } = await invocarFuncaoComTempoLimite(this.client, 'assinaturas-remotas', {
       body: { acao: 'enviar', dados: { pacote } }
     });
     if (error) throw new Error(await erroDaEdgeFunction(error));
@@ -2262,7 +2273,7 @@ class DesktopSupabaseRuntime {
       return { sucesso: false, erro: 'Entre novamente para realizar esta ação.' };
     }
     try {
-      const { data, error } = await this.client.functions.invoke('admin-global', {
+      const { data, error } = await invocarFuncaoComTempoLimite(this.client, 'admin-global', {
         body: { acao: String(acao || ''), dados }
       });
       if (error) throw new Error(await erroDaEdgeFunction(error));
@@ -2310,7 +2321,7 @@ class DesktopSupabaseRuntime {
   async chamadosSuporte(acao, dados = {}) {
     if (!this.client) return { sucesso: false, erro: 'Conexão com o suporte indisponível.' };
     try {
-      const { data, error } = await this.client.functions.invoke('chamados-suporte', {
+      const { data, error } = await invocarFuncaoComTempoLimite(this.client, 'chamados-suporte', {
         body: { acao: String(acao || ''), dados }
       });
       if (error) throw new Error(await erroDaEdgeFunction(error));

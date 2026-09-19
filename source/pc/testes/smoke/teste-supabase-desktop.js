@@ -21,6 +21,9 @@ function jwt(payload) {
     assert(/^sb_publishable_/i.test(publicConfig.anonKey));
     assert(!/service_role|sb_secret_/i.test(JSON.stringify(publicConfig)));
     assert.match(runtimeSource, /auth\/v1\/settings[\s\S]{0,300}AbortSignal\.timeout\(10000\)/, 'teste de conexão não pode aguardar indefinidamente');
+    assert.match(runtimeSource, /function invocarFuncaoComTempoLimite[\s\S]{0,500}client\.functions\.invoke/, 'Edge Functions devem ter um limite de espera compartilhado');
+    assert.strictEqual((runtimeSource.match(/this\.client\.functions\.invoke/g) || []).length, 1, 'somente o login, que já possui timeout próprio, pode invocar Edge Function diretamente');
+    assert.match(runtimeSource, /assinaturasSaas[\s\S]{0,600}invocarFuncaoComTempoLimite\(this\.client, 'assinaturas-saas'/, 'consulta de planos não pode ficar carregando indefinidamente');
     assert.throws(() => validarChavePublica(jwt({ role: 'service_role' })), /service_role/);
     assert.throws(() => validarChavePublica('sb_secret_nao_pode'), /secret key/);
     assert.doesNotThrow(() => validarChavePublica(jwt({ role: 'anon' })));

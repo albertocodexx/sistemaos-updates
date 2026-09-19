@@ -7518,39 +7518,43 @@ async function carregarListaUsuarios() {
     }
 
     tbody.innerHTML = lista.map(u => {
-      const statusBadge  = `<span class="badge-usuario badge-${u.status}">${_nomeStatus(u.status)}</span>`;
-      const perfilBadge  = `<span class="badge-usuario badge-${u.perfil}">${u.cargoNome || (u.perfil === 'admin' ? 'Admin' : 'Operador')}</span>`;
+      const statusSeguro = ['ativo', 'bloqueado', 'inativo'].includes(u.status) ? u.status : 'inativo';
+      const perfilSeguro = u.perfil === 'admin' ? 'admin' : 'operador';
+      const idArgumento = _argJsUri(u.id);
+      const loginArgumento = _argJsUri(u.usuario);
+      const statusBadge  = `<span class="badge-usuario badge-${statusSeguro}">${_escHtml(_nomeStatus(statusSeguro))}</span>`;
+      const perfilBadge  = `<span class="badge-usuario badge-${perfilSeguro}">${_escHtml(u.cargoNome || (perfilSeguro === 'admin' ? 'Admin' : 'Operador'))}</span>`;
       const ultimoLogin  = u.ultimoLogin ? new Date(u.ultimoLogin).toLocaleString('pt-BR') : '—';
       const ehEuMesmo    = usuarioAtual && u.id === usuarioAtual.id;
 
       const acoes = `
         <div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap;">
           <button class="botao botao-secundario" style="padding:4px 9px;font-size:12px;"
-            title="Editar nome e cargo" onclick="abrirFormEditarUsuario('${u.id}')">${ICONE_LAPIS} Editar</button>
+            title="Editar nome e cargo" onclick="abrirFormEditarUsuario(decodeURIComponent('${idArgumento}'))">${ICONE_LAPIS} Editar</button>
           <button class="botao botao-fantasma" style="padding:4px 9px;font-size:12px;"
-            title="Alterar senha" onclick="abrirModalAlterarSenha('${u.id}','${u.usuario.replace(/'/g,"\\'")}')">Senha</button>
+            title="Alterar senha" onclick="abrirModalAlterarSenha(decodeURIComponent('${idArgumento}'),decodeURIComponent('${loginArgumento}'))">Senha</button>
           ${u.status === 'ativo' && !ehEuMesmo ? `
             <button class="botao botao-perigo" style="padding:4px 9px;font-size:12px;"
-              title="Bloquear usuário" onclick="alterarStatusUsuario('${u.id}','bloqueado')">Bloquear</button>
+              title="Bloquear usuário" onclick="alterarStatusUsuario(decodeURIComponent('${idArgumento}'),'bloqueado')">Bloquear</button>
             <button class="botao botao-fantasma" style="padding:4px 9px;font-size:12px;"
-              title="Desativar usuário" onclick="alterarStatusUsuario('${u.id}','inativo')">Pausar</button>
+              title="Desativar usuário" onclick="alterarStatusUsuario(decodeURIComponent('${idArgumento}'),'inativo')">Pausar</button>
           ` : ''}
           ${u.status !== 'ativo' && !ehEuMesmo ? `
             <button class="botao botao-sucesso" style="padding:4px 9px;font-size:12px;"
-              title="Reativar usuário" onclick="alterarStatusUsuario('${u.id}','ativo')">Ativar</button>
+              title="Reativar usuário" onclick="alterarStatusUsuario(decodeURIComponent('${idArgumento}'),'ativo')">Ativar</button>
           ` : ''}
           ${!ehEuMesmo && usuarioAtual?.admin ? `
             <button class="botao botao-perigo" style="padding:4px 9px;font-size:12px;background:#b91c1c;border-color:#b91c1c;"
-              title="Excluir usuário permanentemente" data-uid="${u.id}" data-unome="${(u.nome||'').replace(/"/g,'&quot;')}" onclick="excluirUsuarioUI(this.dataset.uid, this.dataset.unome)">${ICONE_LIXEIRA} Excluir</button>
+              title="Excluir usuário permanentemente" data-uid="${_escHtml(u.id)}" data-unome="${_escHtml(u.nome || '')}" onclick="excluirUsuarioUI(this.dataset.uid, this.dataset.unome)">${ICONE_LIXEIRA} Excluir</button>
           ` : ''}
         </div>`;
 
       return `<tr>
-        <td style="font-family:monospace;font-size:12px;">${u.usuario}</td>
-        <td>${u.nome}${ehEuMesmo ? ' <span style="font-size:10px;color:var(--texto-sec);">(você)</span>' : ''}</td>
+        <td style="font-family:monospace;font-size:12px;">${_escHtml(u.usuario)}</td>
+        <td>${_escHtml(u.nome)}${ehEuMesmo ? ' <span style="font-size:10px;color:var(--texto-sec);">(você)</span>' : ''}</td>
         <td>${perfilBadge}</td>
         <td>${statusBadge}</td>
-        <td style="font-size:12px;">${ultimoLogin}</td>
+        <td style="font-size:12px;">${_escHtml(ultimoLogin)}</td>
         <td>${acoes}</td>
       </tr>`;
     }).join('');
@@ -7575,7 +7579,7 @@ async function _popularSelectCargos(selectEl, valorSelecionado) {
     return;
   }
   const cargos = await window.api.cargoslistar();
-  selectEl.innerHTML = cargos.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+  selectEl.innerHTML = cargos.map(c => `<option value="${_escHtml(c.id)}">${_escHtml(c.nome)}</option>`).join('');
   if (valorSelecionado) selectEl.value = valorSelecionado;
 }
 
@@ -8223,20 +8227,21 @@ async function carregarListaCargos() {
     const [cargos, modulos] = await Promise.all([window.api.cargoslistar(), _carregarModulosCargo()]);
 
     tbody.innerHTML = cargos.map(c => {
+      const idArgumento = _argJsUri(c.id);
       const permissoesTexto = c.admin
         ? '<span style="color:var(--cor-principal);font-weight:600;">Acesso total (todas)</span>'
-        : modulos.filter(m => c.permissoes?.[m.id]).map(m => m.label).join(', ') || '<span style="color:var(--texto-sec);">nenhuma</span>';
+        : modulos.filter(m => c.permissoes?.[m.id]).map(m => _escHtml(m.label)).join(', ') || '<span style="color:var(--texto-sec);">nenhuma</span>';
 
       const acoes = c.admin
         ? '<span style="font-size:12px;color:var(--texto-sec);">fixo</span>'
         : `<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
-            <button class="botao botao-secundario" style="padding:4px 10px;font-size:12px;" onclick="abrirFormEditarCargo('${c.id}')">️</button>
-            ${!c.sistema ? `<button class="botao botao-perigo" style="padding:4px 10px;font-size:12px;" onclick="excluirCargoUI('${c.id}')"></button>` : ''}
+            <button class="botao botao-secundario" style="padding:4px 10px;font-size:12px;" onclick="abrirFormEditarCargo(decodeURIComponent('${idArgumento}'))">️</button>
+            ${!c.sistema ? `<button class="botao botao-perigo" style="padding:4px 10px;font-size:12px;" onclick="excluirCargoUI(decodeURIComponent('${idArgumento}'))"></button>` : ''}
           </div>`;
 
       return `<tr>
-        <td><b>${c.nome}</b>${c.sistema ? ' <span style="font-size:10px;color:var(--texto-sec);">(padrão)</span>' : ''}</td>
-        <td>${c.qtdUsuarios}</td>
+        <td><b>${_escHtml(c.nome)}</b>${c.sistema ? ' <span style="font-size:10px;color:var(--texto-sec);">(padrão)</span>' : ''}</td>
+        <td>${Number(c.qtdUsuarios) || 0}</td>
         <td style="font-size:12.5px;">${permissoesTexto}</td>
         <td>${acoes}</td>
       </tr>`;
@@ -8253,8 +8258,8 @@ async function _renderCheckboxesPermissoes(permissoesAtuais) {
   const wrap = $('formCargoPermissoes');
   wrap.innerHTML = modulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;cursor:pointer;">
-      <input type="checkbox" class="chk-permissao-cargo" data-modulo="${m.id}" ${permissoesAtuais?.[m.id] ? 'checked' : ''} />
-      ${m.label}
+      <input type="checkbox" class="chk-permissao-cargo" data-modulo="${_escHtml(m.id)}" ${permissoesAtuais?.[m.id] ? 'checked' : ''} />
+      ${_escHtml(m.label)}
     </label>`).join('');
 }
 
@@ -14230,18 +14235,24 @@ window.reenviarWappEntregue = async function(numero) {
       return;
     }
 
-    el.innerHTML = visiveis.map(n => `
-      <div class="notif-card ${n.lida ? '' : 'nao-lida'} tipo-${n.tipo}${n.acao ? ' notif-acionavel' : ''}" data-notif-id="${n.id}" ${n.acao ? `role="button" tabindex="0" onclick="window._abrirNotificacao('${n.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window._abrirNotificacao('${n.id}')}"` : ''}>
-        <div class="notif-icone">${_icone(n.tipo)}</div>
+    const tiposPermitidos = ['pagamento_confirmado', 'mensagem_enviada', 'cobranca', 'erro', 'sistema'];
+    const acoesPermitidas = ['abrir_assinatura', 'abrir_cobranca'];
+    el.innerHTML = visiveis.map(n => {
+      const tipoSeguro = tiposPermitidos.includes(n.tipo) ? n.tipo : 'sistema';
+      const acionavel = acoesPermitidas.includes(n.acao);
+      const idArgumento = _argJsUri(n.id);
+      return `
+      <div class="notif-card ${n.lida ? '' : 'nao-lida'} tipo-${tipoSeguro}${acionavel ? ' notif-acionavel' : ''}" data-notif-id="${_escHtml(n.id)}" ${acionavel ? `role="button" tabindex="0" onclick="window._abrirNotificacao(decodeURIComponent('${idArgumento}'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window._abrirNotificacao(decodeURIComponent('${idArgumento}'))}"` : ''}>
+        <div class="notif-icone">${_icone(tipoSeguro)}</div>
         <div class="notif-corpo">
           <div class="notif-titulo">${_renderComIcones(normalizarReferenciasOS(n.titulo))}</div>
           ${n.descricao ? `<div class="notif-desc">${_renderComIcones(normalizarReferenciasOS(n.descricao))}</div>` : ''}
-          ${n.osNumero ? `<div class="notif-desc">${normalizarNumeroOSVisual(n.osNumero)}</div>` : ''}
-          <div class="notif-tempo">${_tempoRelativo(n.data)}</div>
+          ${n.osNumero ? `<div class="notif-desc">${_escHtml(normalizarNumeroOSVisual(n.osNumero))}</div>` : ''}
+          <div class="notif-tempo">${_escHtml(_tempoRelativo(n.data))}</div>
         </div>
-        ${!n.lida ? `<button class="notif-lida-btn" onclick="window._marcarNotifLida('${n.id}')" title="Marcar como lida">${ICONE_CHECK}</button>` : ''}
+        ${!n.lida ? `<button class="notif-lida-btn" onclick="event.stopPropagation();window._marcarNotifLida(decodeURIComponent('${idArgumento}'))" title="Marcar como lida">${ICONE_CHECK}</button>` : ''}
       </div>
-    `).join('');
+    `; }).join('');
   }
 
   // ── Marcar uma notificação como lida ─────────────────────────────────────
@@ -15007,12 +15018,12 @@ window.reenviarWappEntregue = async function(numero) {
           const status = document.createElement('div');
           if (r?.sucesso) {
             status.className = 'iaChatAcaoStatus iaChatAcaoStatus-ok';
-            if (acao.tipo === 'criar_os') status.innerHTML = `${ICONE_CHECK} OS ${r.os?.numero || ''} criada com sucesso.`;
-            else if (acao.tipo === 'alterar_status_os') status.innerHTML = `${ICONE_CHECK} Status da ${acao.dados.numero} atualizado para "${acao.dados.novoStatus}".`;
-            else if (acao.tipo === 'excluir_os') status.innerHTML = `${ICONE_CHECK} OS ${acao.dados.numero} excluída com sucesso.`;
-            else if (acao.tipo === 'enviar_mensagem_whatsapp') status.innerHTML = `${ICONE_CHECK} Mensagem enviada para o cliente da ${acao.dados.numero}.`;
-            else if (acao.tipo === 'adicionar_custos_compra') status.innerHTML = `${ICONE_CHECK} Custos confirmados na ${acao.dados.numero}. Adicionado agora: ${fmtMoeda(r.custoAdicionado || 0)}. Custo acumulado das peças: ${fmtMoeda(r.custoTotal || 0)}. Total investido: ${fmtMoeda(r.valorTotal || 0)}.`;
-            else if (acao.tipo === 'alterar_status_cobranca') status.innerHTML = `${ICONE_CHECK} Cobrança da ${acao.dados.numero} marcada como ${_escHtml(acao.dados.novoStatus)}.`;
+            if (acao.tipo === 'criar_os') status.innerHTML = `${ICONE_CHECK} OS ${_escHtml(r.os?.numero || '')} criada com sucesso.`;
+            else if (acao.tipo === 'alterar_status_os') status.innerHTML = `${ICONE_CHECK} Status da ${_escHtml(acao.dados.numero)} atualizado para "${_escHtml(acao.dados.novoStatus)}".`;
+            else if (acao.tipo === 'excluir_os') status.innerHTML = `${ICONE_CHECK} OS ${_escHtml(acao.dados.numero)} excluída com sucesso.`;
+            else if (acao.tipo === 'enviar_mensagem_whatsapp') status.innerHTML = `${ICONE_CHECK} Mensagem enviada para o cliente da ${_escHtml(acao.dados.numero)}.`;
+            else if (acao.tipo === 'adicionar_custos_compra') status.innerHTML = `${ICONE_CHECK} Custos confirmados na ${_escHtml(acao.dados.numero)}. Adicionado agora: ${_escHtml(fmtMoeda(r.custoAdicionado || 0))}. Custo acumulado das peças: ${_escHtml(fmtMoeda(r.custoTotal || 0))}. Total investido: ${_escHtml(fmtMoeda(r.valorTotal || 0))}.`;
+            else if (acao.tipo === 'alterar_status_cobranca') status.innerHTML = `${ICONE_CHECK} Cobrança da ${_escHtml(acao.dados.numero)} marcada como ${_escHtml(acao.dados.novoStatus)}.`;
             else status.innerHTML = `${ICONE_CHECK} Ação concluída.`;
             // Atualiza as telas relevantes se estiverem carregadas, mesmo padrão do excluirOS/salvar OS manual.
             if (acao.tipo === 'adicionar_custos_compra') {
