@@ -1,6 +1,8 @@
 'use strict';
 
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const {
   _interpretarAcaoCobrancaLocal,
   _executarAlterarStatusCobranca
@@ -40,5 +42,22 @@ const ambiguo = _interpretarAcaoCobrancaLocal('marcar a cobrança da OS 20 como 
 assert.equal(ambiguo.acaoProposta, null);
 assert.match(ambiguo.resposta, /14\/09\/2026/);
 assert.match(ambiguo.resposta, /29\/09\/2026/);
+
+const raiz = path.resolve(__dirname, '..', '..');
+const html = fs.readFileSync(path.join(raiz, 'renderer', 'index.html'), 'utf8');
+const tela = fs.readFileSync(path.join(raiz, 'renderer', 'modules', 'cobrancas', 'cobrancas.js'), 'utf8');
+const dominio = fs.readFileSync(path.join(raiz, 'src', 'database', 'domain.js'), 'utf8');
+const runtime = fs.readFileSync(path.join(raiz, 'renderer', 'core', 'legacy-runtime.js'), 'utf8');
+assert.match(html, /data-aba="cobrancas"/);
+assert.match(html, /id="cobrancasPCTipos"[\s\S]*data-cobranca-tipo="todos"[\s\S]*data-cobranca-tipo="os"[\s\S]*data-cobranca-tipo="venda"/);
+assert.match(html, /data-orc-subaba="finalizadas"/);
+assert.match(tela, /Promise\.all\(\[window\.api\.oslistar\(\), window\.api\.estoquelistar\(\)\]\)/);
+assert.match(tela, /Após esta cobrança resta/);
+assert.match(dominio, /valorRecebidoBaseCobrancas/);
+assert.match(dominio, /lembretesCobrancaExcluidos/);
+assert.match(runtime, /\['autorizado', 'autorizada'\]\.includes\(statusTecnico\)/,
+  'status técnico Autorizada deve aparecer na aba Autorizadas');
+assert.match(runtime, /statusTecnico === 'entregue' && pagaIntegral/,
+  'finalizadas deve exigir entrega e pagamento integral');
 
 console.log('OK: cobranças do PC podem ter status alterado pela IA sem confundir parcelas.');

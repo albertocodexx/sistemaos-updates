@@ -38,7 +38,7 @@ async function esperar(fn) { for (let i=0;i<80;i++) { if(fn())return; await tick
   for(const tipo of ['entrega','garantia','compra','venda','desbloqueio']) {
     get('consulta-aba-'+tipo).click(); await esperar(()=>d.querySelector('.consulta-busca-documento'));
     assert.equal(get('consulta-aba-'+tipo).getAttribute('aria-selected'),'true');
-    assert.equal(d.querySelectorAll('[aria-selected=true][role=tab]').length,1);
+    assert.equal(d.querySelectorAll('.consulta-subabas [aria-selected=true][role=tab]').length,1);
     assert.ok(d.querySelector('.consulta-busca-acoes .btn-compartilhar-pdf-consulta'));
   }
   d.querySelector('.consulta-busca-acoes .btn-primario').click(); assert.equal(abrir,1);

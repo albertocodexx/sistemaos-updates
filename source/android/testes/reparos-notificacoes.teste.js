@@ -130,7 +130,9 @@ const Notificacoes = require(path.join(raiz, 'www', 'js', 'notificacoes.js'));
   assert.equal(agendada.schedule.at.getHours(), 9);
   assert.equal(agendada.schedule.at.getTime(), new Date(dataCobrancaISO + 'T09:00:00').getTime() - 2 * 86400000);
   assert.deepEqual(agendada.extra, { numeroOS: 'OS-0200', tela: 'cobrancas', tipo: 'cobranca-os', lembreteId: 'parcela-1' });
-  assert.ok(agendada.body.includes('Cliente Teste') && agendada.body.includes('Falta'));
+  assert.ok(agendada.body.includes('Cliente Teste') && agendada.body.includes('Após esta cobrança resta'));
+  assert.ok(agendada.body.includes('R$\u00a0200,00') || agendada.body.includes('R$ 200,00'),
+    'o saldo projetado deve descontar a parcela atual do saldo ainda aberto');
 
   const idCobranca = agendada.id;
   await Notificacoes.agendarLembreteCobranca(osCobranca, { ...itemCobranca, status: 'paga', confirmadoEm: new Date().toISOString() });

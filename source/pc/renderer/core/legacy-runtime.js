@@ -9614,16 +9614,33 @@ window.carregarAutorizadas = async function carregarAutorizadas(termo) {
   const infoEl = document.getElementById('orcInfoBusca');
   try {
     const todas = await window.api.oslistar();
-    // A aba acompanha a aprovação da OS. Pagamento aparece como informação
-    // separada e nunca decide sozinho se a OS está aprovada.
+    // Registros antigos podem não ter statusAprovacao, embora o aceite, uma
+    // entrada ou o pagamento já comprovem a autorização. Usa a mesma regra do
+    // domínio para que essas OS não desapareçam desta tela após sincronizar.
     let autorizadas = todas.filter((os) => {
-      if (os.status === 'Cancelado' || os.status === 'Entregue') return false;
-      const aprovada = (os.statusAprovacao || (os.aceitouTermos === true ? 'Aprovado' : 'Pendente')) === 'Aprovado';
+      const statusTecnico = String(os.status || '').trim().toLowerCase();
+      if (statusTecnico === 'cancelado') return false;
+      const statusPagamento = String(os.statusPagamento || '').trim().toLowerCase();
+      const total = _valorServicoOS(os);
+      const recebido = Number(os.valorRecebidoConfirmado) || 0;
+      const pagaIntegral = ['pago', 'autorizado', 'quitado', 'quitada'].includes(statusPagamento)
+        || Number(os.percentualPagamentoConfirmado) >= 100
+        || (total > 0 && recebido >= total);
+      const finalizada = statusTecnico === 'entregue' && pagaIntegral;
+      if (_autorizadasSubaba === 'finalizadas') return finalizada;
+      if (statusTecnico === 'entregue') return false;
+      const aprovada = os.statusAprovacao === 'Aprovado'
+        || (os.statusAprovacao !== 'Desaprovado' && (
+          ['autorizado', 'autorizada'].includes(statusTecnico)
+          ||
+          os.aceitouTermos === true
+          || os.entrada50Paga === true
+          || Number(os.percentualPagamentoConfirmado) > 0
+          || ['pago', 'pago 50%', 'autorizado', 'autorizada', 'quitado', 'quitada'].includes(statusPagamento)
+        ));
       if (!aprovada) return false;
       const naRetirada = os.statusPagamento === 'Aguardando Pagamento na Retirada'
         && os.entrada50Paga !== true;
-      const pagaIntegral = ['Pago', 'Autorizado'].includes(os.statusPagamento);
-      const entradaPaga = os.entrada50Paga === true && os.status !== 'Cancelado';
       if (_autorizadasSubaba === 'retirada') {
         return naRetirada;
       }
@@ -9646,7 +9663,9 @@ window.carregarAutorizadas = async function carregarAutorizadas(termo) {
         ? `<b>${autorizadas.length}</b> resultado(s) para "<b>${_escHtml(termo)}</b>"`
         : `<b>${autorizadas.length}</b> OS ${_autorizadasSubaba === 'retirada'
           ? 'com pagamento na retirada'
-          : (_autorizadasSubaba === 'pagas' ? 'paga(s)' : 'autorizada(s)')}`;
+          : (_autorizadasSubaba === 'pagas'
+            ? 'paga(s)'
+            : (_autorizadasSubaba === 'finalizadas' ? 'finalizada(s), entregue(s) e paga(s)' : 'autorizada(s)'))}`;
     }
     if (!autorizadas.length) {
       lista.innerHTML = `<div style="padding:32px;text-align:center;color:#888;grid-column:1/-1;">${termo ? 'Nenhum resultado.' : 'Nenhuma OS autorizada no momento.'}</div>`;
@@ -14302,10 +14321,11 @@ window.reenviarWappEntregue = async function(numero) {
           const chave = `${os.numero}:${lembrete.id || lembrete.data}:${estado}`;
           if (enviados[chave]) continue;
           const valor = Number(lembrete.valor || 0) || falta;
+          const saldoAposCobranca = Math.max(0, falta - Math.min(valor, falta));
           window.adicionarNotificacao({
             tipo: 'cobranca',
             titulo: `Cobrança ${estado}: ${os.numero}`,
-            descricao: `${os.cliente?.nome || 'Cliente'} · ${fmtMoeda(Math.min(valor, falta))} · falta ${fmtMoeda(falta)}. Clique para abrir.`,
+            descricao: `${os.cliente?.nome || 'Cliente'} · ${fmtMoeda(Math.min(valor, falta))} · após esta cobrança resta ${fmtMoeda(saldoAposCobranca)}. Clique para abrir.`,
             osNumero: os.numero,
             acao: 'abrir_cobranca'
           });

@@ -179,7 +179,10 @@
         <legend>Cliente</legend>
 
         <label for="cliente-nome">Nome <span class="obrigatorio">*</span></label>
-        <input type="text" id="cliente-nome" name="cliente-nome" autocomplete="name" />
+        <input type="text" id="cliente-nome" name="cliente-nome" autocomplete="off" aria-autocomplete="list" aria-controls="cliente-sugestoes-os" />
+        <input type="hidden" id="cliente-id" name="cliente-id" />
+        <input type="hidden" id="cliente-numero" name="cliente-numero" />
+        <div id="cliente-sugestoes-os" class="cliente-sugestoes-os" role="listbox" hidden></div>
         <p class="erro-campo" data-erro-de="nome"></p>
 
         <label for="cliente-telefone">Telefone <span class="obrigatorio">*</span></label>
@@ -877,7 +880,7 @@
     <section class="painel-config" id="painel-config" hidden>
 
       <form id="form-config" class="form-os" novalidate>
-        <p class="config-versao-aplicativo">Aplicativo instalado: <strong>20.5.9</strong></p>
+        <p class="config-versao-aplicativo">Aplicativo instalado: <strong>20.5.10</strong></p>
 
         <fieldset class="secao-config config-empresa-somente-leitura">
           <legend>Dados da empresa</legend>
@@ -1395,7 +1398,7 @@
         <div>
           <span class="cobrancas-mobile-sobrelinha">AGENDA FINANCEIRA</span>
           <h2>Próximas cobranças</h2>
-          <p>Lembretes vinculados às OS, sincronizados com o computador.</p>
+          <p>Parcelas de OS e vendas, sincronizadas com o computador.</p>
         </div>
         <button type="button" id="btn-nova-cobranca-mobile" class="btn-primario">Nova cobrança</button>
       </header>
@@ -1407,8 +1410,13 @@
       </div>
 
       <div class="cobrancas-mobile-ferramentas">
-        <input type="search" id="cobrancas-mobile-busca" placeholder="Buscar OS, cliente ou aparelho" autocomplete="off" />
+        <input type="search" id="cobrancas-mobile-busca" placeholder="Buscar número, cliente ou aparelho" autocomplete="off" />
         <button type="button" id="btn-atualizar-cobrancas-mobile" class="btn-secundario">Atualizar</button>
+      </div>
+      <div id="cobrancas-mobile-tipos" class="cobrancas-mobile-filtros cobrancas-mobile-tipos" role="tablist" aria-label="Tipo de cobrança">
+        <button type="button" class="ativo" data-tipo="todos" role="tab" aria-selected="true">Todos</button>
+        <button type="button" data-tipo="os" role="tab" aria-selected="false">OS</button>
+        <button type="button" data-tipo="venda" role="tab" aria-selected="false">Vendas</button>
       </div>
       <div id="cobrancas-mobile-filtros" class="cobrancas-mobile-filtros" role="group" aria-label="Filtrar cobranças">
         <button type="button" class="ativo" data-status="todas">Todas</button>
@@ -1603,11 +1611,12 @@
   <div id="modal-cobranca-mobile" class="modal-estoque-mobile" hidden>
     <form id="form-cobranca-mobile" class="modal-estoque-mobile-caixa cobranca-mobile-modal">
       <header>
-        <div><span class="cobrancas-mobile-sobrelinha">LEMBRETE DA OS</span><h2 id="titulo-cobranca-mobile">Nova cobrança</h2></div>
+        <div><span class="cobrancas-mobile-sobrelinha">LEMBRETE SINCRONIZADO</span><h2 id="titulo-cobranca-mobile">Nova cobrança</h2></div>
         <button type="button" id="btn-fechar-cobranca-mobile" class="modal-mobile-fechar" aria-label="Fechar" title="Fechar">&times;</button>
       </header>
       <input id="cobranca-mobile-id" type="hidden" />
-      <label>Número da OS *<input id="cobranca-mobile-os" inputmode="numeric" placeholder="Ex.: 20 ou OS-0020" required /></label>
+      <label>Tipo *<select id="cobranca-mobile-tipo"><option value="os">OS</option><option value="venda">Venda</option></select></label>
+      <label><span id="cobranca-mobile-referencia-label">Número da OS *</span><input id="cobranca-mobile-os" placeholder="Ex.: 20 ou OS-0020" required /></label>
       <div class="modal-estoque-mobile-grade">
         <label>Valor *<input id="cobranca-mobile-valor" type="number" min="0.01" step="0.01" inputmode="decimal" required /></label>
         <label>Vencimento *<input id="cobranca-mobile-data" type="date" required /></label>

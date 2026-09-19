@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="monochrome-theme.css" />
 <link rel="stylesheet" href="modules/auditoria/atividades.css" />
 <link rel="stylesheet" href="modules/desbloqueios/desbloqueios.css" />
+<link rel="stylesheet" href="modules/cobrancas/cobrancas.css" />
 <link rel="stylesheet" href="form-layout.css" />
 <link rel="stylesheet" href="theme-accessibility.css" />
 </head>
@@ -464,6 +465,7 @@
     <button class="aba" data-aba="estoque" data-permissao="estoque" title="Estoque: controle aparelhos, peças, acessórios, custos e vendas"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-caixa"/></svg> Estoque</button>
     <button class="aba" data-aba="precos" data-permissao="estoque" title="Tabela de preços: pesquise e cadastre valores de peças e serviços"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-etiqueta"/></svg> Tabela de preços</button>
     <button class="aba" data-aba="relatorios" data-permissao="relatorios" data-permissao-alternativa="financeiro" title="Relatórios: analise receitas, custos, lucros, estoque e desempenho"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-grafico"/></svg> Relatórios</button>
+    <button class="aba" data-aba="cobrancas" data-permissao="financeiro" title="Cobranças: acompanhe parcelas de OS e vendas, altere situações e sincronize com o celular"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-cifrao"/></svg> Cobranças</button>
     <button class="aba" data-aba="pagamentos" data-permissao="financeiro" title="Pagamentos: confira cobranças, recebimentos e comprovantes"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-nota"/></svg> Pagamentos</button>
 
     <button class="aba aba-sininho" data-aba="notificacoes" id="btnAbaNotificacoes" title="Notificações">
@@ -741,6 +743,7 @@
           <button type="button" class="tab-historico-interna ativa" data-orc-subaba="todas">Todas</button>
           <button type="button" class="tab-historico-interna" data-orc-subaba="pagas">Pagas</button>
           <button type="button" class="tab-historico-interna" data-orc-subaba="retirada">Pagamento na retirada</button>
+          <button type="button" class="tab-historico-interna" data-orc-subaba="finalizadas">Finalizadas</button>
         </div>
         <div id="orcInfoBusca" style="font-size:13px;color:var(--texto-sec);margin-bottom:10px;display:none;"></div>
         <div id="orcListagem" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">
@@ -1829,6 +1832,67 @@
           <div class="card-titulo">Estoque por Tipo de Equipamento</div>
           <div id="relEstoquePorTipo"></div>
         </div>
+      </div>
+    </section>
+
+      <!-- ═══ ABA: COBRANÇAS SINCRONIZADAS ═══ -->
+    <section id="aba-cobrancas" class="secao-aba escondido">
+      <div class="cobrancas-pc-cabecalho">
+        <div>
+          <span class="cobrancas-pc-sobrelinha">AGENDA FINANCEIRA</span>
+          <h1>Cobranças</h1>
+          <p>Parcelas de ordens de serviço e vendas. Toda alteração é sincronizada com o celular.</p>
+        </div>
+        <div class="cobrancas-pc-cabecalho-acoes">
+          <button type="button" id="btnAtualizarCobrancasPC" class="botao botao-fantasma">Atualizar</button>
+          <button type="button" id="btnNovaCobrancaPC" class="botao botao-primario">Nova cobrança</button>
+        </div>
+      </div>
+
+      <div class="cobrancas-pc-resumo" aria-label="Resumo das cobranças">
+        <div><span>Pendentes</span><strong id="cobrancasPCPendentes">0</strong></div>
+        <div><span>Atrasadas</span><strong id="cobrancasPCAtrasadas">0</strong></div>
+        <div><span>A receber</span><strong id="cobrancasPCValor">R$ 0,00</strong></div>
+      </div>
+
+      <div class="cobrancas-pc-filtros">
+        <div id="cobrancasPCTipos" class="cobrancas-pc-subabas" role="tablist" aria-label="Tipo de cobrança">
+          <button type="button" class="ativa" data-cobranca-tipo="todos" role="tab" aria-selected="true">Todos</button>
+          <button type="button" data-cobranca-tipo="os" role="tab" aria-selected="false">OS</button>
+          <button type="button" data-cobranca-tipo="venda" role="tab" aria-selected="false">Vendas</button>
+        </div>
+        <input id="cobrancasPCBusca" type="search" placeholder="Buscar número, cliente ou aparelho" autocomplete="off" />
+        <select id="cobrancasPCStatus" aria-label="Filtrar pela situação">
+          <option value="todas">Todas as situações</option>
+          <option value="pendente">Pendentes</option>
+          <option value="atrasada">Atrasadas</option>
+          <option value="paga">Pagas</option>
+          <option value="desativada">Desativadas</option>
+        </select>
+      </div>
+      <p id="cobrancasPCMensagem" class="cobrancas-pc-mensagem" aria-live="polite">Abra a aba para sincronizar.</p>
+      <div id="cobrancasPCLista" class="cobrancas-pc-lista"></div>
+
+      <div id="modalCobrancaPC" class="modal-fundo escondido" role="dialog" aria-modal="true" aria-labelledby="tituloModalCobrancaPC">
+        <form id="formCobrancaPC" class="modal-caixa cobrancas-pc-modal">
+          <div class="modal-cabecalho">
+            <div><span class="cobrancas-pc-sobrelinha">LEMBRETE SINCRONIZADO</span><h2 id="tituloModalCobrancaPC">Nova cobrança</h2></div>
+            <button type="button" class="botao-fechar" id="btnFecharCobrancaPC" aria-label="Fechar">×</button>
+          </div>
+          <div class="modal-corpo">
+            <input type="hidden" id="cobrancaPCId" />
+            <div class="grade-2">
+              <div class="campo"><label for="cobrancaPCTipo">Tipo</label><select id="cobrancaPCTipo"><option value="os">OS</option><option value="venda">Venda</option></select></div>
+              <div class="campo"><label for="cobrancaPCReferencia">Número da OS ou venda</label><input id="cobrancaPCReferencia" required placeholder="Ex.: OS-0020 ou EST-0002" /></div>
+              <div class="campo"><label for="cobrancaPCValorCampo">Valor</label><input id="cobrancaPCValorCampo" type="number" min="0.01" step="0.01" required /></div>
+              <div class="campo"><label for="cobrancaPCData">Vencimento</label><input id="cobrancaPCData" type="date" required /></div>
+              <div class="campo"><label for="cobrancaPCSituacao">Situação</label><select id="cobrancaPCSituacao"><option value="pendente">Pendente</option><option value="atrasada">Atrasada</option><option value="paga">Paga</option><option value="desativada">Desativada</option></select></div>
+              <div class="campo"><label for="cobrancaPCAntes">Avisar antes</label><select id="cobrancaPCAntes"><option value="0">No dia</option><option value="1">1 dia antes</option><option value="3">3 dias antes</option><option value="7">7 dias antes</option><option value="15">15 dias antes</option><option value="30">30 dias antes</option></select></div>
+            </div>
+            <div class="campo"><label for="cobrancaPCObservacao">Observação</label><textarea id="cobrancaPCObservacao" rows="3" maxlength="240" placeholder="Ex.: segunda parcela"></textarea></div>
+          </div>
+          <div class="modal-rodape"><button type="button" id="btnCancelarCobrancaPC" class="botao botao-fantasma">Cancelar</button><button type="submit" id="btnSalvarCobrancaPC" class="botao botao-primario">Salvar cobrança</button></div>
+        </form>
       </div>
     </section>
 
@@ -4062,6 +4126,7 @@
 <script src="modules/fiscal/documentos.js"></script>
 <script src="modules/auditoria/atividades.js"></script>
 <script src="modules/desbloqueios/desbloqueios.js"></script>
+<script src="modules/cobrancas/cobrancas.js"></script>
 <script src="core/form-layout.js"></script>
 <script src="core/form-organizer.js"></script>
   <script src="modules/os/os-list.js"></script>

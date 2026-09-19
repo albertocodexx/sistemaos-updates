@@ -236,9 +236,12 @@
     graficoReceita.innerHTML = chaves.map(function (k) {
       var valor = meses[k] || 0;
       var altura = Math.max(4, Math.round((valor / maxVal) * 100));
+      var partes = String(k).split('-');
+      var mesAno = partes.length === 2 ? partes[1] + '/' + partes[0] : k;
       return '<div class="barra-receita-mes" title="' + escaparHtml(k) + ': ' + escaparHtml(formatarMoeda(valor)) + '">' +
-        '<div class="barra-receita-mes-preenchimento" style="height:' + altura + '%"></div>' +
-        '<span class="barra-receita-mes-rotulo">' + escaparHtml(k.slice(5)) + '</span>' +
+        '<span class="barra-receita-mes-valor">' + escaparHtml(formatarMoeda(valor)) + '</span>' +
+        '<div class="barra-receita-mes-trilho"><div class="barra-receita-mes-preenchimento" style="height:' + altura + '%"></div></div>' +
+        '<span class="barra-receita-mes-rotulo">' + escaparHtml(mesAno) + '</span>' +
         '</div>';
     }).join('');
   }

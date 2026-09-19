@@ -220,7 +220,15 @@
   }
 
   function valorTotalOS(os) {
-    return Number(os && (os.valorTotalServico || os.valor) || 0) || 0;
+    return Number(os && (os.valorTotalServico || os.valorVenda || os.valor) || 0) || 0;
+  }
+
+  function referenciaCobranca(os) {
+    return os && os._tipoCobranca === 'venda' ? String(os.id || 'Venda') : rotuloOS(os && os.numero);
+  }
+
+  function clienteCobranca(os) {
+    return String(os && (os._tipoCobranca === 'venda' ? os.compradorNome : os.cliente && os.cliente.nome) || '').trim();
   }
 
   function valorRecebidoOS(os) {
@@ -234,7 +242,7 @@
 
   function chaveLembreteAgendado(os, item) {
     var versao = item.atualizadoEm || item.data || item.status || '';
-    return 'sistema-os-lembrete-cobranca:' + empresaAtiva() + ':' + rotuloOS(os.numero) + ':' + String(item.id || item.data) + ':' + versao;
+    return 'sistema-os-lembrete-cobranca:' + empresaAtiva() + ':' + referenciaCobranca(os) + ':' + String(item.id || item.data) + ':' + versao;
   }
 
   function statusLembreteCobranca(item) {
@@ -247,8 +255,8 @@
 
   function cancelarLembreteCobranca(os, item) {
     var p = plugin();
-    if (!p || !os || !os.numero || !item) return Promise.resolve({ cancelada: false });
-    var id = idNotificacaoParaOS(os.numero, 'cobranca-' + String(item.id || item.data));
+    if (!p || !os || !(os.numero || os.id) || !item) return Promise.resolve({ cancelada: false });
+    var id = idNotificacaoParaOS(referenciaCobranca(os), 'cobranca-' + String(item.id || item.data));
     return p.cancel({ notifications: [{ id: id }] })
       .then(function () { return { cancelada: true }; })
       .catch(function () { return { cancelada: false }; });
@@ -256,8 +264,8 @@
 
   function agendarLembreteCobranca(os, item) {
     var p = plugin();
-    if (!p || !os || !os.numero || !item || !item.data) return Promise.resolve({ agendada: false });
-    var id = idNotificacaoParaOS(os.numero, 'cobranca-' + String(item.id || item.data));
+    if (!p || !os || !(os.numero || os.id) || !item || !item.data) return Promise.resolve({ agendada: false });
+    var id = idNotificacaoParaOS(referenciaCobranca(os), 'cobranca-' + String(item.id || item.data));
     var status = statusLembreteCobranca(item);
     if (status === 'paga' || status === 'desativada') {
       return cancelarLembreteCobranca(os, item).then(function () { return { agendada: false, motivo: status }; });
@@ -278,15 +286,16 @@
     var recebido = valorRecebidoOS(os);
     var falta = Math.max(0, total - recebido);
     var valorLembrete = Number(item.valor || 0);
-    var cliente = String(os.cliente && os.cliente.nome || '').trim();
-    var detalhes = [cliente, valorLembrete > 0 ? 'Parcela ' + numeroMoeda(valorLembrete) : '', 'Falta ' + (numeroMoeda(falta) || 'confirmar')].filter(Boolean);
+    var saldoAposCobranca = Math.max(0, falta - Math.min(valorLembrete || falta, falta));
+    var cliente = clienteCobranca(os);
+    var detalhes = [cliente, valorLembrete > 0 ? 'Parcela ' + numeroMoeda(valorLembrete) : '', 'Após esta cobrança resta ' + (numeroMoeda(saldoAposCobranca) || 'confirmar')].filter(Boolean);
     return p.schedule({
       notifications: [{
         id: id,
-        title: (atrasado ? 'Cobrança atrasada — ' : 'Lembrete de cobrança — ') + rotuloOS(os.numero),
+        title: (atrasado ? 'Cobrança atrasada — ' : 'Lembrete de cobrança — ') + referenciaCobranca(os),
         body: detalhes.join(' · '),
         schedule: { at: quando, allowWhileIdle: true },
-        extra: { numeroOS: rotuloOS(os.numero), tela: 'cobrancas', tipo: 'cobranca-os', lembreteId: item.id || '' }
+        extra: { numeroOS: referenciaCobranca(os), tela: 'cobrancas', tipo: os._tipoCobranca === 'venda' ? 'cobranca-venda' : 'cobranca-os', lembreteId: item.id || '' }
       }]
     }).then(function () {
       if (chaveAvisoAtrasado) {
@@ -298,18 +307,18 @@
 
   function notificarTesteCobranca(os, item) {
     var p = plugin();
-    if (!p || !os || !os.numero || !item) return Promise.resolve({ agendada: false, motivo: 'plugin-indisponivel' });
+    if (!p || !os || !(os.numero || os.id) || !item) return Promise.resolve({ agendada: false, motivo: 'plugin-indisponivel' });
     return solicitarPermissao().then(function (permitida) {
       if (!permitida || permitida.concedida !== true) return { agendada: false, motivo: permitida && permitida.motivo || 'permissao' };
       var valor = Number(item.valor || 0);
-      var cliente = String(os.cliente && os.cliente.nome || 'Cliente não informado').trim();
+      var cliente = clienteCobranca(os) || 'Cliente não informado';
       return p.schedule({
         notifications: [{
-          id: idNotificacaoParaOS(os.numero, 'cobranca-teste'),
-          title: 'Teste de cobrança — ' + rotuloOS(os.numero),
+          id: idNotificacaoParaOS(referenciaCobranca(os), 'cobranca-teste'),
+          title: 'Teste de cobrança — ' + referenciaCobranca(os),
           body: [cliente, valor > 0 ? numeroMoeda(valor) : '', 'Vencimento ' + String(item.data || '').split('-').reverse().join('/')].filter(Boolean).join(' · '),
           schedule: { at: new Date(Date.now() + 900), allowWhileIdle: true },
-          extra: { numeroOS: rotuloOS(os.numero), tela: 'cobrancas', tipo: 'cobranca-teste', lembreteId: item.id || '' }
+          extra: { numeroOS: referenciaCobranca(os), tela: 'cobrancas', tipo: 'cobranca-teste', lembreteId: item.id || '' }
         }]
       }).then(function () { return { agendada: true }; }).catch(function (erro) { return { agendada: false, erro: erro }; });
     });

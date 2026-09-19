@@ -35,8 +35,10 @@ assert.match(renderer, /resultado\.status !== 'Cancelado'/,
   'cancelamento deve validar o resultado gravado');
 assert.match(renderer, /confirmado\.status !== 'Cancelado'/,
   'cancelamento deve reler o banco antes de informar sucesso');
-assert.match(renderer, /if \(os\.status === 'Cancelado' \|\| os\.status === 'Entregue'\) return false/,
+assert.match(renderer, /if \(statusTecnico === 'cancelado'\) return false/,
   'OS cancelada não deve permanecer na aba de autorizadas');
+assert.match(renderer, /if \(statusTecnico === 'entregue'\) return false/,
+  'OS entregue não deve permanecer entre as autorizadas ativas');
 assert.match(renderer, /os\.statusAprovacao.*=== 'Aprovado'/,
   'a aba de autorizadas deve usar o estado de aprovação, não o pagamento');
 assert.match(renderer, /prompt-senha-toggle/,

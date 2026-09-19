@@ -18,9 +18,12 @@
   var modalEl = root.document && root.document.getElementById('modal-cobranca-mobile');
   var formEl = root.document && root.document.getElementById('form-cobranca-mobile');
   var filtroAtual = 'todas';
+  var tipoAtual = 'todos';
   var ordensAtuais = [];
+  var vendasAtuais = [];
   var cobrancasAtuais = [];
   var pararRealtime = null;
+  var pararRealtimeEstoque = null;
   var carregando = false;
 
   function texto(valor) { return String(valor == null ? '' : valor).trim(); }
@@ -41,6 +44,21 @@
     return root.SistemaOSNumero && root.SistemaOSNumero.formatar
       ? root.SistemaOSNumero.formatar(valor)
       : ('OS-' + texto(valor).replace(/\D/g, ''));
+  }
+  function referencia(tipo, registro) {
+    return tipo === 'venda' ? texto(registro && registro.id) : rotuloOS(registro && registro.numero);
+  }
+  function clienteRegistro(tipo, registro) {
+    return tipo === 'venda'
+      ? texto(registro && registro.compradorNome)
+      : texto(registro && registro.cliente && registro.cliente.nome);
+  }
+  function aparelhoRegistro(tipo, registro) {
+    var aparelho = tipo === 'venda' ? (registro || {}) : (registro && registro.aparelho || {});
+    return texto(aparelho.nome || [aparelho.marca, aparelho.modelo].filter(Boolean).join(' ')) || 'Aparelho não informado';
+  }
+  function totalRegistro(tipo, registro) {
+    return tipo === 'venda' ? numero(registro && registro.valorVenda) : numero(registro && (registro.valorTotalServico || registro.valor));
   }
   function dataHoje() {
     var agora = new Date();
@@ -113,12 +131,20 @@
     return texto(aparelho.nome || [aparelho.marca, aparelho.modelo].filter(Boolean).join(' ')) || 'Aparelho não informado';
   }
 
-  function achatar(ordens) {
+  function achatar(ordens, vendas) {
     var resultado = [];
     (ordens || []).forEach(function (os) {
       normalizarLembretes(os.lembretesCobranca).forEach(function (item) {
         if (!item || !item.data) return;
-        resultado.push({ os: os, item: Object.assign({}, item), status: statusCobranca(item) });
+        resultado.push({ tipo: 'os', registro: os, os: os, item: Object.assign({}, item), status: statusCobranca(item) });
+      });
+    });
+    (vendas || []).filter(function (venda) {
+      return ['Vendido', 'Reservado'].indexOf(venda.status) >= 0 || normalizarLembretes(venda.lembretesCobranca).length > 0;
+    }).forEach(function (venda) {
+      normalizarLembretes(venda.lembretesCobranca).forEach(function (item) {
+        if (!item || !item.data) return;
+        resultado.push({ tipo: 'venda', registro: venda, venda: venda, item: Object.assign({}, item), status: statusCobranca(item) });
       });
     });
     var prioridade = { atrasada: 0, pendente: 1, paga: 2, desativada: 3 };
@@ -143,10 +169,11 @@
   function cobrancasFiltradas() {
     var termo = texto(buscaEl && buscaEl.value).toLowerCase();
     return cobrancasAtuais.filter(function (cobranca) {
+      if (tipoAtual !== 'todos' && cobranca.tipo !== tipoAtual) return false;
       if (filtroAtual !== 'todas' && cobranca.status !== filtroAtual) return false;
       if (!termo) return true;
-      var os = cobranca.os || {};
-      var base = [rotuloOS(os.numero), os.cliente && os.cliente.nome, aparelhoOS(os), cobranca.item.observacao]
+      var registro = cobranca.registro || cobranca.os || {};
+      var base = [referencia(cobranca.tipo || 'os', registro), clienteRegistro(cobranca.tipo || 'os', registro), aparelhoRegistro(cobranca.tipo || 'os', registro), cobranca.item.observacao]
         .map(texto).join(' ').toLowerCase();
       return base.indexOf(termo) !== -1;
     });
@@ -171,34 +198,39 @@
       return;
     }
     cobrancas.forEach(function (cobranca) {
-      var os = cobranca.os;
+      var os = cobranca.registro || cobranca.os;
+      var tipo = cobranca.tipo || 'os';
       var item = cobranca.item;
+      var total = totalRegistro(tipo, os);
+      var recebido = valorRecebidoOS(os);
+      var valorParcela = Math.min(numero(item.valor), Math.max(0, total - recebido)) || numero(item.valor);
+      var saldoApos = Math.max(0, total - recebido - (cobranca.status === 'paga' ? 0 : valorParcela));
       var card = root.document.createElement('article');
       card.className = 'cobranca-mobile-card';
       card.dataset.status = cobranca.status;
       card.dataset.lembreteId = texto(item.id || item.data);
-      card.innerHTML = '<div class="cobranca-mobile-card-topo"><div><h3>' + escapar(rotuloOS(os.numero)) + '</h3><p>' +
-        escapar(os.cliente && os.cliente.nome || 'Cliente não informado') + ' · ' + escapar(aparelhoOS(os)) +
+      card.innerHTML = '<div class="cobranca-mobile-card-topo"><div><span class="cobranca-mobile-tipo">' + (tipo === 'os' ? 'OS' : 'VENDA') + '</span><h3>' + escapar(referencia(tipo, os)) + '</h3><p>' +
+        escapar(clienteRegistro(tipo, os) || 'Cliente não informado') + ' · ' + escapar(aparelhoRegistro(tipo, os)) +
         '</p></div><strong class="cobranca-mobile-valor">' + escapar(moeda(item.valor)) + '</strong></div>' +
         '<div class="cobranca-mobile-card-detalhe"><span>Vencimento: <strong>' + escapar(dataBr(item.data)) +
-        '</strong></span><span>Aviso: ' + (numero(item.avisarAntesDias) > 0 ? numero(item.avisarAntesDias) + ' dia(s) antes' : 'no dia') +
+        '</strong></span><span>Após esta cobrança resta: <strong>' + escapar(moeda(saldoApos)) + '</strong></span><span>Aviso: ' + (numero(item.avisarAntesDias) > 0 ? numero(item.avisarAntesDias) + ' dia(s) antes' : 'no dia') +
         '</span></div>' + (texto(item.observacao) ? '<p class="cobranca-mobile-card-observacao">' + escapar(item.observacao) + '</p>' : '') +
         '<div class="cobranca-mobile-card-rodape"><span class="cobranca-mobile-situacao">' + escapar(nomeStatus(cobranca.status)) +
         '</span><div class="cobranca-mobile-acoes"></div></div>';
       var acoes = card.querySelector('.cobranca-mobile-acoes');
-      acoes.appendChild(botao('Editar', 'btn-secundario', function () { abrirFormulario(os, item); }));
+      acoes.appendChild(botao('Editar', 'btn-secundario', function () { abrirFormulario(os, item, tipo); }));
       if (cobranca.status !== 'paga') {
-        acoes.appendChild(botao('Marcar paga', 'btn-secundario', function () { alterarSituacao(os, item, 'paga'); }));
+        acoes.appendChild(botao('Marcar paga', 'btn-secundario', function () { alterarSituacao(os, item, 'paga', tipo); }));
       } else {
-        acoes.appendChild(botao('Reabrir', 'btn-secundario', function () { alterarSituacao(os, item, 'pendente'); }));
+        acoes.appendChild(botao('Reabrir', 'btn-secundario', function () { alterarSituacao(os, item, 'pendente', tipo); }));
       }
       if (cobranca.status !== 'atrasada' && cobranca.status !== 'paga') {
-        acoes.appendChild(botao('Atrasada', 'btn-secundario', function () { alterarSituacao(os, item, 'atrasada'); }));
+        acoes.appendChild(botao('Atrasada', 'btn-secundario', function () { alterarSituacao(os, item, 'atrasada', tipo); }));
       }
       acoes.appendChild(botao(cobranca.status === 'desativada' ? 'Ativar' : 'Desativar', 'btn-secundario', function () {
-        alterarSituacao(os, item, cobranca.status === 'desativada' ? 'pendente' : 'desativada');
+        alterarSituacao(os, item, cobranca.status === 'desativada' ? 'pendente' : 'desativada', tipo);
       }));
-      acoes.appendChild(botao('Excluir', 'btn-perigo', function () { excluirCobranca(os, item); }));
+      acoes.appendChild(botao('Excluir', 'btn-perigo', function () { excluirCobranca(os, item, tipo); }));
       listaEl.appendChild(card);
     });
   }
@@ -208,12 +240,20 @@
     carregando = true;
     if (statusEl) statusEl.textContent = 'Sincronizando cobranças…';
     try {
-      ordensAtuais = await root.SistemaOSSupabaseOS.listarLeves(500);
-      cobrancasAtuais = achatar(ordensAtuais);
-      if (statusEl) statusEl.textContent = cobrancasAtuais.length + ' cobrança(s) sincronizada(s).';
+      var dados = await Promise.all([
+        root.SistemaOSSupabaseOS.listarLeves(500),
+        root.SistemaOSEstoque && root.SistemaOSEstoque.listar ? root.SistemaOSEstoque.listar('aparelho') : Promise.resolve([])
+      ]);
+      ordensAtuais = dados[0] || [];
+      vendasAtuais = dados[1] || [];
+      cobrancasAtuais = achatar(ordensAtuais, vendasAtuais);
+      if (statusEl) statusEl.textContent = cobrancasAtuais.length + ' cobrança(s): ' + cobrancasAtuais.filter(function (c) { return c.tipo === 'os'; }).length + ' de OS e ' + cobrancasAtuais.filter(function (c) { return c.tipo === 'venda'; }).length + ' de vendas.';
       renderizar();
       if (root.SistemaOSNotificacoes && root.SistemaOSNotificacoes.agendarLembretesCobranca) {
-        root.SistemaOSNotificacoes.agendarLembretesCobranca(ordensAtuais).catch(function () {});
+        var registrosComCobranca = ordensAtuais.concat(vendasAtuais.map(function (venda) {
+          return Object.assign({ _tipoCobranca: 'venda' }, venda);
+        }));
+        root.SistemaOSNotificacoes.agendarLembretesCobranca(registrosComCobranca).catch(function () {});
       }
     } catch (erro) {
       if (statusEl) statusEl.textContent = erro && erro.message ? erro.message : 'Não foi possível carregar as cobranças.';
@@ -223,22 +263,27 @@
     }
   }
 
-  function abrirFormulario(os, item) {
+  function abrirFormulario(os, item, tipo) {
     if (!modalEl || !formEl) return;
     formEl.reset();
     var editando = !!(os && item);
+    tipo = tipo || 'os';
     root.document.getElementById('titulo-cobranca-mobile').textContent = editando ? 'Editar cobrança' : 'Nova cobrança';
     root.document.getElementById('cobranca-mobile-id').value = editando ? texto(item.id || item.data) : '';
+    var campoTipo = root.document.getElementById('cobranca-mobile-tipo');
+    if (campoTipo) { campoTipo.value = editando ? tipo : 'os'; campoTipo.disabled = editando; }
     var campoOS = root.document.getElementById('cobranca-mobile-os');
-    campoOS.value = editando ? rotuloOS(os.numero) : '';
+    campoOS.value = editando ? referencia(tipo, os) : '';
     campoOS.disabled = editando;
+    var rotuloReferencia = root.document.getElementById('cobranca-mobile-referencia-label');
+    if (rotuloReferencia) rotuloReferencia.textContent = tipo === 'venda' ? 'Número da venda *' : 'Número da OS *';
     root.document.getElementById('cobranca-mobile-valor').value = editando ? numero(item.valor) || '' : '';
     root.document.getElementById('cobranca-mobile-data').value = editando ? texto(item.data).slice(0, 10) : dataHoje();
     root.document.getElementById('cobranca-mobile-situacao').value = editando ? statusCobranca(item) : 'pendente';
     root.document.getElementById('cobranca-mobile-antecedencia').value = String(Math.max(0, numero(item && item.avisarAntesDias)));
     root.document.getElementById('cobranca-mobile-observacao').value = editando ? texto(item.observacao) : '';
-    modalEl.dataset.osId = editando ? texto(os.id) : '';
-    modalEl.dataset.osNumero = editando ? texto(os.numero) : '';
+    modalEl.dataset.tipo = editando ? tipo : 'os';
+    modalEl.dataset.referencia = editando ? referencia(tipo, os) : '';
     modalEl.hidden = false;
     if (!editando) root.setTimeout(function () { campoOS.focus(); }, 50);
   }
@@ -246,8 +291,8 @@
   function fecharFormulario() {
     if (!modalEl) return;
     modalEl.hidden = true;
-    delete modalEl.dataset.osId;
-    delete modalEl.dataset.osNumero;
+    delete modalEl.dataset.tipo;
+    delete modalEl.dataset.referencia;
   }
 
   async function obterOSAtual(numeroOS, forcar) {
@@ -257,10 +302,18 @@
     return os;
   }
 
+  async function obterVendaAtual(id) {
+    if (!root.SistemaOSEstoque || !root.SistemaOSEstoque.obterAparelho) throw new Error('Sincronização de vendas indisponível.');
+    var venda = await root.SistemaOSEstoque.obterAparelho(texto(id));
+    if (!venda || !venda.id) throw new Error('Venda não encontrada nesta empresa. Use o número EST da venda.');
+    venda._tipoCobranca = 'venda';
+    return venda;
+  }
+
   function valorRecebidoOS(os) {
     var valorExato = numero(os.valorRecebidoConfirmado);
     if (valorExato > 0) return valorExato;
-    var total = numero(os.valorTotalServico || os.valor);
+    var total = numero(os.valorTotalServico || os.valorVenda || os.valor);
     return total * Math.max(0, Math.min(100, numero(os.percentualPagamentoConfirmado))) / 100;
   }
 
@@ -286,7 +339,7 @@
   }
 
   function recalcularFinanceiro(os, extras, anteriores, novos) {
-    var total = numero(os.valorTotalServico || os.valor);
+    var total = numero(os.valorTotalServico || os.valorVenda || os.valor);
     var impactosAntigos = (anteriores || []).reduce(function (soma, item) {
       return soma + (item.impactaRecebimento && statusCobranca(item) === 'paga' ? numero(item.valorRecebido || item.valor) : 0);
     }, 0);
@@ -327,9 +380,27 @@
     return resultado;
   }
 
+  async function salvarNaVenda(venda, lembretes, exclusoes) {
+    var anteriores = normalizarLembretes(venda.lembretesCobranca);
+    var extras = {
+      valor_recebido_base_cobrancas: venda.valorRecebidoBaseCobrancas,
+      lembretes_cobranca: normalizarLembretes(lembretes),
+      lembretes_cobranca_excluidos: normalizarExclusoes(exclusoes || venda.lembretesCobrancaExcluidos)
+    };
+    recalcularFinanceiro(venda, extras, anteriores, lembretes);
+    var salvo = await root.SistemaOSEstoque.salvarAparelho({
+      lembretesCobranca: extras.lembretes_cobranca,
+      lembretesCobrancaExcluidos: extras.lembretes_cobranca_excluidos,
+      valorRecebidoBaseCobrancas: extras.valor_recebido_base_cobrancas,
+      valorRecebidoConfirmado: extras.valor_recebido_confirmado,
+      valorRestanteVenda: extras.valor_restante_servico
+    }, venda);
+    return { enviado: !salvo._pendenteNuvem, enfileirado: !!salvo._pendenteNuvem };
+  }
+
   function aplicarMutacao(os, mutacao) {
     var lembretes = normalizarLembretes(os.lembretesCobranca);
-    var exclusoes = normalizarExclusoes(os.dadosExtras && os.dadosExtras.lembretes_cobranca_excluidos);
+    var exclusoes = normalizarExclusoes(os.lembretesCobrancaExcluidos || os.dadosExtras && os.dadosExtras.lembretes_cobranca_excluidos);
     var alvoId = texto(mutacao.alvoId);
     var indice = alvoId ? lembretes.findIndex(function (item) { return item.id === alvoId; }) : -1;
     if (mutacao.tipo === 'excluir') {
@@ -350,13 +421,21 @@
     return { lembretes: lembretes, exclusoes: exclusoes };
   }
 
-  async function salvarMutacaoCobranca(osResumo, mutacao) {
+  async function salvarMutacaoCobranca(osResumo, mutacao, tipoRegistro) {
     var ultimaFalha = null;
+    tipoRegistro = tipoRegistro || (osResumo && osResumo._tipoCobranca) || 'os';
     for (var tentativa = 0; tentativa < 3; tentativa += 1) {
-      var os = await obterOSAtual(osResumo.numero || osResumo, true);
+      var referenciaRegistro = tipoRegistro === 'venda'
+        ? texto(osResumo && (osResumo.id || osResumo.referencia) || osResumo)
+        : texto(osResumo && osResumo.numero || osResumo);
+      var os = tipoRegistro === 'venda'
+        ? await obterVendaAtual(referenciaRegistro)
+        : await obterOSAtual(referenciaRegistro, true);
       var alteracao = aplicarMutacao(os, mutacao);
       try {
-        return await salvarNaOS(os, alteracao.lembretes, alteracao.exclusoes);
+        return tipoRegistro === 'venda'
+          ? await salvarNaVenda(os, alteracao.lembretes, alteracao.exclusoes)
+          : await salvarNaOS(os, alteracao.lembretes, alteracao.exclusoes);
       } catch (erro) {
         ultimaFalha = erro;
         if (erro.tipo !== 'conflito') throw erro;
@@ -366,7 +445,7 @@
     throw ultimaFalha || new Error('Não foi possível reconciliar a cobrança com o PC.');
   }
 
-  async function alterarSituacao(osResumo, itemResumo, situacao) {
+  async function alterarSituacao(osResumo, itemResumo, situacao, tipoRegistro) {
     try {
       var resultado = await salvarMutacaoCobranca(osResumo, {
         tipo: 'alterar',
@@ -375,7 +454,7 @@
           if (!item) throw new Error('Esta cobrança não existe mais. Atualize a lista.');
           return prepararSituacao(item, situacao, item);
         }
-      });
+      }, tipoRegistro || 'os');
       toast(resultado.enfileirado ? 'Situação salva e aguardando conexão.' : 'Cobrança marcada como ' + nomeStatus(situacao).toLowerCase() + '.', resultado.enfileirado ? 'aviso' : 'sucesso');
       await carregar();
     } catch (erro) {
@@ -383,12 +462,13 @@
     }
   }
 
-  async function excluirCobranca(osResumo, itemResumo) {
-    if (!root.confirm('Excluir esta cobrança da ' + rotuloOS(osResumo.numero) + '? Ela também será removida do PC.')) return;
+  async function excluirCobranca(osResumo, itemResumo, tipoRegistro) {
+    tipoRegistro = tipoRegistro || 'os';
+    if (!root.confirm('Excluir esta cobrança de ' + referencia(tipoRegistro, osResumo) + '? Ela também será removida do PC.')) return;
     try {
       var id = texto(itemResumo.id || itemResumo.data);
-      await salvarMutacaoCobranca(osResumo, { tipo: 'excluir', alvoId: id });
-      if (root.SistemaOSNotificacoes && root.SistemaOSNotificacoes.cancelarLembreteCobranca) {
+      await salvarMutacaoCobranca(osResumo, { tipo: 'excluir', alvoId: id }, tipoRegistro);
+      if (tipoRegistro === 'os' && root.SistemaOSNotificacoes && root.SistemaOSNotificacoes.cancelarLembreteCobranca) {
         root.SistemaOSNotificacoes.cancelarLembreteCobranca(osResumo, itemResumo).catch(function () {});
       }
       toast('Cobrança excluída do celular e da nuvem.', 'sucesso');
@@ -402,6 +482,7 @@
     evento.preventDefault();
     var botaoSalvar = root.document.getElementById('btn-salvar-cobranca-mobile');
     var numeroOS = root.document.getElementById('cobranca-mobile-os').value;
+    var tipoRegistro = root.document.getElementById('cobranca-mobile-tipo')?.value || 'os';
     var valor = numero(root.document.getElementById('cobranca-mobile-valor').value);
     var data = root.document.getElementById('cobranca-mobile-data').value;
     var situacao = root.document.getElementById('cobranca-mobile-situacao').value;
@@ -414,7 +495,8 @@
     botaoSalvar.textContent = 'Salvando…';
     try {
       var agora = new Date().toISOString();
-      var resultado = await salvarMutacaoCobranca({ numero: numeroOS }, {
+      var resumo = tipoRegistro === 'venda' ? { id: numeroOS, _tipoCobranca: 'venda' } : { numero: numeroOS };
+      var resultado = await salvarMutacaoCobranca(resumo, {
         tipo: 'salvar',
         alvoId: idEdicao,
         criar: function (anterior) {
@@ -429,7 +511,7 @@
           });
           return prepararSituacao(base, situacao, anterior);
         }
-      });
+      }, tipoRegistro);
       fecharFormulario();
       toast(resultado.enfileirado ? 'Cobrança salva. Será sincronizada ao reconectar.' : 'Cobrança salva e sincronizada com o PC.', resultado.enfileirado ? 'aviso' : 'sucesso');
       await carregar();
@@ -442,13 +524,13 @@
   }
 
   async function testarNotificacao() {
-    var preferida = cobrancasAtuais.find(function (c) { return /(?:^|-)0*20$/.test(texto(c.os.numero)); });
+    var preferida = cobrancasAtuais.find(function (c) { return c.tipo === 'os' && /(?:^|-)0*20$/.test(texto(c.os && c.os.numero)); });
     var cobranca = preferida || cobrancasAtuais.find(function (c) { return c.status === 'pendente' || c.status === 'atrasada'; });
     if (!cobranca) return toast('Cadastre uma cobrança antes de testar a notificação.', 'aviso');
     if (!root.SistemaOSNotificacoes || !root.SistemaOSNotificacoes.notificarTesteCobranca) {
       return toast('Notificações locais indisponíveis neste aparelho.', 'erro');
     }
-    var resultado = await root.SistemaOSNotificacoes.notificarTesteCobranca(cobranca.os, cobranca.item);
+    var resultado = await root.SistemaOSNotificacoes.notificarTesteCobranca(Object.assign({ _tipoCobranca: cobranca.tipo }, cobranca.registro || cobranca.os), cobranca.item);
     toast(resultado && resultado.agendada ? 'Notificação de teste enviada pelo aplicativo.' : 'Autorize as notificações do Sistema OS para concluir o teste.', resultado && resultado.agendada ? 'sucesso' : 'erro');
   }
 
@@ -458,6 +540,7 @@
     if (numeroOS) {
       if (buscaEl) buscaEl.value = rotuloOS(numeroOS);
       filtroAtual = 'todas';
+      tipoAtual = 'todos';
     }
     carregar().then(function () {
       renderizar();
@@ -475,6 +558,24 @@
     root.document.getElementById('btn-cancelar-cobranca-mobile')?.addEventListener('click', fecharFormulario);
     if (formEl) formEl.addEventListener('submit', salvarFormulario);
     if (buscaEl) buscaEl.addEventListener('input', renderizar);
+    root.document.getElementById('cobranca-mobile-tipo')?.addEventListener('change', function (evento) {
+      var venda = evento.target.value === 'venda';
+      var rotulo = root.document.getElementById('cobranca-mobile-referencia-label');
+      var campo = root.document.getElementById('cobranca-mobile-os');
+      if (rotulo) rotulo.textContent = venda ? 'Número da venda *' : 'Número da OS *';
+      if (campo) campo.placeholder = venda ? 'Ex.: EST-0002' : 'Ex.: 20 ou OS-0020';
+    });
+    root.document.getElementById('cobrancas-mobile-tipos')?.addEventListener('click', function (evento) {
+      var botao = evento.target.closest('button[data-tipo]');
+      if (!botao) return;
+      tipoAtual = botao.dataset.tipo;
+      Array.prototype.forEach.call(botao.parentNode.querySelectorAll('button[data-tipo]'), function (item) {
+        var ativo = item === botao;
+        item.classList.toggle('ativo', ativo);
+        item.setAttribute('aria-selected', String(ativo));
+      });
+      renderizar();
+    });
     root.document.getElementById('cobrancas-mobile-filtros')?.addEventListener('click', function (evento) {
       var botao = evento.target.closest('button[data-status]');
       if (!botao) return;
@@ -487,10 +588,15 @@
       if (!pararRealtime && root.SistemaOSSupabaseOS && root.SistemaOSSupabaseOS.assinar) {
         pararRealtime = root.SistemaOSSupabaseOS.assinar(function () { carregar(); });
       }
+      if (!pararRealtimeEstoque && root.SistemaOSEstoque && root.SistemaOSEstoque.assinar) {
+        pararRealtimeEstoque = root.SistemaOSEstoque.assinar(function () { carregar(); });
+      }
     });
     root.document.addEventListener('sistema-os:tela-cobrancas-fechada', function () {
       if (pararRealtime) pararRealtime();
+      if (pararRealtimeEstoque) pararRealtimeEstoque();
       pararRealtime = null;
+      pararRealtimeEstoque = null;
     });
   }
 

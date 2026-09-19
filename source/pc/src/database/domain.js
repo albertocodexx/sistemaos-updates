@@ -2987,6 +2987,11 @@ function criarItemEstoque(dadosEntrada) {
     pecasUsadas: normalizarPecasUsadasAparelho(dados.pecasUsadas),
     gastosExtras: parseFloat(dados.gastosExtras) || 0,
     valorVenda: parseFloat(dados.valorVenda) || 0,
+    valorRecebidoConfirmado: Number(dados.valorRecebidoConfirmado) || 0,
+    valorRecebidoBaseCobrancas: Number(dados.valorRecebidoBaseCobrancas) || 0,
+    valorRestanteVenda: Math.max(0, Number(dados.valorRestanteVenda ?? dados.valorVenda) || 0),
+    lembretesCobranca: normalizarLembretes(dados.lembretesCobranca),
+    lembretesCobrancaExcluidos: normalizarExclusoes(dados.lembretesCobrancaExcluidos),
     percentualLucro: dados.percentualLucro !== undefined && dados.percentualLucro !== null ? parseFloat(dados.percentualLucro) : null,
     dataVenda: dados.dataVenda || null,
     compradorNome: dados.compradorNome || '',
@@ -3088,6 +3093,21 @@ function atualizarItemEstoque(id, dadosEntrada) {
       : normalizarPecasUsadasAparelho(atual.pecasUsadas),
     gastosExtras: parseFloat(dados.gastosExtras ?? atual.gastosExtras) || 0,
     valorVenda: parseFloat(dados.valorVenda ?? atual.valorVenda) || 0,
+    valorRecebidoConfirmado: dados.valorRecebidoConfirmado !== undefined
+      ? Math.max(0, Number(dados.valorRecebidoConfirmado) || 0)
+      : Math.max(0, Number(atual.valorRecebidoConfirmado) || 0),
+    valorRecebidoBaseCobrancas: dados.valorRecebidoBaseCobrancas !== undefined
+      ? Math.max(0, Number(dados.valorRecebidoBaseCobrancas) || 0)
+      : Math.max(0, Number(atual.valorRecebidoBaseCobrancas) || 0),
+    valorRestanteVenda: dados.valorRestanteVenda !== undefined
+      ? Math.max(0, Number(dados.valorRestanteVenda) || 0)
+      : Math.max(0, Number(atual.valorRestanteVenda ?? (dados.valorVenda ?? atual.valorVenda)) || 0),
+    lembretesCobranca: dados.lembretesCobranca !== undefined
+      ? normalizarLembretes(dados.lembretesCobranca)
+      : normalizarLembretes(atual.lembretesCobranca),
+    lembretesCobrancaExcluidos: dados.lembretesCobrancaExcluidos !== undefined
+      ? normalizarExclusoes(dados.lembretesCobrancaExcluidos)
+      : normalizarExclusoes(atual.lembretesCobrancaExcluidos),
     historicoStatus,
     // Snapshot de termos do documento (ver criarItemEstoque/importação do
     // celular) — preserva explicitamente se o form de edição não enviar

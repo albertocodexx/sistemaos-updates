@@ -2169,25 +2169,33 @@ button.card-estatistica:active {
    mesmo cantos arredondados e cor de acento primário do resto do app. */
 .grafico-receita-meses {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 8px;
-  height: 140px;
+  min-height: 190px;
   padding: 12px 4px 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
   border-bottom: 1px solid var(--cor-borda);
 }
 .barra-receita-mes {
-  flex: 1 1 0;
+  flex: 1 0 72px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  height: 100%;
   gap: 6px;
-  min-width: 0;
+  min-width: 72px;
+}
+.barra-receita-mes-trilho {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  min-height: 90px;
 }
 .barra-receita-mes-preenchimento {
-  width: 100%;
-  max-width: 28px;
+  width: 28px;
+  min-height: 4px;
   border-radius: var(--raio-pequeno) var(--raio-pequeno) 2px 2px;
   background: linear-gradient(180deg, var(--acento-primario), var(--acento-primario-fundo));
   transition: height .25s ease-out;
@@ -2198,6 +2206,16 @@ button.card-estatistica:active {
   color: var(--cor-texto-mais-fraco-aa);
   white-space: nowrap;
 }
+.barra-receita-mes-valor{max-width:100%;color:var(--cor-texto);font-size:10px;font-weight:750;line-height:1.2;text-align:center;white-space:normal;overflow-wrap:anywhere}
+
+/* Atividade recente não tem miniatura nem botões. A grade genérica do
+   histórico reservava uma coluna vazia de 56px no celular e espremia tudo. */
+#estatisticas-atividade-recente .item-historico{display:block;min-width:0;padding:14px 15px}
+#estatisticas-atividade-recente .item-historico-info{width:100%;min-width:0}
+#estatisticas-atividade-recente .item-historico-tipo,
+#estatisticas-atividade-recente .item-historico-cliente,
+#estatisticas-atividade-recente .item-historico-aparelho{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+#estatisticas-atividade-recente .item-historico-aparelho:last-child{margin-top:7px;color:var(--cor-texto-mais-fraco-aa);font-variant-numeric:tabular-nums}
 
 /* ── Supabase Auth / gate de entrada ─────────────────────────────── */
 .tela-login {
@@ -2922,6 +2940,7 @@ body.qr-camera-ativa #leitor-qr-camera,body.qr-camera-ativa #leitor-qr-camera *{
 .cobrancas-mobile-filtros::-webkit-scrollbar{display:none}
 .cobrancas-mobile-filtros button{flex:0 0 auto;min-height:38px;padding:8px 13px;border:1px solid var(--cor-borda);border-radius:var(--raio-pill);background:var(--cor-card);color:var(--cor-texto-fraco);font:inherit;font-size:.84rem;font-weight:700}
 .cobrancas-mobile-filtros button.ativo{border-color:var(--cor-texto);background:var(--cor-texto);color:var(--cor-fundo)}
+.cobrancas-mobile-tipos{margin-top:-2px;padding-bottom:7px;border-bottom:1px solid var(--cor-borda)}
 .cobrancas-mobile-status{margin:8px 0 12px;color:var(--cor-texto-fraco);font-size:.86rem;line-height:1.45}
 .cobrancas-mobile-lista{display:grid;gap:10px}
 .cobranca-mobile-card{position:relative;overflow:hidden;padding:15px 14px 13px 18px;border:1px solid var(--cor-borda);border-radius:var(--raio-card);background:var(--cor-card);box-shadow:var(--sombra-card)}
@@ -2932,6 +2951,7 @@ body.qr-camera-ativa #leitor-qr-camera,body.qr-camera-ativa #leitor-qr-camera *{
 .cobranca-mobile-card[data-status="desativada"]::before{background:var(--cor-texto-mais-fraco)}
 .cobranca-mobile-card-topo,.cobranca-mobile-card-rodape{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .cobranca-mobile-card-topo h3{margin:0 0 4px;color:var(--cor-texto);font-size:1rem}
+.cobranca-mobile-tipo{display:inline-block;margin-bottom:4px;color:var(--cor-texto-mais-fraco-aa);font-size:.68rem;font-weight:850;letter-spacing:.08em}
 .cobranca-mobile-card-topo p,.cobranca-mobile-card-detalhe,.cobranca-mobile-card-observacao{margin:0;color:var(--cor-texto-fraco);font-size:.84rem;line-height:1.45}
 .cobranca-mobile-valor{flex:0 0 auto;color:var(--cor-texto);font-size:1.05rem;font-weight:850;letter-spacing:-.02em}
 .cobranca-mobile-card-detalhe{display:flex;flex-wrap:wrap;gap:7px 13px;margin:12px 0 9px}
@@ -2960,3 +2980,34 @@ body.qr-camera-ativa #leitor-qr-camera,body.qr-camera-ativa #leitor-qr-camera *{
 /* ── Autorizações de desbloqueio ───────────────────────────── */
 .painel-desbloqueios-mobile{max-width:980px;margin:0 auto;padding:18px 14px 32px}.desbloqueios-cabecalho{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}.desbloqueios-cabecalho h2{margin:3px 0 4px;font-size:26px}.desbloqueios-cabecalho p{margin:0;color:var(--texto-sec)}.desbloqueios-sobrelinha{font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--texto-sec)}.desbloqueio-form,.desbloqueios-registros{background:var(--fundo-card);border:1px solid var(--borda);border-radius:16px;padding:16px;margin-bottom:16px}.desbloqueio-form fieldset{margin:0 0 16px;padding:0;border:0}.desbloqueio-form legend{width:100%;padding:0 0 10px;border-bottom:1px solid var(--borda);font-size:16px;font-weight:800}.desbloqueio-grade{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px;margin-top:13px}.desbloqueio-form label{display:grid;gap:6px;font-weight:700}.desbloqueio-form input,.desbloqueio-form select,.desbloqueio-form textarea,.desbloqueios-ferramentas input{width:100%;color:var(--texto);background:var(--fundo-input);border:1px solid var(--borda);border-radius:10px;padding:12px;font:inherit}.desbloqueio-form input:focus,.desbloqueio-form select:focus,.desbloqueio-form textarea:focus,.desbloqueios-ferramentas input:focus{outline:2px solid var(--texto);outline-offset:2px}.desbloqueio-titularidade{display:flex!important;grid-template-columns:auto 1fr;align-items:flex-start;gap:9px!important;font-weight:600!important}.desbloqueio-titularidade input{width:18px!important;height:18px;margin:1px 0 0}.desbloqueio-identificacao{margin-bottom:14px;padding:11px 13px;border-radius:10px;background:var(--fundo);border:1px solid var(--borda);font-weight:800}.desbloqueio-acoes,.desbloqueio-card-acoes{display:flex;gap:9px;flex-wrap:wrap}.desbloqueio-feedback{min-height:20px;margin:6px 0 12px;color:var(--texto-sec)}.desbloqueio-feedback.erro{color:#ef4444}.desbloqueios-ferramentas{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.desbloqueios-ferramentas h3{margin:0}.desbloqueios-ferramentas p{margin:4px 0 0;color:var(--texto-sec);font-size:13px}.desbloqueios-ferramentas input{max-width:390px}.desbloqueio-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}.desbloqueio-card{padding:14px;border:1px solid var(--borda);border-radius:12px;background:var(--fundo)}.desbloqueio-card-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.desbloqueio-card-topo>div{display:grid}.desbloqueio-card-topo span{font-size:12px;color:var(--texto-sec)}.desbloqueio-card h3{font-size:17px;margin:14px 0 3px}.desbloqueio-card p{margin:0 0 10px;color:var(--texto-sec)}.desbloqueio-status{border:1px solid var(--borda);border-radius:99px;padding:5px 8px!important;font-size:11px!important;font-weight:800;white-space:nowrap}.desbloqueio-status-assinado{background:#d9fbe8;color:#166534!important;border-color:#86efac}.desbloqueio-status-aguardando{background:#fff6cc;color:#854d0e!important;border-color:#facc15}.desbloqueio-status-nao_assinado{background:#fee2e2;color:#991b1b!important;border-color:#fca5a5}.desbloqueio-preview-modal{position:fixed;inset:0;z-index:10030;background:rgba(0,0,0,.78);display:grid;place-items:center;padding:12px}.desbloqueio-preview-card{width:min(980px,100%);height:min(94vh,940px);background:var(--fundo-card);border:1px solid var(--borda);border-radius:16px;overflow:hidden;display:grid;grid-template-rows:auto 1fr auto}.desbloqueio-preview-card header,.desbloqueio-preview-card footer{display:flex;align-items:center;justify-content:space-between;gap:9px;padding:11px 13px}.desbloqueio-preview-card header>div{display:grid}.desbloqueio-preview-card header span{font-size:12px;color:var(--texto-sec)}.desbloqueio-preview-card header button{border:0;background:transparent;color:var(--texto);font-size:30px}.desbloqueio-preview-card iframe{width:100%;height:100%;border:0;background:#fff}.desbloqueio-preview-card footer{justify-content:flex-end;flex-wrap:wrap}.consulta-busca-cliente{margin-bottom:12px}.consulta-clientes-resultado{display:grid;gap:10px;margin-bottom:18px}.consulta-cliente-card{border:1px solid var(--borda);border-radius:12px;padding:14px;background:var(--fundo)}.consulta-cliente-card h3{margin:0 0 4px}.consulta-cliente-meta{color:var(--texto-sec);font-size:13px}.consulta-cliente-documentos{display:grid;gap:6px;margin-top:12px}.consulta-cliente-documento{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid var(--borda);border-radius:9px}.consulta-cliente-documento span{color:var(--texto-sec)}
 @media(max-width:680px){.desbloqueios-cabecalho,.desbloqueios-ferramentas{display:grid}.desbloqueio-grade{grid-template-columns:1fr}.desbloqueios-ferramentas input{max-width:none}.desbloqueio-acoes>*{flex:1 1 45%}.desbloqueio-preview-card footer>*{flex:1 1 40%}}
+/* Busca incremental de clientes na Nova OS. */
+.cliente-sugestoes-os {
+  position: relative;
+  z-index: 30;
+  margin-top: -1px;
+  border: 1px solid var(--borda);
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+  background: var(--fundo-card, var(--fundo));
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .24);
+}
+
+.cliente-sugestoes-os[hidden] { display: none; }
+.cliente-sugestoes-os button {
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  border: 0;
+  border-bottom: 1px solid var(--borda);
+  border-radius: 0;
+  background: transparent;
+  color: var(--texto);
+  text-align: left;
+}
+.cliente-sugestoes-os button:last-child { border-bottom: 0; }
+.cliente-sugestoes-os button:active { background: var(--fundo-hover, rgba(127, 127, 127, .16)); }
+.cliente-sugestoes-os small { color: var(--texto-sec); }
