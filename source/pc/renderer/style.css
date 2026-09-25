@@ -1664,6 +1664,10 @@ body:not(.tema-escuro) .login-caixa {
 .badge-inativo  { background: #f3f4f6; color: #6b7280; }
 .badge-admin    { background: #ede9fe; color: #5b21b6; }
 .badge-operador { background: #e0f2fe; color: #0369a1; }
+.usuarios-tabela { min-width:1040px; }
+.usuario-acoes { display:grid;grid-template-columns:repeat(3,minmax(96px,1fr));gap:6px;min-width:330px; }
+.usuario-acao { min-height:34px!important;padding:5px 9px!important;font-size:11.5px!important;justify-content:center;white-space:nowrap; }
+.usuario-acao-excluir { background:#b91c1c!important;border-color:#b91c1c!important; }
 
 /* ─── ETAPA 18 — TABS INTERNAS DO ESTOQUE ──────────────── */
 .tab-estoque-interna {
@@ -2514,15 +2518,18 @@ body:not(.tema-escuro) .login-caixa {
   font-size: 13.5px;
   line-height: 1.5;
   white-space: pre-wrap;
-  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 .iaChatMsg-ia {
   align-self: flex-start;
+  max-width: 100%;
   background: var(--bg-card);
   border: 1px solid var(--borda);
   color: var(--texto);
   border-bottom-left-radius: 3px;
 }
+.iaChatMsg strong { font-weight: 850; color: inherit; }
 .iaChatMsg-usuario {
   align-self: flex-end;
   background: var(--cor-botoes);
@@ -2994,6 +3001,13 @@ body.modo-suporte-global #painelGlobalSistema {
 .suporte-form-secao:first-child { margin-top:0;padding-top:0;border-top:0; }
 .suporte-form-secao strong { font-size:14px;color:var(--texto); }
 .suporte-form-secao span { font-size:12px;color:var(--texto-sec); }
+.suporte-identidade-automatica { display:grid;gap:3px;padding:11px 13px;border:1px solid color-mix(in srgb,#22c55e 42%,var(--borda));border-radius:10px;background:color-mix(in srgb,var(--bg-card) 92%,#22c55e 8%); }
+.suporte-identidade-automatica strong { color:var(--texto);font-size:13px; }
+.suporte-identidade-automatica span { color:var(--texto-sec);font-size:12px;line-height:1.4; }
+.suporte-motivo-principal { padding:14px;border:1px solid color-mix(in srgb,var(--primario) 42%,var(--borda));border-radius:12px;background:color-mix(in srgb,var(--bg-card) 91%,var(--primario) 9%); }
+.suporte-detalhes-motivo { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px; }
+.suporte-detalhes-motivo[hidden] { display:none; }
+.suporte-novo-chamado [hidden] { display:none!important; }
 .suporte-novo-chamado textarea { resize:vertical;min-height:116px; }
 .suporte-novo-chamado-acoes { justify-content:flex-end;margin-top:14px; }
 .suporte-chat-layout { display:grid;grid-template-columns:minmax(230px,300px) 1fr;min-height:0;flex:1; }
@@ -3012,7 +3026,10 @@ body.modo-suporte-global #painelGlobalSistema {
 .suporte-chat-balao strong { display:block;font-size:11px;color:var(--primario); }
 .suporte-chat-balao p { margin:5px 0;white-space:pre-wrap;overflow-wrap:anywhere; }
 .suporte-chat-balao time { display:block;text-align:right;font-size:10px;color:var(--texto-sec); }
-.suporte-chat-form { display:flex;gap:10px;padding:12px 16px;border-top:1px solid var(--borda);align-items:flex-end; }
+.suporte-chat-form { display:flex;flex-wrap:wrap;gap:10px;padding:12px 16px;border-top:1px solid var(--borda);align-items:flex-end; }
+.suporte-anexos { display:block;min-width:0;max-width:100%;font-size:13px; }
+.suporte-anexos input { display:block;max-width:100%;margin-top:6px; }
+.suporte-chat-form .suporte-anexos { flex-basis:100%;order:2; }
 .suporte-chat-form textarea { min-height:62px;max-height:150px;resize:vertical;flex:1; }
 .suporte-chat-form .botao { min-height:44px; }
 .suporte-chat-status { margin:0;padding:0 18px 10px;min-height:18px; }
@@ -3078,6 +3095,7 @@ body.modo-suporte-global #painelGlobalSistema {
   .suporte-novo-chamado { width:calc(100% - 20px);margin:10px;padding:16px; }
   .suporte-novo-chamado-grade { grid-template-columns:1fr; }
   .suporte-novo-chamado-grade .campo-largo { grid-column:auto; }
+  .suporte-detalhes-motivo { grid-template-columns:1fr; }
   .suporte-chat-topo #btnNovoChamadoCentral { padding:8px 10px; }
   .suporte-limites-grade,.suporte-recursos-grid { grid-template-columns:1fr; }
   .suporte-whatsapp-modos { grid-template-columns:1fr; }

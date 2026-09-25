@@ -57,6 +57,13 @@ export async function carregarIntegracaoPlataforma(admin: any, tipo: string) {
     .eq('tipo', tipo).maybeSingle();
   if (error) throw error;
   if (!integracao || integracao.status !== 'conectada') return { integracao, segredo: null };
+  if (tipo === 'mercado_pago') {
+    const accessToken = texto(Deno.env.get('MERCADO_PAGO_ACCESS_TOKEN'));
+    const webhookSecret = texto(Deno.env.get('MERCADO_PAGO_WEBHOOK_SECRET'));
+    if (accessToken && webhookSecret) {
+      return { integracao, segredo: { access_token: accessToken, webhook_secret: webhookSecret } };
+    }
+  }
   const { data: cofre, error: cofreErro } = await admin.from('integracoes_plataforma_segredos')
     .select('iv_base64,segredo_cifrado_base64').eq('integracao_id', integracao.id).maybeSingle();
   if (cofreErro) throw cofreErro;

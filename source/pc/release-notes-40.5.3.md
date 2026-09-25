@@ -7,3 +7,4 @@
 - Bloqueia a versão antiga durante a atualização e retoma automaticamente downloads interrompidos.
 - Valida novamente a confirmação idempotente do Mercado Pago e a renovação automática da licença.
 - Reduz chamadas e eventos Realtime duplicados no Android.
+

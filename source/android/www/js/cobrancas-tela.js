@@ -25,6 +25,8 @@
   var pararRealtime = null;
   var pararRealtimeEstoque = null;
   var carregando = false;
+  var recarregarPendente = false;
+  var revisaoContexto = 0;
 
   function texto(valor) { return String(valor == null ? '' : valor).trim(); }
   function escapar(valor) {
@@ -236,14 +238,17 @@
   }
 
   async function carregar() {
-    if (carregando || !root.SistemaOSSupabaseOS || !root.SistemaOSSupabaseOS.listarLeves) return Promise.resolve();
+    if (carregando) { recarregarPendente = true; return; }
+    if (!root.SistemaOSSupabaseOS || !root.SistemaOSSupabaseOS.listarLeves) return;
     carregando = true;
+    var revisaoDaCarga = revisaoContexto;
     if (statusEl) statusEl.textContent = 'Sincronizando cobranças…';
     try {
       var dados = await Promise.all([
         root.SistemaOSSupabaseOS.listarLeves(500),
         root.SistemaOSEstoque && root.SistemaOSEstoque.listar ? root.SistemaOSEstoque.listar('aparelho') : Promise.resolve([])
       ]);
+      if (revisaoDaCarga !== revisaoContexto) return;
       ordensAtuais = dados[0] || [];
       vendasAtuais = dados[1] || [];
       cobrancasAtuais = achatar(ordensAtuais, vendasAtuais);
@@ -260,6 +265,10 @@
       toast('Não foi possível sincronizar as cobranças.', 'erro');
     } finally {
       carregando = false;
+      if (recarregarPendente) {
+        recarregarPendente = false;
+        await carregar();
+      }
     }
   }
 
@@ -597,6 +606,15 @@
       if (pararRealtimeEstoque) pararRealtimeEstoque();
       pararRealtime = null;
       pararRealtimeEstoque = null;
+    });
+    root.document.addEventListener('sistema-os:sessao-alterada', function () {
+      revisaoContexto += 1;
+      ordensAtuais = [];
+      vendasAtuais = [];
+      cobrancasAtuais = [];
+      if (statusEl) statusEl.textContent = '';
+      renderizar();
+      if (carregando) recarregarPendente = true;
     });
   }
 

@@ -11,9 +11,12 @@ const assinatura = ler('www', 'js', 'assinaturas-saas.js');
 const empresa = ler('www', 'js', 'supabase', 'empresa-service.js');
 const EmpresaService = require(path.join(raiz, 'www', 'js', 'supabase', 'empresa-service.js'));
 
-for (const id of ['usuario-novo-chamado-app', 'telefone-novo-chamado-app', 'email-novo-chamado-app', 'cargo-novo-chamado-app', 'motivo-novo-chamado-app', 'preferencia-contato-novo-chamado-app']) {
+for (const id of ['telefone-novo-chamado-app', 'email-novo-chamado-app', 'motivo-novo-chamado-app', 'detalhe-novo-chamado-app', 'complemento-novo-chamado-app', 'preferencia-contato-novo-chamado-app']) {
   assert.match(chamados, new RegExp(id));
 }
+assert.doesNotMatch(chamados, /for="(?:empresa|usuario|nome)-novo-chamado-app"/);
+assert.match(chamados, /Empresa e usuário identificados automaticamente/);
+assert.match(chamados, /FLUXOS_MOTIVO/);
 assert.match(chamados, /trial_assinatura/);
 assert.match(chamados, /Outro motivo/);
 assert.match(chamados, /Os campos mudam conforme o motivo/);

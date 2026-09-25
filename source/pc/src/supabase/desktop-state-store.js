@@ -2,7 +2,16 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const VERSAO_ESTADO = 1;
+const VERSAO_ESTADO = 2;
+
+const CAMPOS_POR_EMPRESA = Object.freeze([
+  'dispositivoId', 'ultimoPullEm', 'ultimaReconciliacaoOSCompletaEm',
+  'ultimoPullExclusoesEm', 'ultimoPullEstoqueEm', 'ultimoPullComercialEm',
+  'ultimoPullArquivosEm', 'fila', 'filaAssinaturas', 'mapeamentosOS',
+  'mapeamentosEstoque', 'documentosComerciais', 'posAtendimento',
+  'posAtendimentoExclusoes', 'arquivosLocais', 'limpezasStoragePendentes',
+  'conflitos', 'auditoriaPostgresql', 'ultimaSincronizacaoEm', 'ultimoErro'
+]);
 
 function estadoInicial() {
   return {
@@ -28,7 +37,8 @@ function estadoInicial() {
     conflitos: [],
     auditoriaPostgresql: null,
     ultimaSincronizacaoEm: '',
-    ultimoErro: ''
+    ultimoErro: '',
+    estadosPorEmpresa: {}
   };
 }
 
@@ -67,7 +77,9 @@ class DesktopStateStore {
       documentosComerciais: lido?.documentosComerciais && typeof lido.documentosComerciais === 'object' ? lido.documentosComerciais : {},
       arquivosLocais: lido?.arquivosLocais && typeof lido.arquivosLocais === 'object' ? lido.arquivosLocais : {},
       limpezasStoragePendentes: Array.isArray(lido?.limpezasStoragePendentes) ? lido.limpezasStoragePendentes : [],
-      conflitos: Array.isArray(lido?.conflitos) ? lido.conflitos : []
+      conflitos: Array.isArray(lido?.conflitos) ? lido.conflitos : [],
+      estadosPorEmpresa: lido?.estadosPorEmpresa && typeof lido.estadosPorEmpresa === 'object'
+        ? lido.estadosPorEmpresa : {}
     });
     this.salvar();
     return this.state;
@@ -93,27 +105,23 @@ class DesktopStateStore {
 
   trocarEmpresa(empresaId) {
     this.alterar((estado) => {
-      if (estado.empresaId && estado.empresaId !== empresaId) {
-        estado.ultimoPullEm = '1970-01-01T00:00:00.000Z';
-        estado.ultimaReconciliacaoOSCompletaEm = '';
-        estado.ultimoPullExclusoesEm = '1970-01-01T00:00:00.000Z';
-        estado.ultimoPullEstoqueEm = '1970-01-01T00:00:00.000Z';
-        estado.ultimoPullComercialEm = '1970-01-01T00:00:00.000Z';
-        estado.ultimoPullArquivosEm = '1970-01-01T00:00:00.000Z';
-        estado.fila = [];
-        estado.filaAssinaturas = [];
-        estado.mapeamentosOS = {};
-        estado.mapeamentosEstoque = {};
-        estado.documentosComerciais = {};
-        estado.posAtendimento = {};
-        estado.posAtendimentoExclusoes = {};
-        estado.arquivosLocais = {};
-        estado.limpezasStoragePendentes = [];
-        estado.conflitos = [];
-        estado.auditoriaPostgresql = null;
+      const anterior = String(estado.empresaId || '');
+      const proxima = String(empresaId || '');
+      if (anterior === proxima) return;
+      estado.estadosPorEmpresa = estado.estadosPorEmpresa || {};
+      if (anterior) {
+        estado.estadosPorEmpresa[anterior] = CAMPOS_POR_EMPRESA.reduce((salvo, campo) => {
+          salvo[campo] = clonar(estado[campo]);
+          return salvo;
+        }, {});
       }
-      estado.empresaId = empresaId || '';
-      estado.dispositivoId = '';
+      const vazio = estadoInicial();
+      const restaurado = proxima && estado.estadosPorEmpresa[proxima]
+        ? estado.estadosPorEmpresa[proxima] : vazio;
+      CAMPOS_POR_EMPRESA.forEach((campo) => {
+        estado[campo] = clonar(restaurado[campo] === undefined ? vazio[campo] : restaurado[campo]);
+      });
+      estado.empresaId = proxima;
     });
   }
 
@@ -246,6 +254,7 @@ class DesktopStateStore {
         localId,
         revision: Number(linha.revision) || 1,
         hashLocal: hashLocal || '',
+        dadosBase: linha.dados ? clonar(linha.dados) : null,
         updatedAt: linha.updated_at || new Date().toISOString(),
         deletedAt: linha.deleted_at || ''
       };
@@ -253,4 +262,4 @@ class DesktopStateStore {
   }
 }
 
-module.exports = { DesktopStateStore, estadoInicial, VERSAO_ESTADO };
+module.exports = { DesktopStateStore, estadoInicial, VERSAO_ESTADO, CAMPOS_POR_EMPRESA };

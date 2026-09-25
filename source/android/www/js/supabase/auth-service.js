@@ -90,9 +90,14 @@
   }
 
   async function atualizarSenha(novaSenha) {
-    var resposta = await cliente().auth.updateUser({ password: String(novaSenha || '') });
-    falhar(resposta.error);
-    return resposta.data && resposta.data.user;
+    var resposta = await comTempoLimite(cliente().functions.invoke('admin-global', {
+      body: { acao: 'concluir_troca_senha', dados: { novaSenha: String(novaSenha || '') } }
+    }), 20000);
+    await falharFuncao(resposta.error);
+    if (resposta.data && resposta.data.erro) throw new Error(resposta.data.erro);
+    var atualizada = await comTempoLimite(cliente().auth.refreshSession(), 15000);
+    falhar(atualizada.error);
+    return atualizada.data && (atualizada.data.user || (atualizada.data.session && atualizada.data.session.user));
   }
 
   async function processarUrlAutenticacao(valorUrl) {

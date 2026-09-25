@@ -6,11 +6,15 @@
 #aba-nova-os .formulario-fluxo,
 .form-organizador-texto { display:none; }
 .form-organizador { justify-content:flex-end; padding:0; border:0; background:none; box-shadow:none; margin-bottom:12px; }
-#modalEditarOS .modal-caixa > .form-organizador { padding:0 !important; }
+/* A OS já separa o essencial dos opcionais no próprio formulário. Os dois
+   botões globais repetiam essa decisão e deixavam um vazio grande no topo. */
+#aba-nova-os > .form-organizador,
+#modalEditarOS .modal-caixa > .form-organizador { display:none !important; }
+#aba-nova-os .formulario-cabecalho-pagina h1 { margin:0;font-size:clamp(25px,2.2vw,34px);letter-spacing:-.035em; }
 .formulario-layout[data-layout-enxuto] { grid-template-columns: minmax(0,1.2fr) minmax(320px,.9fr); align-items:start; }
 #modalEditarOS .formulario-layout[data-layout-enxuto] { grid-template-columns: minmax(0,1.2fr) minmax(320px,.9fr) !important; }
 .formulario-layout[data-layout-enxuto] .coluna-form { min-width:0; position:static !important; }
-.formulario-layout[data-layout-enxuto] .card { padding:18px; margin-bottom:14px; }
+.formulario-layout[data-layout-enxuto] .card { padding:18px; margin-bottom:12px; border-radius:12px; }
 .form-atendimento .grade-2 { gap:14px; }
 .form-atendimento input[type=number] { font-size:21px; font-weight:700; font-variant-numeric:tabular-nums; }
 .form-atendimento .campo:first-child { grid-column:1/-1; }

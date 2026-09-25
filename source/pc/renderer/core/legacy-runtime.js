@@ -710,15 +710,14 @@ function mostrarPrimeiroCampoInvalido(ids, mensagemGeral) {
   });
 }
 
-// Escapa texto arbitrário e permite apenas os ícones internos (strings
-// que começam com "<svg", geradas por _svg()/_bolinha() acima, nunca
-// vindas de input do usuário) passarem como HTML. Isso corrige o bug de
+// Escapa texto arbitrário e permite apenas SVGs exatamente iguais aos
+// ícones do catálogo interno. Isso corrige o bug de
 // SVGs de ícone aparecendo como texto cru (ex.: toasts e chat da IA
 // mostrando "<svg viewBox=..." na tela em vez do ícone renderizado).
 function _renderComIcones(msg) {
   const partes = normalizarReferenciasOS(String(msg)).split(/(<svg[\s\S]*?<\/svg>)/g);
   return partes.map(p => {
-    if (p.startsWith('<svg')) return p; // ícone de confiança, gerado internamente
+    if (Object.values(window.RendererIcons).includes(p)) return p;
     const div = document.createElement('div');
     div.textContent = p; // escapa qualquer HTML/texto dinâmico
     return div.innerHTML;
@@ -727,14 +726,19 @@ function _renderComIcones(msg) {
 
 // O chat recebe texto gerado pela IA. Primeiro escapamos tudo (inclusive
 // qualquer HTML que a IA pudesse devolver) e só então aplicamos a pequena
-// parte de Markdown suportada pela interface: **negrito**.
+// parte de Markdown suportada pela interface. Alguns provedores ainda usam
+// *um asterisco* para dar destaque; no chat do Sistema OS isso também vira
+// negrito para não deixar os marcadores crus na tela.
 function _renderMarkdownSeguro(msg) {
   const partes = normalizarReferenciasOS(String(msg)).split(/(<svg[\s\S]*?<\/svg>)/g);
   return partes.map(p => {
     if (p.startsWith('<svg')) return p;
     const div = document.createElement('div');
     div.textContent = p;
-    return div.innerHTML.replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>');
+    return div.innerHTML
+      .replace(/\*\*([^*\n][\s\S]*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/__([^_\n][\s\S]*?)__/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, '$1<strong>$2</strong>');
   }).join('');
 }
 
@@ -5445,6 +5449,11 @@ function ocultarTelaLogin() {
 }
 
 function mostrarSistema(exibirBoasVindas = false) {
+  if (usuarioAtual?.trocaSenhaObrigatoria) {
+    ocultarTelaLogin();
+    abrirTrocaSenhaObrigatoria();
+    return;
+  }
   ocultarTelaLogin();
   atualizarInfoUsuarioTopo();
   aplicarPermissoesUI();
@@ -5502,6 +5511,56 @@ function mostrarSistema(exibirBoasVindas = false) {
       }
     }
   }
+}
+
+function abrirTrocaSenhaObrigatoria() {
+  if ($('modalTrocaSenhaObrigatoria')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'modalTrocaSenhaObrigatoria';
+  overlay.className = 'modal-fundo';
+  overlay.style.zIndex = '12000';
+  overlay.innerHTML = `
+    <form class="modal-caixa" style="max-width:430px;" id="formTrocaSenhaObrigatoria" novalidate>
+      <div class="modal-cabecalho"><div><h2>Crie sua senha</h2><p class="campo-desc" style="margin:4px 0 0;">A senha recebida era temporária e não poderá continuar sendo usada.</p></div></div>
+      <div style="padding:20px 22px;display:grid;gap:14px;">
+        <div class="campo"><label for="senhaObrigatoriaNova">Nova senha</label><input id="senhaObrigatoriaNova" type="password" minlength="8" maxlength="128" autocomplete="new-password" /></div>
+        <div class="campo"><label for="senhaObrigatoriaConfirmar">Confirmar nova senha</label><input id="senhaObrigatoriaConfirmar" type="password" minlength="8" maxlength="128" autocomplete="new-password" /></div>
+        <p id="erroTrocaSenhaObrigatoria" class="mensagem-erro escondido" role="alert"></p>
+      </div>
+      <div class="modal-rodape"><button type="submit" class="botao botao-primario" id="btnTrocaSenhaObrigatoria">Salvar e continuar</button></div>
+    </form>`;
+  document.body.appendChild(overlay);
+  const form = $('formTrocaSenhaObrigatoria');
+  form.addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const nova = $('senhaObrigatoriaNova').value;
+    const confirmar = $('senhaObrigatoriaConfirmar').value;
+    const erro = $('erroTrocaSenhaObrigatoria');
+    erro.classList.add('escondido');
+    if (nova.length < 8) { erro.textContent = 'Use pelo menos 8 caracteres.'; erro.classList.remove('escondido'); return; }
+    if (nova !== confirmar) { erro.textContent = 'As senhas não coincidem.'; erro.classList.remove('escondido'); return; }
+    const botao = $('btnTrocaSenhaObrigatoria');
+    botao.disabled = true;
+    botao.textContent = 'Salvando…';
+    try {
+      const resposta = usuarioAtual?.origemAuth === 'supabase'
+        ? await window.api.supabaseatualizarsenha(nova)
+        : await window.api.authatualizarminhasenha(usuarioAtual.id, nova);
+      if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível salvar a nova senha.');
+      usuarioAtual = { ...usuarioAtual, ...(resposta.usuario || {}), trocaSenhaObrigatoria: false };
+      salvarSessao(usuarioAtual);
+      overlay.remove();
+      mostrarSistema();
+      toast('Nova senha salva com segurança.', 'sucesso');
+    } catch (falha) {
+      erro.textContent = falha.message || String(falha);
+      erro.classList.remove('escondido');
+    } finally {
+      botao.disabled = false;
+      botao.textContent = 'Salvar e continuar';
+    }
+  });
+  setTimeout(() => $('senhaObrigatoriaNova')?.focus(), 80);
 }
 
 // Mantém a aba de estoque aberta atualizada quando uma alteração chega do
@@ -5673,8 +5732,11 @@ async function fazerLogin() {
       const tela = $('telaLogin');
       if (tela) { tela.style.opacity = '0'; tela.style.transition = 'opacity .25s'; }
       await new Promise(r => setTimeout(r, 220));
-      const primeiroAcesso = await verificarPrimeiroAcesso(res.usuario);
-      mostrarSistema(primeiroAcesso);
+      if (res.usuario?.trocaSenhaObrigatoria) mostrarSistema(false);
+      else {
+        const primeiroAcesso = await verificarPrimeiroAcesso(res.usuario);
+        mostrarSistema(primeiroAcesso);
+      }
     } else {
       _mostrarErroLogin(res.erro || 'Falha no login.');
     }
@@ -5698,7 +5760,7 @@ async function abrirChamadoSuporte(origem) {
     ? String($('loginEmpresa')?.value || '').trim().toLowerCase()
     : '';
   if (window.SistemaOSChamados?.abrirNovo) {
-    await window.SistemaOSChamados.abrirNovo({
+    await window.SistemaOSChamados.abrir({
       origem,
       empresa,
       usuario: peloLogin ? String($('loginUsuario')?.value || '').trim() : String(usuarioAtual?.usuario || '').trim(),
@@ -6195,7 +6257,6 @@ function renderizarEmpresasGlobais(empresas) {
         criarBotaoSuporte('Pagamento', 'botao-secundario', () => confirmarPagamentoGlobal(empresa)),
         criarBotaoSuporte('Adicionar dias', 'botao-secundario', () => adicionarDiasLicencaGlobal(empresa)),
         criarBotaoSuporte('Remover dias', 'botao-secundario', () => removerDiasLicencaGlobal(empresa)),
-        criarBotaoSuporte(trocaRapidaAtiva ? 'Desativar troca rápida' : 'Ativar troca rápida', 'botao-secundario', () => configurarTrocaRapidaEmpresaGlobal(empresa, !trocaRapidaAtiva)),
         criarBotaoSuporte(acessoBloqueado ? 'Reativar' : 'Bloquear', acessoBloqueado ? 'botao-secundario' : 'botao-perigo', () => alterarAcessoEmpresaGlobal(empresa, acessoBloqueado ? 'ativa' : 'bloqueada')),
         criarBotaoSuporte('Arquivar', 'botao-perigo', () => arquivarEmpresaGlobal(empresa))
       );
@@ -6502,7 +6563,7 @@ function textoOrigemChamado(origem) {
 }
 
 function textoStatusChamado(status) {
-  return ({ aberto: 'Aberto', em_atendimento: 'Em atendimento', resolvido: 'Resolvido', fechado: 'Fechado' })[String(status || '')] || 'Aberto';
+  return ({ aberto: 'Aguardando suporte', em_atendimento: 'Atendido', resolvido: 'Finalizado', fechado: 'Finalizado', cancelado: 'Cancelado' })[String(status || '')] || 'Aguardando suporte';
 }
 
 function textoMotivoChamado(motivo, outro) {
@@ -6514,6 +6575,29 @@ function textoMotivoChamado(motivo, outro) {
     configuracao_integracao: 'Configuração / integração', duvida_funcionalidade: 'Dúvida',
     sugestao: 'Sugestão', outro: 'Outro motivo'
   })[String(motivo || '')] || 'Motivo não informado';
+}
+
+function resumoContextoChamado(detalhes) {
+  const dados = detalhes && typeof detalhes === 'object' ? detalhes : {};
+  const rotulos = {
+    contratar: 'Contratar após o teste', renovar: 'Renovar assinatura', trocar_plano: 'Trocar de plano', acesso_bloqueado: 'Acesso bloqueado ou vencido',
+    nao_reconhecido: 'Pagamento não reconhecido', checkout: 'Falha ao pagar', valor_incorreto: 'Valor ou vencimento incorreto', duplicado: 'Cobrança duplicada', reembolso: 'Reembolso ou cancelamento',
+    nao_entra: 'Não consegue entrar', senha: 'Senha', bloqueado: 'Usuário bloqueado', trocar_usuario: 'Troca de usuário', conta: 'Conta ou empresa ausente',
+    os: 'Ordem de serviço', assinaturas: 'Assinaturas ou documentos', estoque: 'Estoque ou vendas', clientes: 'Clientes', cobrancas: 'Cobranças', configuracoes: 'Configurações', backup: 'Backup',
+    no_pc: 'Criado no celular e ausente no PC', no_celular: 'Criado no PC e ausente no celular', ambos: 'Diferente nos dois',
+    pdf: 'PDF vazio, preto ou incorreto', assinatura_nao_chega: 'Assinatura não sincroniza', assinatura_visual: 'Assinatura com tamanho ou posição incorreta', compartilhar: 'Falha ao compartilhar', documento_reaparece: 'Documento excluído reaparece',
+    entrega: 'Entrega', garantia: 'Garantia', desbloqueio: 'Desbloqueio', compra: 'Compra', venda: 'Venda',
+    financeiro: 'Financeiro ou cobranças', usuarios: 'Usuários e permissões', ia: 'Assistente de IA', relatorios: 'Relatórios', atualizacao: 'Atualização',
+    sempre: 'Acontece sempre', as_vezes: 'Acontece às vezes', uma_vez: 'Aconteceu uma vez', apos_atualizar: 'Após atualização',
+    whatsapp: 'WhatsApp', mercado_pago: 'Mercado Pago', nota_fiscal: 'Nota fiscal', empresa: 'Dados da empresa', documentos: 'Documentos e assinaturas', outro: 'Outro'
+  };
+  const plataformas = { pc: 'Computador', celular: 'Celular', ambos: 'Computador e celular' };
+  return [
+    dados.detalhe ? `Detalhe: ${rotulos[dados.detalhe] || dados.detalhe}` : '',
+    dados.complemento ? `Contexto: ${rotulos[dados.complemento] || dados.complemento}` : '',
+    dados.plataforma ? `Onde: ${plataformas[dados.plataforma] || dados.plataforma}` : '',
+    dados.referencia ? `Referência: ${dados.referencia}` : ''
+  ].filter(Boolean).join(' · ');
 }
 
 function renderizarChamadosSuporte(chamados) {
@@ -6538,11 +6622,16 @@ function renderizarChamadosSuporte(chamados) {
     const contato = document.createElement('div');
     contato.className = 'campo-desc';
     contato.style.marginTop = '5px';
-    contato.textContent = [chamado.telefone_contato ? `Tel. ${chamado.telefone_contato}` : '', chamado.email_contato || '', chamado.preferencia_contato ? `retorno por ${chamado.preferencia_contato}` : '', chamado.cargo_outro || chamado.cargo_empresa || ''].filter(Boolean).join(' · ');
+    contato.textContent = [chamado.telefone_contato ? `Tel. ${chamado.telefone_contato}` : '', chamado.email_contato || '', chamado.preferencia_contato ? `retorno por ${chamado.preferencia_contato}` : ''].filter(Boolean).join(' · ');
+    const contexto = document.createElement('div');
+    contexto.className = 'campo-desc';
+    contexto.style.marginTop = '5px';
+    contexto.textContent = resumoContextoChamado(chamado.detalhes_contato);
+    contexto.hidden = !contexto.textContent;
     const texto = document.createElement('p');
     texto.style.cssText = 'white-space:pre-wrap;margin:8px 0 0;';
     texto.textContent = chamado.mensagem || '';
-    item.append(titulo, detalhes, contato, texto);
+    item.append(titulo, detalhes, contato, contexto, texto);
     if (chamado.resolucao) {
       const resolucao = document.createElement('p');
       resolucao.className = 'campo-desc';
@@ -6559,7 +6648,11 @@ function renderizarChamadosSuporte(chamados) {
       assumir.addEventListener('click', () => atualizarChamadoSuporte(chamado, 'em_atendimento').catch((erro) => toast(erro.message || String(erro), 'erro')));
       acoes.appendChild(assumir);
     }
-    if (!['resolvido', 'fechado'].includes(String(chamado.status))) {
+    if (!['resolvido', 'fechado', 'cancelado'].includes(String(chamado.status))) {
+      const cancelar = document.createElement('button');
+      cancelar.type='button';cancelar.className='botao botao-secundario botao-pequeno';cancelar.textContent='Cancelar chamado';
+      cancelar.addEventListener('click', () => atualizarChamadoSuporte(chamado, 'cancelado').catch((erro) => toast(erro.message || String(erro), 'erro')));
+      acoes.appendChild(cancelar);
       const resolver = document.createElement('button');
       resolver.type = 'button'; resolver.className = 'botao botao-primario botao-pequeno'; resolver.textContent = 'Finalizar';
       resolver.addEventListener('click', () => atualizarChamadoSuporte(chamado, 'resolvido').catch((erro) => toast(erro.message || String(erro), 'erro')));
@@ -6596,7 +6689,7 @@ async function copiarProtocoloChamado(chamado) {
 async function excluirChamadoSuporte(chamado) {
   const protocolo = chamado.protocolo || ('CH-' + String(chamado.id || '').slice(0, 8).toUpperCase());
   const confirmado = await confirmModal(
-    'Excluir permanentemente o chamado ' + protocolo + '?\n\nA conversa e todas as mensagens deste chamado também serão apagadas. Esta ação não pode ser desfeita.',
+    'Arquivar o chamado ' + protocolo + '?\n\nEle sairá da lista. Os registros serão preservados para auditoria.',
     { titulo: 'Excluir chamado' }
   );
   if (!confirmado) return;
@@ -6611,7 +6704,7 @@ async function excluirChamadoSuporte(chamado) {
 
 async function atualizarChamadoSuporte(chamado, status) {
   let resolucao = '';
-  if (status === 'resolvido' || status === 'fechado') {
+  if (status === 'resolvido' || status === 'fechado' || status === 'cancelado') {
     const resposta = await promptModal(status === 'resolvido' ? 'Resumo da solução (opcional):' : 'Motivo do fechamento (opcional):', '', { titulo: 'Chamado de suporte' });
     if (resposta === null) return;
     resolucao = String(resposta).trim();
@@ -7263,7 +7356,7 @@ function renderizarUsuariosEmpresaGlobal(usuarios) {
     if (suportePodeGerenciar()) {
       grupo.append(
         criarBotaoSuporte('Editar', 'botao-secundario', async () => abrirFormularioUsuarioEmpresaGlobal(usuario)),
-        criarBotaoSuporte('Senha', 'botao-fantasma', () => redefinirSenhaUsuarioEmpresaGlobal(usuario)),
+        criarBotaoSuporte('Senha temporária', 'botao-fantasma', () => redefinirSenhaUsuarioEmpresaGlobal(usuario)),
         criarBotaoSuporte(usuario.ativo === false ? 'Ativar' : 'Bloquear', usuario.ativo === false ? 'botao-sucesso' : 'botao-perigo', () => alterarStatusUsuarioEmpresaGlobal(usuario)),
         criarBotaoSuporte(suporteEhAdministradorGeral() ? 'Solicitar exclusão' : 'Enviar para exclusão', 'botao-perigo', () => excluirUsuarioEmpresaGlobal(usuario))
       );
@@ -7348,14 +7441,20 @@ async function salvarUsuarioEmpresaGlobal(evento) {
 }
 
 async function redefinirSenhaUsuarioEmpresaGlobal(usuario) {
-  const senha = await promptModal('Nova senha para ' + usuario.usuario + ' (mínimo de 8 caracteres):', '', { titulo: 'Redefinir senha', senha: true });
-  if (senha === null) return;
-  if (String(senha).length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres.');
-  const motivo = await promptModal('Motivo da redefinição:', 'Solicitação do responsável pela empresa', { titulo: 'Auditoria de senha' });
-  if (motivo === null) return;
-  const resposta = await window.api.supabaseadministracaoglobal?.('resetar_senha', { usuarioId: usuario.id, novaSenha: String(senha), motivo: String(motivo).trim() });
-  if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível redefinir a senha.');
-  toast('Senha de ' + usuario.usuario + ' redefinida.', 'sucesso');
+  const confirmado = await confirmModal(
+    'Gerar uma nova senha temporária para ' + usuario.usuario + '?\n\nA senha atual deixará de funcionar.',
+    { titulo: 'Senha temporária' }
+  );
+  if (!confirmado) return;
+  const resposta = await window.api.supabaseadministracaoglobal?.('gerar_senha_temporaria', {
+    empresaId: empresaUsuariosGlobal?.id,
+    usuarioId: usuario.id
+  });
+  if (!resposta?.sucesso || !resposta.senhaTemporaria) throw new Error(resposta?.erro || 'Não foi possível gerar a senha temporária.');
+  $('senhaTmpLogin').textContent = usuario.usuario;
+  $('senhaTmpSenha').textContent = resposta.senhaTemporaria;
+  $('modalSenhaTmp').classList.remove('escondido');
+  toast('Senha temporária gerada. Ela deverá ser trocada no próximo acesso.', 'sucesso');
 }
 
 async function alterarStatusUsuarioEmpresaGlobal(usuario) {
@@ -7528,23 +7627,23 @@ async function carregarListaUsuarios() {
       const ehEuMesmo    = usuarioAtual && u.id === usuarioAtual.id;
 
       const acoes = `
-        <div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap;">
-          <button class="botao botao-secundario" style="padding:4px 9px;font-size:12px;"
+        <div class="usuario-acoes">
+          <button class="botao botao-secundario usuario-acao"
             title="Editar nome e cargo" onclick="abrirFormEditarUsuario(decodeURIComponent('${idArgumento}'))">${ICONE_LAPIS} Editar</button>
-          <button class="botao botao-fantasma" style="padding:4px 9px;font-size:12px;"
-            title="Alterar senha" onclick="abrirModalAlterarSenha(decodeURIComponent('${idArgumento}'),decodeURIComponent('${loginArgumento}'))">Senha</button>
+          <button class="botao botao-fantasma usuario-acao"
+            title="Gerar uma senha temporária de acesso" onclick="gerarSenhaTemporariaUsuario(decodeURIComponent('${idArgumento}'),decodeURIComponent('${loginArgumento}'))">Senha temporária</button>
           ${u.status === 'ativo' && !ehEuMesmo ? `
-            <button class="botao botao-perigo" style="padding:4px 9px;font-size:12px;"
+            <button class="botao botao-perigo usuario-acao"
               title="Bloquear usuário" onclick="alterarStatusUsuario(decodeURIComponent('${idArgumento}'),'bloqueado')">Bloquear</button>
-            <button class="botao botao-fantasma" style="padding:4px 9px;font-size:12px;"
+            <button class="botao botao-fantasma usuario-acao"
               title="Desativar usuário" onclick="alterarStatusUsuario(decodeURIComponent('${idArgumento}'),'inativo')">Pausar</button>
           ` : ''}
           ${u.status !== 'ativo' && !ehEuMesmo ? `
-            <button class="botao botao-sucesso" style="padding:4px 9px;font-size:12px;"
+            <button class="botao botao-sucesso usuario-acao"
               title="Reativar usuário" onclick="alterarStatusUsuario(decodeURIComponent('${idArgumento}'),'ativo')">Ativar</button>
           ` : ''}
           ${!ehEuMesmo && usuarioAtual?.admin ? `
-            <button class="botao botao-perigo" style="padding:4px 9px;font-size:12px;background:#b91c1c;border-color:#b91c1c;"
+            <button class="botao botao-perigo usuario-acao usuario-acao-excluir"
               title="Excluir usuário permanentemente" data-uid="${_escHtml(u.id)}" data-unome="${_escHtml(u.nome || '')}" onclick="excluirUsuarioUI(this.dataset.uid, this.dataset.unome)">${ICONE_LIXEIRA} Excluir</button>
           ` : ''}
         </div>`;
@@ -7593,9 +7692,7 @@ async function abrirFormNovoUsuario() {
   await _popularSelectCargos($('formUsuarioCargo'));
   $('formUsuarioSenha').value  = '';
   $('labelSenhaForm').textContent = 'Senha';
-  $('formUsuarioSenhaHint').textContent = usandoUsuariosSupabaseEmpresa()
-    ? 'Informe uma senha inicial com pelo menos 8 caracteres.'
-    : 'Deixe em branco para gerar uma senha forte ou use 10 caracteres com maiúscula, minúscula e número.';
+  $('formUsuarioSenhaHint').textContent = 'Deixe em branco para gerar uma senha forte temporária ou informe uma senha própria.';
   $('formUsuarioErro').classList.add('escondido');
   resetarBotaoFecharModal('modalFormUsuario');
   $('modalFormUsuario').classList.remove('escondido');
@@ -7637,12 +7734,15 @@ async function salvarFormUsuario() {
   let res;
   try {
     if (usandoUsuariosSupabaseEmpresa()) {
-      if (!_modoEdicaoUsuario && senha.length < 8) throw new Error('A senha inicial precisa ter pelo menos 8 caracteres.');
+      const senhaTemporaria = !_modoEdicaoUsuario && !senha ? _gerarSenhaTemporariaForte() : '';
+      const senhaFinal = senha || senhaTemporaria;
+      if (!_modoEdicaoUsuario && senhaFinal.length < 8) throw new Error('A senha inicial precisa ter pelo menos 8 caracteres.');
       const acao = _modoEdicaoUsuario ? 'atualizar_usuario_empresa' : 'criar_usuario_empresa';
       res = await window.api.supabaseadministracaoglobal?.(acao, {
         empresaId: usuarioAtual.empresaId, usuarioId: id, usuario: login,
-        nome, cargo: cargoId, senha, ativo: true
+        nome, cargo: cargoId, senha: senhaFinal, ativo: true
       });
+      if (res?.sucesso && senhaTemporaria && res.usuario) res.usuario.senhaTemporaria = senhaTemporaria;
       if (_modoEdicaoUsuario && senha) {
         const senhaResposta = await window.api.supabaseadministracaoglobal?.('resetar_senha', {
           usuarioId: id, novaSenha: senha, motivo: 'Alterada pelo administrador da empresa'
@@ -7687,15 +7787,71 @@ async function salvarFormUsuario() {
 }
 
 // ── Gerar Usuário Automático ────────────────────────────────
+function _normalizarLoginAutomatico(nome, usuarios = []) {
+  const baseOriginal = String(nome || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '')
+    .slice(0, 24) || 'usuario';
+  const base = baseOriginal.length >= 3 ? baseOriginal : `${baseOriginal}.user`;
+  const existentes = new Set((usuarios || []).map((item) => String(item.usuario || '').toLowerCase()));
+  let login = base;
+  let tentativa = 1;
+  while (existentes.has(login)) {
+    tentativa += 1;
+    const sufixo = String(tentativa);
+    login = `${base.slice(0, Math.max(3, 30 - sufixo.length - 1))}.${sufixo}`;
+  }
+  return login;
+}
+
+function _gerarSenhaTemporariaForte() {
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const corpo = Array.from(bytes, (valor) => alfabeto[valor % alfabeto.length]).join('');
+  return `${corpo}Aa1!`;
+}
+
+async function _cargosUsuarioAutomatico() {
+  if (usandoUsuariosSupabaseEmpresa()) {
+    return ['Administrador', 'Gerente', 'Técnico', 'Atendente'].map((nome) => ({ id: nome, nome }));
+  }
+  return await window.api.cargoslistar();
+}
+
 async function gerarUsuarioAutomatico() {
-  const cargos = await window.api.cargoslistar();
+  const nomeCompleto = await promptModal('Nome completo da pessoa:', '', { titulo: 'Gerar acesso automaticamente' });
+  if (nomeCompleto === null) return;
+  const nome = String(nomeCompleto).trim();
+  if (nome.length < 3) { alert('Informe o nome completo do usuário.'); return; }
+
+  const cargos = await _cargosUsuarioAutomatico();
   const nomes = cargos.map(c => c.nome).join(', ');
-  const escolha = await promptModal(`Cargo do usuário gerado (${nomes}):`, 'Atendente', { titulo: ' Gerar usuário automaticamente' });
+  const escolha = await promptModal(`Cargo do usuário (${nomes}):`, 'Atendente', { titulo: 'Gerar acesso automaticamente' });
   if (!escolha) return;
   const cargo = cargos.find(c => c.nome.toLowerCase() === escolha.trim().toLowerCase());
   if (!cargo) { alert('Cargo não encontrado. Use exatamente um destes nomes: ' + nomes); return; }
   try {
-    const res = await window.api.authgerarautomatico(cargo.id);
+    let res;
+    if (usandoUsuariosSupabaseEmpresa()) {
+      const usuarios = await obterUsuariosDaEmpresaAtual();
+      const login = _normalizarLoginAutomatico(nome, usuarios);
+      const senhaTemporaria = _gerarSenhaTemporariaForte();
+      res = await window.api.supabaseadministracaoglobal?.('criar_usuario_empresa', {
+        empresaId: usuarioAtual.empresaId,
+        usuario: login,
+        nome,
+        cargo: cargo.id,
+        senha: senhaTemporaria,
+        ativo: true
+      });
+      if (res?.sucesso && res.usuario) res.usuario.senhaTemporaria = senhaTemporaria;
+    } else {
+      res = await window.api.authgerarautomatico({ cargoId: cargo.id, nome });
+    }
     if (!res.sucesso) { alert('Erro: ' + res.erro); return; }
     await carregarListaUsuarios();
     if (res.usuario?.senhaTemporaria) {
@@ -7798,6 +7954,30 @@ window.abrirModalAlterarSenha = function(id, login) {
   $('alterarSenhaErro').classList.add('escondido');
   modal.classList.remove('escondido');
   setTimeout(() => $('alterarSenhaNova')?.focus(), 100);
+};
+
+window.gerarSenhaTemporariaUsuario = async function(id, login) {
+  const confirmado = await confirmModal(
+    `Gerar uma nova senha temporária para ${login}?\n\nA senha atual deixará de funcionar e a pessoa deverá escolher outra no próximo acesso.`,
+    { titulo: 'Gerar senha temporária' }
+  );
+  if (!confirmado) return;
+  try {
+    let res;
+    if (usandoUsuariosSupabaseEmpresa()) {
+      res = await window.api.supabaseadministracaoglobal?.('gerar_senha_temporaria', { usuarioId: id });
+      if (res?.sucesso) res.usuario = { usuario: login, senhaTemporaria: res.senhaTemporaria };
+    } else {
+      res = await window.api.authgerarsenhatemporaria(id);
+    }
+    if (!res?.sucesso || !res?.usuario?.senhaTemporaria) throw new Error(res?.erro || 'Não foi possível gerar a senha temporária.');
+    $('senhaTmpLogin').textContent = res.usuario.usuario || login;
+    $('senhaTmpSenha').textContent = res.usuario.senhaTemporaria;
+    $('modalSenhaTmp').classList.remove('escondido');
+    toast('Senha temporária gerada.', 'sucesso');
+  } catch (erro) {
+    definirMensagemUsuarios(erro.message || String(erro), 'erro');
+  }
 };
 
 async function salvarAlterarSenha() {

@@ -5,6 +5,8 @@
   var aba = 'aparelhos';
   var cancelarTempoReal = null;
   var carregando = false;
+  var recarregarPendente = false;
+  var revisaoContexto = 0;
   var aparelhoEmEdicao = null;
   var pecasUsadasAparelho = [];
   var pecaEmEdicao = null;
@@ -65,8 +67,9 @@
   }
 
   async function carregar(silencioso) {
-    if (carregando) return;
+    if (carregando) { recarregarPendente = true; return; }
     carregando = true;
+    var contextoInicio = revisaoContexto;
     var cacheAparelhos = root.SistemaOSEstoque.listarCache ? root.SistemaOSEstoque.listarCache('aparelho') : [];
     var cachePecas = root.SistemaOSEstoque.listarCache ? root.SistemaOSEstoque.listarCache('peca') : [];
     if (cacheAparelhos.length || cachePecas.length) {
@@ -80,18 +83,23 @@
         root.SistemaOSEstoque.listar('aparelho'),
         root.SistemaOSEstoque.listar('peca')
       ]);
+      if (contextoInicio !== revisaoContexto) return;
       aparelhos = resposta[0]; pecas = resposta[1]; render();
       $('estoque-mobile-status').textContent = fila.pendentes
         ? 'Atualizado agora. ' + fila.pendentes + ' alteração(ões) aguardam conexão.'
         : 'Atualizado agora pela nuvem · ' + aparelhos.length + ' aparelho(s) e ' + pecas.length + ' item(ns). Funciona mesmo com o PC desligado.';
     } catch (erro) {
+      if (contextoInicio !== revisaoContexto) return;
       if (cacheAparelhos.length || cachePecas.length) {
         $('estoque-mobile-status').textContent = 'Sem conexao: mostrando o ultimo estoque salvo neste celular.';
         return;
       }
       $('estoque-mobile-status').textContent = 'Não foi possível atualizar: ' + (erro.message || erro);
       if (!silencioso) toast('Falha ao sincronizar o estoque.', true);
-    } finally { carregando = false; }
+    } finally {
+      carregando = false;
+      if (recarregarPendente) { recarregarPendente = false; carregar(true); }
+    }
   }
 
   function abrirFormulario(item) {
@@ -321,7 +329,6 @@
   }
 
   function abrir() {
-    if (root.SistemaOSEstoque.processarFila) root.SistemaOSEstoque.processarFila().catch(function () {});
     carregar(false);
     if (!cancelarTempoReal) cancelarTempoReal = root.SistemaOSEstoque.assinar(function () { carregar(true); });
   }
@@ -358,6 +365,14 @@
     $('btn-atualizar-estoque-mobile')?.addEventListener('click', function () { carregar(false); });
   });
   document.addEventListener('sistema-os:estoque-alterado', function () { carregar(true); });
+  document.addEventListener('sistema-os:sessao-alterada', function () {
+    revisaoContexto += 1;
+    aparelhos = []; pecas = [];
+    aparelhoEmEdicao = null; pecaEmEdicao = null;
+    fechar();
+    if ($('estoque-lista-aparelhos')) render();
+    if (carregando) recarregarPendente = true;
+  });
   document.addEventListener('sistema-os:tela-estoque-aberta', abrir);
   document.addEventListener('sistema-os:tela-estoque-fechada', fechar);
 })(typeof globalThis !== 'undefined' ? globalThis : this);

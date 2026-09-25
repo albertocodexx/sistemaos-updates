@@ -293,7 +293,7 @@
   if (btnAbrirChamado) {
     btnAbrirChamado.addEventListener('click', async function () {
       if (window.SistemaOSChamados && window.SistemaOSChamados.abrirNovo) {
-        await window.SistemaOSChamados.abrirNovo({
+        await window.SistemaOSChamados.abrir({
           origem: 'login_celular', empresa: empresa.value.trim().toLowerCase(),
           usuario: email.value.trim(), nome: email.value.trim()
         });

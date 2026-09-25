@@ -2597,6 +2597,16 @@ button.card-estatistica:active {
 .suporte-form-secao-app { display:grid!important;gap:3px!important;margin-top:20px!important;padding-top:14px;border-top:1px solid var(--borda); }
 .suporte-form-secao-app strong { color:var(--texto);font-size:.9rem; }
 .suporte-form-secao-app span { color:var(--texto-sec);font-size:.72rem; }
+.suporte-identidade-automatica-app { display:grid!important;gap:3px!important;margin-top:16px!important;padding:11px 12px;border:1px solid color-mix(in srgb,#22c55e 42%,var(--borda));border-radius:12px;background:color-mix(in srgb,var(--bg-card) 92%,#22c55e 8%); }
+.suporte-identidade-automatica-app strong { color:var(--texto);font-size:.82rem; }
+.suporte-identidade-automatica-app span { color:var(--texto-sec);font-size:.72rem;line-height:1.4; }
+.suporte-motivo-principal-app { padding:14px;border:1px solid color-mix(in srgb,var(--primario) 42%,var(--borda));border-radius:14px;background:color-mix(in srgb,var(--bg-card) 91%,var(--primario) 9%); }
+.detalhes-novo-chamado-app { display:grid!important;gap:0!important;margin-top:5px!important; }
+.detalhes-novo-chamado-app[hidden] { display:none!important; }
+.form-novo-chamado-app [hidden] { display:none!important; }
+.detalhes-novo-chamado-app > div { display:grid;gap:6px;margin-top:13px;min-width:0; }
+.form-novo-chamado-app { box-sizing:border-box;min-height:0; }
+.campo-opcional-app { color:var(--texto-sec);font-size:.7rem;font-weight:500; }
 .novo-chamado-app-acoes { display:grid;grid-template-columns:1fr 1.5fr;gap:9px;margin-top:16px; }
 .lista-central-chamados-app { display:flex;gap:9px;overflow-x:auto;padding:12px 14px;border-bottom:1px solid var(--borda); }
 .item-chamado-app { min-width:220px;display:grid;gap:3px;text-align:left;border:1px solid var(--borda);border-radius:13px;background:var(--bg-card);color:var(--texto);padding:12px;box-shadow:0 6px 18px rgba(0,0,0,.10); }
@@ -2613,6 +2623,9 @@ button.card-estatistica:active {
 .mensagem-chamado-app small { text-align:right;color:var(--texto-sec);font-size:.65rem; }
 .form-mensagem-chamado-app { padding:11px 14px;border-top:1px solid var(--borda);background:var(--bg-card);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end; }
 .form-mensagem-chamado-app textarea { min-height:68px;resize:none; }
+.suporte-anexos { display:block;min-width:0;max-width:100%;font-size:13px; }
+.suporte-anexos input { display:block;max-width:100%;margin-top:6px; }
+.form-mensagem-chamado-app .suporte-anexos { grid-column:1 / -1;grid-row:2; }
 .form-mensagem-chamado-app .btn-primario { min-height:48px; }
 .central-chamados-app > .suporte-status { margin:0;padding:6px 16px 10px;background:var(--bg-card); }
 @media (max-width: 520px) {

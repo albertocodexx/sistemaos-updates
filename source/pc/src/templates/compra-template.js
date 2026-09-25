@@ -288,7 +288,7 @@ function gerarHtmlCompra(cp, config) {
   }
   .assin-bloco{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;}
   .assin-esp{height:60px;width:100%;}
-  .assin-linha{border-top:1.5px solid #222;width:90%;margin-bottom:4px;}
+  .assin-linha{box-sizing:border-box;height:0;flex:0 0 0;align-self:center;border:0;border-top:1.5px solid #222;width:90%;margin-bottom:4px;transform:none;}
   .assin-label{font-size:9px;color:#111;font-weight:800;text-transform:uppercase;letter-spacing:.05em;line-height:1.2;}
   .assin-nome{font-size:10px;color:#333;margin-top:2px;font-weight:600;}
   .assin-cpf{font-size:9px;color:#555;margin-top:1px;}

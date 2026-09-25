@@ -237,6 +237,7 @@ function autenticar(usuario, senha) {
       usuario: u.usuario,
       nome:    u.nome,
       perfil:  u.perfil, // mantido por compatibilidade visual
+      trocaSenhaObrigatoria: u.trocaSenhaObrigatoria === true,
       ...perm,
     },
   };
@@ -262,6 +263,7 @@ function revalidarSessao(id) {
     usuario: u.usuario,
     nome:    u.nome,
     perfil:  u.perfil,
+    trocaSenhaObrigatoria: u.trocaSenhaObrigatoria === true,
     ...perm,
   };
 }
@@ -312,19 +314,41 @@ function criarUsuario(dados) {
   };
 }
 
-/** Gera usuário automaticamente (login e senha aleatórios). */
-function gerarUsuarioAutomatico(cargoId) {
-  const cargoFinal = cargoId || CARGO_ATENDENTE_ID;
+function loginAutomaticoPorNome(nome) {
+  const base = String(nome || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '')
+    .slice(0, 24) || 'usuario';
+  let login = base.length >= 3 ? base : `${base}.user`;
+  let tentativa = 1;
+  while (db.obterUsuarioPorLogin(login)) {
+    tentativa += 1;
+    const sufixo = String(tentativa);
+    login = `${base.slice(0, Math.max(3, 30 - sufixo.length - 1))}.${sufixo}`;
+  }
+  return login;
+}
+
+/** Gera usuário automaticamente a partir do nome, com login e senha temporária. */
+function gerarUsuarioAutomatico(dados = {}) {
+  const opcoes = typeof dados === 'string' ? { cargoId: dados } : (dados || {});
+  const nome = String(opcoes.nome || '').trim();
+  if (nome.length < 3) throw new Error('Informe o nome completo do usuário.');
+
+  const cargoFinal = opcoes.cargoId || CARGO_ATENDENTE_ID;
   const cargo = db.obterCargoPorId(cargoFinal);
   if (!cargo) throw new Error('Cargo inválido.');
 
-  const base      = 'user' + Date.now().toString(36);
+  const base      = loginAutomaticoPorNome(nome);
   const senhaTmp  = crypto.randomBytes(9).toString('base64url') + 'Aa1';
   const salt      = gerarSalt();
 
   const criado = db.criarUsuario({
     usuario:              base,
-    nome:                 'Usuário ' + base.toUpperCase(),
+    nome,
     perfil:               cargo.admin ? 'admin' : 'operador',
     cargoId:              cargoFinal,
     senhaHash:            hashSenha(senhaTmp, salt),
@@ -406,6 +430,22 @@ function editarUsuario(id, dados) {
   }
 
   return _semCamposSensiveis(db.atualizarUsuario(id, atualizado));
+}
+
+/** Gera uma credencial descartável para um usuário existente. */
+function gerarSenhaTemporaria(id) {
+  const u = db.obterUsuarioPorId(id);
+  if (!u) throw new Error('Usuário não encontrado.');
+  const senhaTemporaria = crypto.randomBytes(9).toString('base64url') + 'Aa1!';
+  const salt = gerarSalt();
+  const atualizado = db.atualizarUsuario(id, {
+    ...u,
+    senhaHash: hashSenha(senhaTemporaria, salt),
+    senhaSalt: salt,
+    senhaIteracoes: ITERACOES_SENHA_ATUAIS,
+    trocaSenhaObrigatoria: true
+  });
+  return { ..._semCamposSensiveis(atualizado), senhaTemporaria };
 }
 
 /** Altera status de um usuário (ativo / bloqueado / inativo). */
@@ -525,6 +565,7 @@ module.exports = {
   revalidarSessao,
   criarUsuario,
   gerarUsuarioAutomatico,
+  gerarSenhaTemporaria,
   editarUsuario,
   alterarStatus,
   listarUsuarios,

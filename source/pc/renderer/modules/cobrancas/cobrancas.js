@@ -1,7 +1,10 @@
 (function () {
   'use strict';
 
-  const estado = { tipo: 'todos', status: 'todas', registros: [], cobrancas: [], carregando: false };
+  const estado = {
+    tipo: 'todos', status: 'todas', registros: [], cobrancas: [],
+    carregando: false, recarregarPendente: false, atualizacaoAutomatica: null
+  };
   const $ = (id) => document.getElementById(id);
   const texto = (valor) => String(valor == null ? '' : valor).trim();
   const numero = (valor) => Number.isFinite(Number(valor)) ? Number(valor) : 0;
@@ -157,7 +160,13 @@
   }
 
   async function carregar({ sincronizar = false } = {}) {
-    if (estado.carregando) return;
+    if (estado.carregando) {
+      // O evento supabase:sincronizado pode chegar enquanto a aba ainda
+      // aguarda a mesma sincronizacao. Antes ele era simplesmente perdido e
+      // a lista ficava vazia/desatualizada ate o proximo clique do usuario.
+      estado.recarregarPendente = true;
+      return;
+    }
     estado.carregando = true;
     $('cobrancasPCMensagem').textContent = sincronizar ? 'Sincronizando com o celular…' : 'Carregando cobranças…';
     try {
@@ -170,7 +179,23 @@
     } catch (erro) {
       $('cobrancasPCMensagem').textContent = erro?.message || 'Não foi possível carregar as cobranças.';
       avisar('Não foi possível sincronizar as cobranças.', 'erro');
-    } finally { estado.carregando = false; }
+    } finally {
+      estado.carregando = false;
+      if (estado.recarregarPendente) {
+        estado.recarregarPendente = false;
+        setTimeout(() => carregar(), 0);
+      }
+    }
+  }
+
+  function abaCobrancasAtiva() {
+    const botao = document.querySelector('[data-aba="cobrancas"]');
+    const painel = $('aba-cobrancas');
+    return !!botao?.classList.contains('ativa') && !!painel && !painel.classList.contains('escondido');
+  }
+
+  function sincronizarSeVisivel() {
+    if (!document.hidden && abaCobrancasAtiva()) carregar({ sincronizar: true });
   }
 
   function encontrarCobranca(chaveCodificada) {
@@ -284,7 +309,7 @@
     } catch (erro) { avisar(erro?.message || 'Não foi possível atualizar a cobrança.', 'erro'); }
   }
 
-  document.querySelector('[data-aba="cobrancas"]')?.addEventListener('click', () => carregar({ sincronizar: true }));
+  document.querySelector('[data-aba="cobrancas"]')?.addEventListener('click', sincronizarSeVisivel);
   $('btnAtualizarCobrancasPC')?.addEventListener('click', () => carregar({ sincronizar: true }));
   $('btnNovaCobrancaPC')?.addEventListener('click', () => abrirFormulario(null));
   $('btnFecharCobrancaPC')?.addEventListener('click', fecharFormulario);
@@ -308,8 +333,16 @@
     else executarAcao(cobranca, botao.dataset.cobrancaAcao);
   });
   window.api.onSupabaseSincronizado?.(() => {
-    if (document.querySelector('[data-aba="cobrancas"]')?.classList.contains('ativa')) carregar();
+    if (abaCobrancasAtiva()) carregar();
   });
+
+  // Realtime continua sendo a via principal. Este pulso curto e incremental
+  // e uma rede de seguranca para notebook suspenso, mudanca feita no celular
+  // durante a abertura da aba ou canal Realtime recriado pela troca de rede.
+  estado.atualizacaoAutomatica = setInterval(sincronizarSeVisivel, 15000);
+  window.addEventListener('focus', sincronizarSeVisivel);
+  document.addEventListener('visibilitychange', sincronizarSeVisivel);
+  window.addEventListener('beforeunload', () => clearInterval(estado.atualizacaoAutomatica), { once: true });
 
   window.carregarCobrancas = carregar;
   window.SistemaOSCobrancasPC = { achatar, situacao, prepararSituacao, normalizarLembretes };

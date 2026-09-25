@@ -20,7 +20,7 @@
         <div style="padding:14px;border:1px solid var(--borda);border-radius:10px;background:var(--bg)">
           <strong>Mercado Pago das assinaturas</strong><p id="statusMpPlataforma" class="campo-desc">Não conectado</p>
           <div class="campo"><label for="mpPlataformaToken">Chave da conta Mercado Pago</label><input id="mpPlataformaToken" type="password" autocomplete="new-password" placeholder="APP_USR-..."></div>
-          <div class="campo"><label for="mpPlataformaWebhook">Assinatura de segurança dos avisos (opcional)</label><input id="mpPlataformaWebhook" type="password" autocomplete="new-password"></div>
+          <div class="campo"><label for="mpPlataformaWebhook">Assinatura secreta do webhook</label><input id="mpPlataformaWebhook" type="password" autocomplete="new-password" minlength="16" required><p class="campo-desc">Obrigatória para validar cada confirmação do Mercado Pago e ativar o plano automaticamente.</p></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="btnConectarMpPlataforma" class="botao botao-primario botao-pequeno">Conectar</button><button type="button" id="btnDesconectarMpPlataforma" class="botao botao-perigo botao-pequeno" hidden>Desconectar</button></div>
         </div>
         <div class="suporte-integracao-card">
@@ -247,9 +247,11 @@
 
   async function conectarMp() {
     const token = $('mpPlataformaToken').value.trim();
-    if (!token) { $('statusIntegracoesPlataforma').textContent = 'Informe a chave do Mercado Pago.'; return; }
+    const segredoWebhook = $('mpPlataformaWebhook').value.trim();
+    if (!/^APP_USR-/.test(token)) { $('statusIntegracoesPlataforma').textContent = 'Informe a chave de produção APP_USR- do Mercado Pago.'; return; }
+    if (segredoWebhook.length < 16) { $('statusIntegracoesPlataforma').textContent = 'Informe a assinatura secreta do webhook para habilitar a confirmação automática.'; return; }
     $('statusIntegracoesPlataforma').textContent = 'Conectando Mercado Pago…';
-    const resposta = await window.api.supabaseassinaturassaas('conectar_mercado_pago', { accessToken: token, webhookSecret: $('mpPlataformaWebhook').value.trim() });
+    const resposta = await window.api.supabaseassinaturassaas('conectar_mercado_pago', { accessToken: token, webhookSecret: segredoWebhook });
     if (!resposta?.sucesso) { $('statusIntegracoesPlataforma').textContent = resposta?.erro || 'Não foi possível conectar.'; return; }
     $('statusIntegracoesPlataforma').textContent = resposta.mensagem || 'Mercado Pago conectado.';
     await carregar();

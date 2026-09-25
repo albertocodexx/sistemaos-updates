@@ -8,3 +8,4 @@
 - Mantém exclusões e documentos sincronizados após fechar, abrir ou reinstalar o aplicativo.
 - Inicia automaticamente uma atualização obrigatória antes de liberar o uso do aplicativo.
 - Adiciona resposta visual curta aos toques, respeitando a preferência de redução de movimento.
+

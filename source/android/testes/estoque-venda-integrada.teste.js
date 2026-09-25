@@ -21,8 +21,8 @@ assert.match(html, /id="venda-data"[^>]*required/, 'venda deve exigir data');
 assert.match(app, /estoqueLocalId:\s*\(estoqueVendaAtual && estoqueVendaAtual\.id\)/,
   'documento deve conservar o vínculo com o EST original');
 assert.match(app, /SistemaOSVendaEstoque/, 'estoque deve reutilizar o fluxo completo de PDF e assinatura');
-assert.match(servico, /status:\s*pendente\s*\?\s*'Reservado'\s*:\s*'Vendido'/,
-  'assinar depois reserva e assinatura concluída vende');
+assert.match(servico, /atual\.status\s*===\s*'Vendido'\s*\?\s*'Vendido'\s*:\s*\(pendente\s*\?\s*'Reservado'\s*:\s*'Vendido'\)/,
+  'assinar depois reserva, assinatura concluída vende e snapshot antigo não rebaixa venda já confirmada');
 assert.match(estatisticas, /quantidadeVendas/, 'estatísticas do APK devem contabilizar vendas');
 assert.match(estatisticas, /totalVendas/, 'valor vendido deve alimentar os gráficos do APK');
 assert.match(servico, /listarCache/, 'estoque deve manter cache leve por empresa para consulta sem PC');

@@ -35,6 +35,7 @@ const CANAIS_SOMENTE_ADMIN = new Set([
   'licenca:resetar',
   'auth:criarUsuario',
   'auth:gerarAutomatico',
+  'auth:gerarSenhaTemporaria',
   'auth:editarUsuario',
   'auth:alterarStatus',
   'auth:excluirUsuario',
@@ -93,7 +94,7 @@ function exigirAcesso(canal, usuario, args = []) {
   if (canal.startsWith('backup:') && canal !== 'backup:exportarPainelPDF' && !ehAdministrador(usuario)) {
     throw new Error('Somente o administrador pode acessar o backup completo.');
   }
-  if (['auth:atualizarNome', 'auth:revalidar'].includes(canal)) {
+  if (['auth:atualizarNome', 'auth:atualizarMinhaSenha', 'auth:revalidar'].includes(canal)) {
     if (args[0] !== usuario.id && !ehAdministrador(usuario)) throw new Error('Nao e permitido alterar ou consultar outra conta.');
     if (usuario.acessoSomenteCobranca) throw new Error('Acesso limitado a assinatura.');
     return;

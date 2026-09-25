@@ -92,7 +92,7 @@
 
   async function salvar(empresa, usuario, sessao, contexto) {
     if (!sessao || !sessao.access_token || !sessao.refresh_token) return false;
-    var permitido = contexto && (contexto.administrador_global === true || contexto.recursos_habilitados && contexto.recursos_habilitados.troca_rapida_contas === true);
+    var permitido = !!contexto;
     if (!permitido) return false;
     var id = identificador(empresa || contexto.empresa_codigo, usuario);
     if (!id || id === ':') return false;

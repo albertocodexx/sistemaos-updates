@@ -18,6 +18,13 @@
     return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
+  function calcularOferta(plano, meses) {
+    var quantidade = Math.max(1, Math.min(12, Number(meses) || 1));
+    var desconto = quantidade >= 12 ? 15 : quantidade >= 6 ? 10 : quantidade >= 3 ? 5 : 0;
+    var semDesconto = Number(plano && plano.preco_referencia || 0) * quantidade;
+    return { quantidade: quantidade, desconto: desconto, total: semDesconto * (1 - desconto / 100) };
+  }
+
   function data(valor) {
     if (!valor) return 'não informada';
     var texto = String(valor).trim();
@@ -149,7 +156,9 @@
           '<div><h3>' + escapar(plano.nome) + (atual ? ' <span>Atual</span>' : '') + '</h3>' +
           '<p>' + escapar(plano.descricao || '') + '</p></div>' +
           '<strong class="assinatura-mobile-preco">' + moeda(plano.preco_referencia) + '<small> / ' + escapar(periodo) + '</small></strong>' +
+          (plano.oferta_beta_fundador ? '<div class="assinatura-mobile-beneficio">Preço fundador exclusivo para empresas que participaram do beta.</div>' : '') +
           '<ul>' + recursos(plano) + '</ul>' +
+          '<label class="assinatura-mobile-periodo">Período<select data-meses-plano="' + escapar(plano.id) + '"><option value="1">1 mês</option><option value="2">2 meses</option><option value="3">3 meses · 5% OFF</option><option value="6">6 meses · 10% OFF</option><option value="12">12 meses · 15% OFF</option></select></label>' +
           '<button type="button" class="btn-primario" data-assinar-plano="' + escapar(plano.id) + '">' +
             (atual ? 'Renovar este plano' : 'Escolher este plano') + '</button>' +
         '</article>';
@@ -163,7 +172,8 @@
         '<small>Vencimento: ' + escapar(data(empresa.data_vencimento || empresa.fim_trial)) + '</small>' +
       '</div>' +
       (cobranca ? '<div class="assinatura-mobile-aviso">Pagamento aguardando confirmação. Se você já pagou, esta tela será liberada automaticamente.</div>' : '') +
-      listaPlanos;
+      listaPlanos +
+      '<div class="assinatura-mobile-seguranca"><div><strong>Formas de pagamento</strong><span>Pix, cartão e opções disponíveis na sua conta Mercado Pago.</span></div><div><strong>Seus dados protegidos</strong><span>O pagamento acontece no Mercado Pago. O Sistema OS não recebe nem armazena os dados do seu cartão.</span></div><div><strong>Liberação automática</strong><span>Plano e dias são ativados somente após o servidor conferir assinatura, valor e moeda.</span></div></div>';
 
     var botaoRecarregar = document.getElementById('btn-recarregar-planos-mobile');
     if (botaoRecarregar) {
@@ -212,7 +222,9 @@
   async function iniciarPagamento(planoId, botao) {
     var plano = (resumoAtual.planos || []).find(function (item) { return item.id === planoId; });
     if (!plano) return;
-    if (!window.confirm('Continuar com o plano ' + plano.nome + ' por ' + moeda(plano.preco_referencia) + '?')) return;
+    var seletor = botao.closest('.assinatura-mobile-plano').querySelector('[data-meses-plano]');
+    var oferta = calcularOferta(plano, seletor && seletor.value);
+    if (!window.confirm('Continuar com o plano ' + plano.nome + ' por ' + moeda(oferta.total) + ' (' + oferta.quantidade + ' mês(es)' + (oferta.desconto ? ', ' + oferta.desconto + '% de desconto' : '') + ')?')) return;
     var textoOriginal = botao.textContent;
     botao.disabled = true;
     botao.textContent = 'Preparando pagamento…';
@@ -221,7 +233,7 @@
       var precoAtual = Number(((resumoAtual.planos || []).find(function (p) { return p.id === atualId; }) || {}).preco_referencia || 0);
       var tipo = planoId === atualId ? 'renovacao'
         : atualId && Number(plano.preco_referencia) < precoAtual ? 'downgrade' : 'upgrade';
-      var resultado = await chamar('criar_checkout', { planoId: planoId, tipoAlteracao: tipo });
+      var resultado = await chamar('criar_checkout', { planoId: planoId, tipoAlteracao: tipo, quantidadeMeses: oferta.quantidade });
       await abrirLinkSeguro(resultado.link);
       toast('Pagamento aberto no navegador. A confirmação será automática.');
       acompanharPagamento(resultado.cobranca && resultado.cobranca.id);
@@ -282,8 +294,8 @@
   function montar() {
     if (document.getElementById('assinatura-mobile-modal')) return;
     var estilo = document.createElement('style');
-    estilo.textContent = '.assinatura-mobile-aberta{overflow:hidden}.assinatura-mobile-modal{position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.86);padding:12px;display:flex;align-items:flex-end}.assinatura-mobile-modal[hidden]{display:none}.assinatura-mobile-caixa{width:100%;max-height:94vh;overflow:auto;border:1px solid var(--cor-borda-forte);border-radius:9px;background:var(--cor-card);color:var(--cor-texto);padding:18px}.assinatura-mobile-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.assinatura-mobile-topo h2{margin:0}.assinatura-mobile-topo p{margin:5px 0 0;color:var(--cor-texto-fraco)}.assinatura-mobile-fechar{border:0;background:transparent;color:inherit;font-size:28px}.assinatura-mobile-resumo,.assinatura-mobile-aviso{margin:16px 0;padding:14px;border:1px solid var(--cor-borda);border-radius:6px;background:var(--cor-card-alto);display:grid;gap:4px}.assinatura-mobile-resumo strong{font-size:22px}.assinatura-mobile-resumo small{color:var(--cor-texto-fraco)}.assinatura-mobile-aviso{border-color:var(--acento-aviso);background:var(--acento-aviso-fundo)}.assinatura-mobile-planos{display:grid;gap:10px}.assinatura-mobile-plano{padding:16px;border:1px solid var(--cor-borda);border-radius:7px;background:var(--cor-fundo)}.assinatura-mobile-plano.destaque{border-color:var(--cor-texto);box-shadow:0 0 0 1px var(--cor-texto)}.assinatura-mobile-plano h3{margin:0 0 5px}.assinatura-mobile-plano h3 span{font-size:11px;border-radius:999px;padding:3px 8px;background:var(--cor-texto);color:var(--cor-fundo)}.assinatura-mobile-plano p{margin:0;color:var(--cor-texto-fraco)}.assinatura-mobile-preco{display:block;margin:14px 0;font-size:30px;line-height:1;color:var(--cor-texto);font-variant-numeric:tabular-nums}.assinatura-mobile-preco small{font-size:12px;color:var(--cor-texto-fraco)}.assinatura-mobile-plano ul{list-style:none;padding:0;margin:0 0 14px;display:grid;gap:6px;font-size:13px}.assinatura-mobile-acoes{display:flex;gap:8px;margin-top:16px}.assinatura-mobile-acoes button{flex:1;min-height:48px}.assinatura-mobile-bloqueio{padding:10px;border:1px solid var(--acento-erro);border-radius:6px;background:var(--acento-erro-fundo);color:var(--acento-erro);margin-top:12px}';
-    estilo.textContent += '.assinatura-mobile-estado{margin:16px 0;padding:18px 14px;border:1px solid var(--cor-borda);border-radius:7px;background:var(--cor-card-alto);display:grid;justify-items:start;gap:7px}.assinatura-mobile-estado strong{font-size:17px}.assinatura-mobile-estado small{color:var(--cor-texto-fraco);line-height:1.45}.assinatura-mobile-estado button{width:100%;margin-top:8px}.assinatura-mobile-estado.erro{border-color:var(--acento-erro);background:var(--acento-erro-fundo)}.assinatura-mobile-estado.erro strong{color:var(--acento-erro)}.assinatura-mobile-spinner{width:22px;height:22px;border:2px solid var(--cor-borda-forte);border-top-color:var(--cor-texto);border-radius:50%;animation:assinatura-mobile-girar .8s linear infinite}@keyframes assinatura-mobile-girar{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.assinatura-mobile-spinner{animation:none;border-top-color:var(--cor-borda-forte);background:var(--cor-texto)}}';
+    estilo.textContent = '.assinatura-mobile-aberta{overflow:hidden}.assinatura-mobile-modal{position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.86);padding:12px;display:flex;align-items:flex-end}.assinatura-mobile-modal[hidden]{display:none}.assinatura-mobile-caixa{width:100%;max-height:94vh;overflow:auto;border:1px solid var(--cor-borda-forte);border-radius:9px;background:var(--cor-card);color:var(--cor-texto);padding:18px}.assinatura-mobile-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.assinatura-mobile-topo h2{margin:0}.assinatura-mobile-topo p{margin:5px 0 0;color:var(--cor-texto-fraco)}.assinatura-mobile-fechar{border:0;background:transparent;color:inherit;font-size:28px}.assinatura-mobile-resumo,.assinatura-mobile-aviso{margin:16px 0;padding:14px;border:1px solid var(--cor-borda);border-radius:6px;background:var(--cor-card-alto);display:grid;gap:4px}.assinatura-mobile-resumo strong{font-size:22px}.assinatura-mobile-resumo small{color:var(--cor-texto-fraco)}.assinatura-mobile-aviso{border-color:var(--acento-aviso);background:var(--acento-aviso-fundo)}.assinatura-mobile-planos{display:grid;gap:10px}.assinatura-mobile-plano{padding:16px;border:1px solid var(--cor-borda);border-radius:7px;background:var(--cor-fundo)}.assinatura-mobile-plano.destaque{border-color:var(--cor-texto);box-shadow:0 0 0 1px var(--cor-texto)}.assinatura-mobile-plano h3{margin:0 0 5px}.assinatura-mobile-plano h3 span{font-size:11px;border-radius:999px;padding:3px 8px;background:var(--cor-texto);color:var(--cor-fundo)}.assinatura-mobile-plano p{margin:0;color:var(--cor-texto-fraco)}.assinatura-mobile-preco{display:block;margin:14px 0;font-size:30px;line-height:1;color:var(--cor-texto);font-variant-numeric:tabular-nums}.assinatura-mobile-preco small{font-size:12px;color:var(--cor-texto-fraco)}.assinatura-mobile-beneficio{margin:-4px 0 12px;padding:8px;border-left:3px solid var(--cor-texto);background:var(--cor-card-alto);font-size:12px}.assinatura-mobile-periodo{display:grid;gap:6px;margin:0 0 12px;font-size:12px;font-weight:700}.assinatura-mobile-periodo select{width:100%;min-height:44px;padding:8px;border:1px solid var(--cor-borda-forte);border-radius:6px;background:var(--cor-card);color:var(--cor-texto)}.assinatura-mobile-plano ul{list-style:none;padding:0;margin:0 0 14px;display:grid;gap:6px;font-size:13px}.assinatura-mobile-acoes{display:flex;gap:8px;margin-top:16px}.assinatura-mobile-acoes button{flex:1;min-height:48px}.assinatura-mobile-bloqueio{padding:10px;border:1px solid var(--acento-erro);border-radius:6px;background:var(--acento-erro-fundo);color:var(--acento-erro);margin-top:12px}';
+    estilo.textContent += '.assinatura-mobile-seguranca{margin-top:14px;padding:14px;border:1px solid var(--cor-borda);border-radius:7px;background:var(--cor-card-alto);display:grid;gap:12px}.assinatura-mobile-seguranca div{display:grid;gap:3px}.assinatura-mobile-seguranca strong{font-size:13px}.assinatura-mobile-seguranca span{font-size:12px;line-height:1.45;color:var(--cor-texto-fraco)}.assinatura-mobile-estado{margin:16px 0;padding:18px 14px;border:1px solid var(--cor-borda);border-radius:7px;background:var(--cor-card-alto);display:grid;justify-items:start;gap:7px}.assinatura-mobile-estado strong{font-size:17px}.assinatura-mobile-estado small{color:var(--cor-texto-fraco);line-height:1.45}.assinatura-mobile-estado button{width:100%;margin-top:8px}.assinatura-mobile-estado.erro{border-color:var(--acento-erro);background:var(--acento-erro-fundo)}.assinatura-mobile-estado.erro strong{color:var(--acento-erro)}.assinatura-mobile-spinner{width:22px;height:22px;border:2px solid var(--cor-borda-forte);border-top-color:var(--cor-texto);border-radius:50%;animation:assinatura-mobile-girar .8s linear infinite}@keyframes assinatura-mobile-girar{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.assinatura-mobile-spinner{animation:none;border-top-color:var(--cor-borda-forte);background:var(--cor-texto)}}';
     document.head.appendChild(estilo);
 
     var modal = document.createElement('div');

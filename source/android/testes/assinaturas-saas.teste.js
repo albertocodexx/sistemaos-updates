@@ -14,6 +14,9 @@ const css = fs.readFileSync(path.join(raiz, 'www', 'css', 'app.css'), 'utf8');
 
 assert.match(interfaceAssinatura, /Minha assinatura/);
 assert.match(interfaceAssinatura, /criar_checkout/);
+assert.match(interfaceAssinatura, /quantidadeMeses: oferta\.quantidade/);
+assert.match(interfaceAssinatura, /12 meses · 15% OFF/);
+assert.match(interfaceAssinatura, /Preço fundador exclusivo/);
 assert.match(interfaceAssinatura, /mercadopago\\\.com/);
 assert.match(interfaceAssinatura, /mercadopago\\\.com\(\?:\\\.br\)\?/);
 assert.match(interfaceAssinatura, /mercadolivre\\\.com\(\?:\\\.br\)\?/);

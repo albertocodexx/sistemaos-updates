@@ -2427,10 +2427,6 @@
         <div class="config-secao-titulo">Sessão da conta</div>
         <p class="campo-desc">Encerra somente a conta usada neste computador. Os dados da empresa continuam protegidos no Supabase.</p>
         <button id="btnTrocarUsuarioConfig" type="button" class="botao botao-secundario">Sair e trocar usuário</button>
-        <label id="linhaAtivarTrocaRapida" class="contas-rapidas-ativacao" hidden>
-          <input id="cfgTrocaRapidaContas" type="checkbox" />
-          <span><strong>Permitir troca rápida de contas</strong><small>Somente o administrador da empresa pode alterar esta opção.</small></span>
-        </label>
         <div id="contasRapidasConfig" class="contas-rapidas-config" hidden>
           <div class="contas-rapidas-cabecalho">
             <div><strong>Contas protegidas</strong><span>As sessões ficam criptografadas pelo Windows. Nenhuma senha é salva.</span></div>
@@ -2800,7 +2796,7 @@
 
         <!-- Lista de usuários -->
         <div class="tabela-wrapper">
-          <table class="tabela" id="tabelaUsuarios">
+          <table class="tabela usuarios-tabela" id="tabelaUsuarios">
             <thead>
               <tr>
                 <th>Usuário</th>
@@ -4118,6 +4114,7 @@
   <script src="shared/icons.js"></script>
   <script src="core/app-version.js"></script>
 <script src="core/legacy-runtime.js"></script>
+<script src="modules/suporte/anexos.js"></script>
 <script src="modules/suporte/chamados.js"></script>
 <script src="modules/suporte/planos.js"></script>
 <script src="modules/suporte/integracoes-plataforma.js"></script>

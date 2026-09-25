@@ -75,6 +75,15 @@ function erroTransitorioDeRede(erro) {
     || status >= 500;
 }
 
+function sincronizacaoOcupada(erro) {
+  return String(erro?.code || '') === '55000'
+    || /sincronizacao_em_andamento|sincroniza[cç][aã]o em andamento/i.test(mensagemErro(erro));
+}
+
+function esperar(ms) {
+  return new Promise((resolver) => setTimeout(resolver, Math.max(0, Number(ms) || 0)));
+}
+
 function comTempoLimite(promessa, limiteMs = 20000, codigo = 'TEMPO_LIMITE_SERVIDOR') {
   let temporizador;
   return Promise.race([
@@ -206,7 +215,8 @@ function usuarioPublico(user, contexto, aliases) {
     inicioTrial: contexto.inicio_trial || '',
     fimTrial: contexto.fim_trial || '',
     fiscalHabilitado: contexto.administrador_global !== true && contexto.recursos_habilitados?.fiscal_habilitado === true,
-    trocaRapidaContas: contexto.administrador_global === true || contexto.recursos_habilitados?.troca_rapida_contas === true,
+    trocaRapidaContas: true,
+    trocaSenhaObrigatoria: user.app_metadata?.troca_senha_obrigatoria === true,
     origemAuth: 'supabase'
   };
 }
@@ -500,9 +510,7 @@ class DesktopSupabaseRuntime {
   }
 
   _trocaRapidaPermitida(contexto = this.contexto) {
-    if (!contexto) return false;
-    if (contexto.administrador_global === true) return true;
-    return contexto.recursos_habilitados?.troca_rapida_contas === true;
+    return !!contexto;
   }
 
   async _salvarContaRapida(sessao, empresaInformada, usuarioInformado) {
@@ -987,9 +995,16 @@ class DesktopSupabaseRuntime {
     const novaSenha = String(senha || '');
     if (novaSenha.length < 8) return { sucesso: false, erro: 'A nova senha precisa ter pelo menos 8 caracteres.' };
     try {
-      const { data, error } = await this.client.auth.updateUser({ password: novaSenha });
+      const { data, error } = await invocarFuncaoComTempoLimite(this.client, 'admin-global', {
+        body: { acao: 'concluir_troca_senha', dados: { novaSenha } }
+      });
       if (error) throw new Error(await erroDaEdgeFunction(error));
-      const usuario = await this._carregarContexto(data.user);
+      if (data?.erro) throw new Error(data.erro);
+      const atualizada = await this.client.auth.refreshSession();
+      if (atualizada.error) throw atualizada.error;
+      const usuarioAuth = atualizada.data?.user || atualizada.data?.session?.user;
+      if (!usuarioAuth) throw new Error('Não foi possível atualizar a sessão com a nova senha.');
+      const usuario = await this._carregarContexto(usuarioAuth);
       this.ultimoStatus = { ativo: true, autenticado: true, conectado: true, modo: 'supabase' };
       return { sucesso: true, usuario, contexto: this.contexto };
     } catch (erro) {
@@ -1267,6 +1282,67 @@ class DesktopSupabaseRuntime {
     return linha;
   }
 
+  async _enviarItemComRetryOcupado(item) {
+    let ultimaFalha;
+    for (let tentativa = 0; tentativa < 4; tentativa += 1) {
+      try {
+        return await this._enviarItem(item);
+      } catch (erro) {
+        ultimaFalha = erro;
+        if (!sincronizacaoOcupada(erro) || tentativa === 3) throw erro;
+        // A trava do PostgreSQL dura somente a transação concorrente. Um
+        // retry curto e com jitter confirma a alteração em segundos, sem
+        // empurrar a cobrança para o backoff de vários minutos.
+        await esperar(120 * (tentativa + 1) + Math.floor(Math.random() * 180));
+      }
+    }
+    throw ultimaFalha;
+  }
+
+  _reconciliarItemPendenteComEstadoAtual(item) {
+    if (!item || item.operacao !== 'update' || !item.numero) return item;
+    const estado = this.stateStore.obter();
+    const mapeamento = estado.mapeamentosOS?.[item.numero];
+    const revisaoEnfileirada = Number(item.dados?.revision || 0);
+    const revisaoAtual = Number(mapeamento?.revision || 0);
+    if (!mapeamento?.id || revisaoAtual <= revisaoEnfileirada) return item;
+
+    const osAtual = this.db.obterOSPorNumero?.(item.numero);
+    if (!osAtual) return item;
+    const payloadAtual = localParaSupabase(osAtual, estado.deviceKey);
+    const dadosEnfileirados = item.dados?.dados || {};
+    const dadosAtuais = payloadAtual?.dados || {};
+    const valorTotal = Number(
+      dadosAtuais.dados_extras?.valor_total_servico ??
+      dadosEnfileirados.dados_extras?.valor_total_servico ??
+      dadosAtuais.valor ?? dadosEnfileirados.valor ?? 0
+    ) || 0;
+    const dadosReconciliados = {
+      ...dadosEnfileirados,
+      dados_extras: mesclarExtrasCobranca(
+        dadosEnfileirados.dados_extras,
+        dadosAtuais.dados_extras,
+        valorTotal
+      )
+    };
+    const atualizado = {
+      ...item,
+      dados: {
+        ...item.dados,
+        remoteId: mapeamento.id,
+        revision: revisaoAtual,
+        dados: dadosReconciliados
+      }
+    };
+    // Persiste a cura antes da chamada de rede. Se o servidor cair novamente,
+    // a próxima abertura não volta a carregar a fotografia antiga da parcela.
+    this.stateStore.alterar((proximoEstado) => {
+      const pendente = (proximoEstado.fila || []).find((entrada) => entrada.id === item.id);
+      if (pendente) pendente.dados = atualizado.dados;
+    });
+    return atualizado;
+  }
+
   async _processarFila() {
     const agora = Date.now();
     const itens = this.stateStore.obter().fila.filter((item) => item.status === 'pendente' && (!item.proximaTentativaEm || new Date(item.proximaTentativaEm).getTime() <= agora));
@@ -1275,11 +1351,14 @@ class DesktopSupabaseRuntime {
     // em lotes curtos para não monopolizar o PostgREST nem a CPU do projeto.
     for (const item of itens.slice(0, 10)) {
       try {
-        await this._enviarItem(item);
+        const itemAtual = this._reconciliarItemPendenteComEstadoAtual(item);
+        await this._enviarItemComRetryOcupado(itemAtual);
         this.stateStore.alterar((estado) => { estado.fila = estado.fila.filter((x) => x.id !== item.id); });
         enviados += 1;
       } catch (erro) {
         const msg = mensagemErro(erro);
+        const ocupado = sincronizacaoOcupada(erro);
+        const redeTransitoria = erroTransitorioDeRede(erro);
         this.stateStore.alterar((estado) => {
           const atual = estado.fila.find((x) => x.id === item.id);
           if (!atual) return;
@@ -1292,7 +1371,11 @@ class DesktopSupabaseRuntime {
               estado.conflitos.push({ id: atual.id, numero: atual.numero, dadosLocais: atual.dados, erro: msg, criadoEm: new Date().toISOString() });
             }
           } else {
-            const atraso = Math.min(300000, 2000 * Math.pow(2, Math.min(atual.tentativas, 7)));
+            const atraso = ocupado
+              ? 1200 + Math.floor(Math.random() * 1000)
+              : redeTransitoria
+                ? Math.min(15000, 2000 * Math.pow(2, Math.min(atual.tentativas, 3)))
+                : Math.min(300000, 2000 * Math.pow(2, Math.min(atual.tentativas, 7)));
             atual.proximaTentativaEm = new Date(Date.now() + atraso).toISOString();
           }
         });
@@ -1959,13 +2042,18 @@ class DesktopSupabaseRuntime {
         // Se o lote foi limitado ou uma alteração chegou durante o ciclo,
         // agenda exatamente uma continuação depois que o lock foi liberado.
         // Isso evita o timer disparar contra a própria sincronização ativa.
-        const aindaPendente = this.stateStore.obter().fila.some((item) =>
-          item.status === 'pendente' &&
-          (!item.proximaTentativaEm || new Date(item.proximaTentativaEm).getTime() <= Date.now())
-        ) || (this.stateStore.obter().filaAssinaturas || []).some((item) =>
-          !item.proximaTentativaEm || new Date(item.proximaTentativaEm).getTime() <= Date.now()
-        );
-        if (aindaPendente) this.solicitarSincronizacao(15000);
+        const estadoPendente = this.stateStore.obter();
+        const instantesPendentes = [
+          ...(estadoPendente.fila || []).filter((item) => item.status === 'pendente'),
+          ...(estadoPendente.filaAssinaturas || [])
+        ].map((item) => {
+          const instante = Date.parse(item.proximaTentativaEm || '');
+          return Number.isFinite(instante) ? instante : Date.now();
+        });
+        if (instantesPendentes.length) {
+          const espera = Math.max(300, Math.min(15000, Math.min(...instantesPendentes) - Date.now()));
+          this.solicitarSincronizacao(espera);
+        }
       }
     })();
     return this.syncEmAndamento;
@@ -2369,6 +2457,7 @@ class DesktopSupabaseRuntime {
 module.exports = {
   DesktopSupabaseRuntime,
   CAMPOS_PULL_OS,
+  sincronizacaoOcupada,
   validarChavePublica,
   resolverNomeLoginPublico,
   usuarioPublico

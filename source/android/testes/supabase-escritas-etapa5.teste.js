@@ -72,7 +72,7 @@ async function executar() {
       garantiaDias: 90,
       fotos: ['data:image/jpeg;base64,NAO-DEVE-IR']
     }, 'os-local-1', 'device-a');
-    assert.equal(chamadas[0].nome, 'criar_ordem_servico');
+    assert.equal(chamadas[0].nome, 'criar_ordem_servico_mobile_v2');
     assert.equal(chamadas[0].parametros.p_id_exportacao, 'os-local-1');
     assert.equal(chamadas[0].parametros.p_origem_dispositivo_id, 'device-a');
     assert.equal('empresa_id' in chamadas[0].parametros.p_dados, false);
@@ -122,6 +122,43 @@ async function executar() {
       (erro) => erro.tipo === 'conflito'
     );
     assert.equal(servico._classificarErro(new TypeError('Failed to fetch')), 'rede');
+    assert.equal(servico._classificarErro({ code: '55000', message: 'sincronizacao_em_andamento' }), 'ocupado');
+  });
+
+  await teste('trava transitória da mesma OS é repetida em segundos sem perder a cobrança', async () => {
+    let chamadas = 0;
+    Object.defineProperty(global, 'navigator', { value: { onLine: true }, configurable: true });
+    global.SistemaOSSessao = {
+      obterEstado() {
+        return { tipo: 'autenticado', usuario: { id: 'usuario-a' }, contexto: { empresa_id: 'empresa-a', usuario_id: 'usuario-a' } };
+      }
+    };
+    global.SistemaOSPermissoes = { obterContexto() { return { empresa_id: 'empresa-a', usuario_id: 'usuario-a' }; } };
+    global.SistemaOSSupabaseOS = {
+      _dadosParaCriacao(d) { return d; },
+      _patchParaServidor(p) { return p; },
+      _classificarErro(e) { return e && e.code === '55000' ? 'ocupado' : 'servidor'; },
+      async atualizar() {
+        chamadas += 1;
+        if (chamadas < 3) {
+          const erro = new Error('sincronizacao_em_andamento');
+          erro.code = '55000';
+          erro.tipo = 'ocupado';
+          throw erro;
+        }
+        return { id: 'os-1', numero: 'OS-0001', revision: 9 };
+      }
+    };
+    global.SistemaOSHistorico = {
+      async enfileirarOperacaoNuvem(item) { return item; }
+    };
+    const sync = recarregar(caminhoSync);
+    const resultado = await sync.atualizarOS('os-1', 8, {
+      dados_extras: { lembretes_cobranca: [{ id: 'cob-1', data: '2026-09-30', valor: 175 }] }
+    }, null, 'OS-0001');
+    assert.equal(resultado.enviado, true);
+    assert.equal(chamadas, 3);
+    assert.equal(resultado.dados.revision, 9);
   });
 
   await teste('sem internet a criação entra na mesma fila local e não finge sucesso', async () => {

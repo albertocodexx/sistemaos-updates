@@ -65,7 +65,13 @@ async function chamarIA(config, mensagens, opcoes = {}) {
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       corpo: { model, system: sistema, messages: conversa, max_tokens: Number(opcoes.maxTokens) || 900, temperature: opcoes.temperature ?? 0.3 }
     });
-    return { choices: [{ message: { content: (resposta.content || []).map(item => item?.text || '').join('\n') } }], usage: resposta.usage };
+    return {
+      choices: [{
+        message: { content: (resposta.content || []).map(item => item?.text || '').join('\n') },
+        finish_reason: resposta.stop_reason === 'max_tokens' ? 'length' : 'stop'
+      }],
+      usage: resposta.usage
+    };
   }
 
   return requisitarJson({

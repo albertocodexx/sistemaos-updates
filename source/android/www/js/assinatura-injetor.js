@@ -137,8 +137,9 @@
   // altura da folha A4 nos 3 templates (OS/Venda/Compra validados via
   // Playwright). Continua grande o suficiente para uma assinatura feita
   // com o dedo (traço largo e baixo) ficar legível.
-  var ESPACO_ALTURA_MIN = 56;
-  var IMG_ALTURA_MAX = 56;
+  var ESPACO_ALTURA_MIN = 58;
+  var IMG_ALTURA_MAX = 50;
+  var DISTANCIA_DA_LINHA = 4;
 
   function normalizarTexto(txt) {
     return String(txt || '')
@@ -286,7 +287,7 @@
             aberturaComAncora +
             (assinaturaSegura
               ? '<img src="' + assinaturaSegura + '" alt="assinatura" onerror="this.remove()" ' +
-                'style="position:absolute;left:50%;bottom:0;' +
+                'style="position:absolute;left:50%;bottom:' + DISTANCIA_DA_LINHA + 'px;' +
                 'transform:translateX(-50%);max-height:' + IMG_ALTURA_MAX +
                 'px;max-width:95%;' +
                 'object-fit:contain;pointer-events:none;" ' +

@@ -417,7 +417,7 @@ function gerarHtmlComprovanteOS(os, config, opcoes) {
   .assinatura{min-height:25mm;text-align:center;display:flex;flex-direction:column;justify-content:flex-end}
   .assinatura-imagem{display:block;max-width:100%;height:15mm;object-fit:contain;margin:auto auto 1px}
   .assinatura-vazia{height:15mm}
-  .assinatura-linha{border-top:1px solid #111;padding-top:3px;font-size:.82em;font-weight:800}
+  .assinatura-linha{box-sizing:border-box;border:0;border-top:1px solid #111;padding-top:3px;font-size:.82em;font-weight:800;transform:none}
   footer{border-top:1.5px solid #111;text-align:center;margin-top:10px;padding-top:6px;font-size:.76em}
   .codigo{font-family:Consolas,monospace;letter-spacing:.08em}
   @media screen{body{margin:16px auto;box-shadow:0 12px 40px rgba(0,0,0,.18)}}

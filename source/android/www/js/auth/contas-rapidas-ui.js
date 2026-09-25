@@ -22,8 +22,7 @@
   }
 
   function permitido(contexto) {
-    return !!(contexto && (contexto.administrador_global === true ||
-      contexto.recursos_habilitados && contexto.recursos_habilitados.troca_rapida_contas === true));
+    return !!contexto;
   }
 
   function definirStatus(mensagem, erro) {
@@ -94,7 +93,7 @@
       listaLogin.replaceChildren();
       contas.forEach(function (conta) { listaLogin.appendChild(criarConta(conta, true)); });
     }
-    if (linhaAtivar) linhaAtivar.hidden = !logado || !ehAdminEmpresa(contexto);
+    if (linhaAtivar) linhaAtivar.hidden = true;
     if (checkAtivar) checkAtivar.checked = permitido(contexto);
     if (blocoConfig && listaConfig) {
       blocoConfig.hidden = !logado || !permitido(contexto);
@@ -142,7 +141,7 @@
       senha = '';
       var estado = await window.SistemaOSSessao.validarSessao(dados && dados.session, true);
       var salva = await window.SistemaOSContasRapidas.salvar(empresa, usuario, dados && dados.session, estado && estado.contexto);
-      if (!salva) throw new Error('A troca rápida precisa estar ativada para a empresa desta conta.');
+      if (!salva) throw new Error('Não foi possível salvar este acesso. Entre novamente.');
       definirStatus('Conta adicionada com segurança.', false);
       await renderizar();
     } catch (erro) {

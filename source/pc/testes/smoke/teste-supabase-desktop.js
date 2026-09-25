@@ -90,14 +90,15 @@ function jwt(payload) {
           chamadasAuth.push({ nome: 'exchangeCodeForSession', codigo });
           return { data: { session: { user: { id: 'user-1', email: 'admin@teste.com' } } }, error: null };
         },
-        updateUser: async ({ password }) => {
-          chamadasAuth.push({ nome: 'updateUser', password });
-          return { data: { user: { id: 'user-1', email: 'admin@teste.com' } }, error: null };
+        refreshSession: async () => {
+          chamadasAuth.push({ nome: 'refreshSession' });
+          return { data: { user: { id: 'user-1', email: 'admin@teste.com', app_metadata: { troca_senha_obrigatoria: false } } }, error: null };
         }
       },
       functions: {
         invoke: async (nome, opcoes) => {
           chamadasAuth.push({ nome: 'invoke', nomeFuncao: nome, opcoes });
+          if (nome === 'admin-global') return { data: { sucesso: true }, error: null };
           return { data: { access_token: 'access', refresh_token: 'refresh' }, error: null };
         }
       },
@@ -143,7 +144,8 @@ function jwt(payload) {
     const senhaAtualizada = await runtime.atualizarSenha('senha-segura');
     assert.strictEqual(senhaAtualizada.sucesso, true);
     assert(chamadasAuth.some((c) => c.nome === 'exchangeCodeForSession' && c.codigo === 'teste'));
-    assert(chamadasAuth.some((c) => c.nome === 'updateUser' && c.password === 'senha-segura'));
+    assert(chamadasAuth.some((c) => c.nomeFuncao === 'admin-global' && c.opcoes.body.acao === 'concluir_troca_senha' && c.opcoes.body.dados.novaSenha === 'senha-segura'));
+    assert(chamadasAuth.some((c) => c.nome === 'refreshSession'));
     runtime.parar();
 
     const clienteErroLogin = {

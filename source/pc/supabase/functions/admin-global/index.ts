@@ -175,14 +175,14 @@ Deno.serve(async (req) => {
     const acao = texto(corpo.acao);
     const dados = corpo.dados || {};
     const administradorEmpresa = ehAdministradorEmpresa(contextoAtual);
-    if (!contextoAtual.administrador_global && !licencaPermiteOperacao(contextoAtual)) {
+    if (!contextoAtual.administrador_global && acao !== 'concluir_troca_senha' && !licencaPermiteOperacao(contextoAtual)) {
       return resposta(403, { erro: 'A assinatura da empresa não permite esta operação.' });
     }
     const acoesAdministradorEmpresa = new Set([
       'listar_usuarios_empresa', 'criar_usuario_empresa', 'atualizar_usuario_empresa',
-      'resetar_senha', 'excluir_usuario_empresa', 'definir_senha_exclusao_usuario'
+      'resetar_senha', 'gerar_senha_temporaria', 'excluir_usuario_empresa', 'definir_senha_exclusao_usuario'
     ]);
-    const acoesQualquerUsuarioEmpresa = new Set(['validar_credencial_admin_exclusao']);
+    const acoesQualquerUsuarioEmpresa = new Set(['validar_credencial_admin_exclusao', 'concluir_troca_senha']);
     if (!contextoAtual.administrador_global &&
         !(administradorEmpresa && acoesAdministradorEmpresa.has(acao)) &&
         !acoesQualquerUsuarioEmpresa.has(acao)) {
@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
       'criar_empresa', 'atualizar_licenca', 'confirmar_pagamento',
       'alterar_telefones_empresa',
       'configurar_troca_rapida_empresa', 'criar_usuario_empresa',
-      'atualizar_usuario_empresa', 'resetar_senha', 'excluir_usuario_empresa'
+      'atualizar_usuario_empresa', 'resetar_senha', 'gerar_senha_temporaria', 'excluir_usuario_empresa'
     ]);
     if (contextoAtual.administrador_global && somenteAdministradorGeral.has(acao) && papelSuporte !== 'administrador_geral') {
       return resposta(403, { erro: 'Somente o Administrador Geral pode realizar esta ação.' });
@@ -452,20 +452,62 @@ Deno.serve(async (req) => {
       return resposta(200, { sucesso: true, empresa: empresaAtualizada });
     }
 
+    if (acao === 'concluir_troca_senha') {
+      const senha = String(dados.novaSenha || '');
+      if (senha.length < 8 || senha.length > 128) return resposta(400, { erro: 'A nova senha precisa ter entre 8 e 128 caracteres.' });
+      const appMetadata = { ...(sessao.user.app_metadata || {}), troca_senha_obrigatoria: false };
+      const { error } = await admin.auth.admin.updateUserById(sessao.user.id, { password: senha, app_metadata: appMetadata });
+      if (error) throw error;
+      await admin.from('auditoria_comercial').insert({
+        empresa_id: contextoAtual.empresa_id, autor_id: sessao.user.id,
+        acao: 'senha_temporaria_substituida', entidade: 'usuario', entidade_id: sessao.user.id
+      });
+      return resposta(200, { sucesso: true });
+    }
+
     if (acao === 'resetar_senha') {
       const usuarioId = texto(dados.usuarioId);
       const senha = String(dados.novaSenha || '');
       if (!usuarioId || senha.length < 8) return resposta(400, { erro: 'Nova senha inválida.' });
-      if (!contextoAtual.administrador_global) {
-        const { data: perfilAlvo, error: perfilErro } = await admin.from('perfis')
-          .select('id').eq('id', usuarioId).eq('empresa_id', contextoAtual.empresa_id).maybeSingle();
-        if (perfilErro) throw perfilErro;
-        if (!perfilAlvo) return resposta(403, { erro: 'Você só pode redefinir senhas de usuários da sua empresa.' });
-      }
-      const { error } = await admin.auth.admin.updateUserById(usuarioId, { password: senha });
+      const empresaAlvo = contextoAtual.administrador_global ? texto(dados.empresaId) : texto(contextoAtual.empresa_id);
+      if (!empresaAlvo) return resposta(400, { erro: 'Empresa do usuário não informada.' });
+      const { data: perfilAlvo, error: perfilErro } = await admin.from('perfis')
+        .select('id').eq('id', usuarioId).eq('empresa_id', empresaAlvo).maybeSingle();
+      if (perfilErro) throw perfilErro;
+      if (!perfilAlvo) return resposta(403, { erro: 'O usuário não pertence à empresa informada.' });
+      const { data: usuarioAuth, error: usuarioAuthErro } = await admin.auth.admin.getUserById(usuarioId);
+      if (usuarioAuthErro || !usuarioAuth.user) return resposta(404, { erro: 'Conta de acesso não encontrada.' });
+      const appMetadata = { ...(usuarioAuth.user?.app_metadata || {}), troca_senha_obrigatoria: true };
+      const { error } = await admin.auth.admin.updateUserById(usuarioId, { password: senha, app_metadata: appMetadata });
       if (error) throw error;
       await admin.from('auditoria_comercial').insert({ autor_id: sessao.user.id, acao: 'senha_redefinida_suporte', entidade: 'usuario', entidade_id: usuarioId, motivo: texto(dados.motivo) || null });
       return resposta(200, { sucesso: true });
+    }
+
+    if (acao === 'gerar_senha_temporaria') {
+      const usuarioId = texto(dados.usuarioId);
+      if (!usuarioId) return resposta(400, { erro: 'Usuário inválido.' });
+      const empresaAlvo = contextoAtual.administrador_global ? texto(dados.empresaId) : texto(contextoAtual.empresa_id);
+      if (!empresaAlvo) return resposta(400, { erro: 'Empresa do usuário não informada.' });
+      const { data: perfilAlvo, error: perfilErro } = await admin.from('perfis')
+        .select('id').eq('id', usuarioId).eq('empresa_id', empresaAlvo).maybeSingle();
+      if (perfilErro) throw perfilErro;
+      if (!perfilAlvo) return resposta(403, { erro: 'O usuário não pertence à empresa informada.' });
+      const bytes = new Uint8Array(12);
+      crypto.getRandomValues(bytes);
+      const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+      const corpoSenha = Array.from(bytes, (valor) => alfabeto[valor % alfabeto.length]).join('');
+      const senhaTemporaria = `${corpoSenha}Aa1!`;
+      const { data: usuarioAuth, error: usuarioAuthErro } = await admin.auth.admin.getUserById(usuarioId);
+      if (usuarioAuthErro || !usuarioAuth.user) return resposta(404, { erro: 'Conta de acesso não encontrada.' });
+      const appMetadata = { ...(usuarioAuth.user?.app_metadata || {}), troca_senha_obrigatoria: true };
+      const { error } = await admin.auth.admin.updateUserById(usuarioId, { password: senhaTemporaria, app_metadata: appMetadata });
+      if (error) throw error;
+      await admin.from('auditoria_comercial').insert({
+        empresa_id: contextoAtual.empresa_id, autor_id: sessao.user.id,
+        acao: 'senha_temporaria_gerada', entidade: 'usuario', entidade_id: usuarioId
+      });
+      return resposta(200, { sucesso: true, senhaTemporaria });
     }
 
     if (acao === 'listar_planos') {
@@ -690,7 +732,8 @@ Deno.serve(async (req) => {
       const emailTecnico = usuario + '.' + empresa.codigo + '@accounts.sistemaos.app';
       const { data: authCriado, error: authErro } = await admin.auth.admin.createUser({
         email: emailTecnico, password: senha, email_confirm: true,
-        user_metadata: { usuario, empresa_codigo: empresa.codigo }
+        user_metadata: { usuario, empresa_codigo: empresa.codigo },
+        app_metadata: { troca_senha_obrigatoria: true }
       });
       if (authErro || !authCriado.user) return resposta(400, { erro: 'Não foi possível criar o usuário.' });
       const permissoes = permissoesParaCargo(cargo);
@@ -789,7 +832,7 @@ Deno.serve(async (req) => {
       }
 
       const { error: identidadeAtualizacaoErro } = await admin.from('identidades_login')
-        .update({ usuario, email_tecnico: novoEmail, updated_at: new Date().toISOString() }).eq('id', identidade.id);
+        .update({ usuario, email_tecnico: novoEmail, ativo, updated_at: new Date().toISOString() }).eq('id', identidade.id);
       if (identidadeAtualizacaoErro) {
         if (loginMudou) await admin.auth.admin.updateUserById(usuarioId, { email: identidade.email_tecnico });
         throw identidadeAtualizacaoErro;
@@ -798,9 +841,17 @@ Deno.serve(async (req) => {
         .update({ nome, cargo, ativo, permissoes: permissoesParaCargo(cargo), updated_at: new Date().toISOString() })
         .eq('empresa_id', empresaId).eq('id', usuarioId);
       if (perfilAtualizacaoErro) {
-        await admin.from('identidades_login').update({ usuario: identidade.usuario, email_tecnico: identidade.email_tecnico }).eq('id', identidade.id);
+        await admin.from('identidades_login').update({ usuario: identidade.usuario, email_tecnico: identidade.email_tecnico, ativo: perfil.ativo }).eq('id', identidade.id);
         if (loginMudou) await admin.auth.admin.updateUserById(usuarioId, { email: identidade.email_tecnico });
         throw perfilAtualizacaoErro;
+      }
+      const { error: acessoAuthErro } = await admin.auth.admin.updateUserById(usuarioId, {
+        ban_duration: ativo ? 'none' : '876000h'
+      });
+      if (acessoAuthErro) {
+        await admin.from('perfis').update({ ativo: perfil.ativo }).eq('empresa_id', empresaId).eq('id', usuarioId);
+        await admin.from('identidades_login').update({ ativo: perfil.ativo }).eq('id', identidade.id);
+        throw acessoAuthErro;
       }
       if (empresaSuporte) {
         const { error: papelErro } = await admin.from('administradores_globais').upsert({

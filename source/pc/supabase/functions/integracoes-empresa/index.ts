@@ -90,7 +90,13 @@ async function chamarProvedorIA(provedor: string, modelo: string, apiKey: string
   const retorno = await respostaIA.json().catch(() => ({}));
   if (!respostaIA.ok) throw new Error(`O provedor recusou a solicitação (HTTP ${respostaIA.status}).`);
   if (definicao.tipo === 'anthropic') {
-    return { choices: [{ message: { content: (retorno.content || []).map((item: any) => String(item?.text || '')).join('\n') } }], usage: retorno.usage };
+    return {
+      choices: [{
+        message: { content: (retorno.content || []).map((item: any) => String(item?.text || '')).join('\n') },
+        finish_reason: retorno.stop_reason === 'max_tokens' ? 'length' : 'stop'
+      }],
+      usage: retorno.usage
+    };
   }
   return retorno;
 }

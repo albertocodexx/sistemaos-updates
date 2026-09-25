@@ -27,7 +27,10 @@ assert.ok(groq.includes('model = GROQ_MODEL'), 'cliente Groq deve aceitar modelo
 assert.ok(groq.includes("String(model).startsWith('groq/compound')"), 'cliente Groq deve tratar modelos Compound sem reasoning comum');
 assert.ok(renderer.includes('function _renderMarkdownSeguro(msg)'), 'renderer deve ter formatador Markdown seguro');
 assert.ok(renderer.includes("'<strong>$1</strong>'"), 'renderer deve converter **texto** em negrito');
+assert.ok(renderer.includes("'$1<strong>$2</strong>'"), 'renderer deve converter *texto* em negrito sem exibir asteriscos crus');
 assert.ok(renderer.includes('bolha.innerHTML = _renderMarkdownSeguro(texto);'), 'chat deve usar o formatador Markdown seguro');
+assert.ok(chat.includes("finish_reason === 'length'") && chat.includes('Continue exatamente do ponto em que parou'),
+  'resposta interrompida pelo limite deve continuar automaticamente sem repetir o começo');
 assert.ok(chat.includes("'entregas', 'garantias', 'financeiro'"), 'chat deve consultar novas areas operacionais');
 assert.ok(chat.includes('function _classificarCategoriasLocalmente(pergunta)'), 'perguntas claras devem evitar chamada extra de roteamento');
 assert.ok(chat.includes('db.listarPagamentos().slice(0, 30)'), 'contexto financeiro deve ser limitado e compacto');

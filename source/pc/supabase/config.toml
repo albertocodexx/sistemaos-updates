@@ -64,6 +64,10 @@ otp_expiry = 3600
 [functions.auth-login]
 verify_jwt = false
 
+[functions.chamados-suporte]
+# O atendimento no login é público; ações privadas validam usuário e empresa no handler.
+verify_jwt = false
+
 [functions.admin-global]
 verify_jwt = true
 

@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { normalizarTipoItem } = require('../inventory/stock-item');
+const { mesclarLembretes, recalcularFinanceiro } = require('./cobrancas-sync');
 
 const CAMPOS = [
   'id', 'empresa_id', 'tipo', 'local_id', 'dados', 'revision',
@@ -17,7 +18,7 @@ function ordenar(valor) {
 }
 
 function hash(valor) {
-  return crypto.createHash('sha256').update(JSON.stringify(ordenar(valor))).digest('hex');
+  return crypto.createHash('sha256').update(JSON.stringify(ordenar(valor)) ?? 'undefined').digest('hex');
 }
 
 function limparAparelho(item) {
@@ -33,6 +34,42 @@ function limparPeca(item) {
   const copia = Object.assign({}, item || {});
   copia.tipoItem = normalizarTipoItem(copia.tipoItem);
   return copia;
+}
+
+// Uma venda concluída não pode voltar para "Reservado" só porque um celular
+// reabriu uma fotografia antiga do formulário de assinatura. Para desfazer
+// uma venda existem estados explícitos (Cancelado/Pronto para venda); o
+// downgrade silencioso para Reservado é sempre um snapshot obsoleto.
+function remotoRegrideVenda(local, remoto) {
+  return String(local?.status || '') === 'Vendido'
+    && String(remoto?.status || '') === 'Reservado';
+}
+
+function conciliarEstoque(base, local, remoto) {
+  const saida = { ...remoto };
+  if (remotoRegrideVenda(local, remoto)) saida.status = 'Vendido';
+  const financeiros = new Set(['lembretesCobranca', 'lembretesCobrancaExcluidos', 'valorRecebidoConfirmado', 'valorRestanteVenda', 'valorRecebidoBaseCobrancas']);
+  for (const campo of Object.keys(local)) {
+    if (financeiros.has(campo) || hash(local[campo]) === hash(base[campo])) continue;
+    if (hash(remoto[campo]) !== hash(base[campo]) && hash(local[campo]) !== hash(remoto[campo])) {
+      if (campo === 'status' && remotoRegrideVenda(local, remoto)) { saida.status = local.status; continue; }
+      throw new Error(`Conflito no estoque ${local.id}, campo ${campo}. Atualize o registro antes de salvar; nenhuma edição foi descartada.`);
+    }
+    saida[campo] = local[campo];
+  }
+  if (financeiros.size && (local.lembretesCobranca?.length || remoto.lembretesCobranca?.length || local.lembretesCobrancaExcluidos?.length)) {
+    const mescla = mesclarLembretes(local.lembretesCobranca, remoto.lembretesCobranca, local.lembretesCobrancaExcluidos, remoto.lembretesCobrancaExcluidos);
+    const financeiro = recalcularFinanceiro({
+      lembretes_cobranca: mescla.lembretes,
+      valor_recebido_base_cobrancas: Math.max(Number(local.valorRecebidoBaseCobrancas) || 0, Number(remoto.valorRecebidoBaseCobrancas) || 0)
+    }, saida.valorVenda);
+    Object.assign(saida, { lembretesCobranca: mescla.lembretes, lembretesCobrancaExcluidos: mescla.exclusoes,
+      valorRecebidoConfirmado: financeiro.valor_recebido_confirmado, valorRestanteVenda: financeiro.valor_restante_servico,
+      valorRecebidoBaseCobrancas: financeiro.valor_recebido_base_cobrancas });
+  } else {
+    for (const campo of financeiros) if (local[campo] !== undefined && hash(local[campo]) !== hash(base[campo])) saida[campo] = local[campo];
+  }
+  return saida;
 }
 
 class InventoryService {
@@ -73,7 +110,10 @@ class InventoryService {
         ? this.db.obterPecaPorId?.(linha.local_id)
         : this.db.obterItemEstoquePorId?.(linha.local_id);
       const dadosLocais = local ? (linha.tipo === 'peca' ? limparPeca(local) : limparAparelho(local)) : null;
-      const localSujo = !!(local && mapeado?.hashLocal && hash(dadosLocais) !== mapeado.hashLocal);
+      const localSujo = !!(local && (
+        (mapeado?.hashLocal && hash(dadosLocais) !== mapeado.hashLocal)
+        || (linha.tipo === 'aparelho' && remotoRegrideVenda(dadosLocais, linha.dados))
+      ));
 
       if (!localSujo) {
         if (linha.deleted_at) this.db.removerItemEstoqueSupabase?.(linha.tipo, linha.local_id);
@@ -85,8 +125,9 @@ class InventoryService {
         this.stateStore.registrarMapeamentoEstoque(linha.tipo, linha.local_id, linha, dadosAplicados ? hash(dadosAplicados) : '');
         recebidos += 1;
       } else {
-        // Mantém a edição local, mas atualiza a revision remota usada no push.
-        this.stateStore.registrarMapeamentoEstoque(linha.tipo, linha.local_id, linha, mapeado.hashLocal);
+        // Não avance a revisão-base de uma edição local. O push precisa
+        // comparar a base original com ambas as edições, nunca adotar a
+        // revisão mais recente para sobrescrever uma fotografia antiga.
       }
       if (linha.updated_at && linha.updated_at > maiorData) maiorData = linha.updated_at;
     }
@@ -106,7 +147,7 @@ class InventoryService {
     const linhasRemotas = [];
     for (let inicio = 0; ; inicio += TAMANHO_PAGINA) {
       const pagina = await cliente.from('estoque_itens')
-        .select('id,tipo,local_id,revision,deleted_at')
+        .select(CAMPOS)
         .order('id', { ascending: true })
         .range(inicio, inicio + TAMANHO_PAGINA - 1);
       if (pagina.error) throw pagina.error;
@@ -121,17 +162,26 @@ class InventoryService {
       const mapeado = this.stateStore.obter().mapeamentosEstoque[chave] || null;
       const remota = remotaPorChave.get(chave) || null;
       const hashLocal = hash(item.dados);
-      if (mapeado && remota && !remota.deleted_at && !mapeado.deletedAt && mapeado.hashLocal === hashLocal) continue;
+      if (mapeado && remota && !remota.deleted_at && !mapeado.deletedAt && mapeado.hashLocal === hashLocal && Number(mapeado.revision) === Number(remota.revision)) continue;
+      if (remota?.deleted_at && mapeado && !mapeado.deletedAt) throw new Error(`Estoque ${item.localId} excluído em outro aparelho. Edição local preservada para revisão.`);
+      let dados = item.dados;
+      if (remota && mapeado && Number(remota.revision) !== Number(mapeado.revision)) {
+        if (!mapeado.dadosBase) throw new Error(`Conflito no estoque ${item.localId}: versão antiga sem base de comparação. Edição local preservada.`);
+        dados = conciliarEstoque(mapeado.dadosBase, item.dados, remota.dados || {});
+      }
       const { data, error } = await cliente.rpc('salvar_item_estoque', {
         p_tipo: item.tipo,
         p_local_id: item.localId,
-        p_dados: item.dados,
+        p_dados: dados,
         p_revision: remota?.revision || null,
         p_dispositivo_id: estado.dispositivoId || null
       });
       if (error) throw error;
       const linha = Array.isArray(data) ? data[0] : data;
-      this.stateStore.registrarMapeamentoEstoque(item.tipo, item.localId, linha, hashLocal);
+      const confirmado = linha?.dados || dados;
+      const atual = this._locais().find(x => x.tipo === item.tipo && x.localId === item.localId);
+      if (atual && hash(atual.dados) === hashLocal) this.db.aplicarItemEstoqueSupabase?.(item.tipo, { ...confirmado, id: item.localId });
+      this.stateStore.registrarMapeamentoEstoque(item.tipo, item.localId, { ...linha, dados: confirmado }, hash(confirmado));
       enviados += 1;
     }
 
@@ -159,4 +209,4 @@ class InventoryService {
   }
 }
 
-module.exports = { InventoryService, limparAparelho, limparPeca };
+module.exports = { InventoryService, limparAparelho, limparPeca, remotoRegrideVenda, conciliarEstoque };

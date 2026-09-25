@@ -307,7 +307,7 @@ function gerarHtmlVenda(item, config) {
      inline (aplicado só na hora da injeção) ainda não estiver presente
      — por exemplo, num preview do documento sem assinatura nenhuma. */
   .assin-esp{height:56px;width:100%;}
-  .assin-linha{border-top:1.5px solid #222;width:90%;margin-bottom:5px;}
+  .assin-linha{box-sizing:border-box;height:0;flex:0 0 0;align-self:center;border:0;border-top:1.5px solid #222;width:90%;margin-bottom:5px;transform:none;}
   .assin-label{font-size:9px;color:#111;font-weight:800;text-transform:uppercase;letter-spacing:.05em;line-height:1.3;}
   .assin-nome{font-size:10px;color:#333;margin-top:2px;font-weight:600;}
   .assin-data{font-size:9px;color:#666;margin-top:3px;}

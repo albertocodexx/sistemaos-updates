@@ -7,6 +7,18 @@ import {
 const emailValido = (valor: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valor);
 const telefoneLimpo = (valor: unknown) => texto(valor).replace(/\D/g, '').slice(0, 15);
 const uuidValido = (valor: unknown) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(texto(valor));
+const ehPlanoBasico = (plano: any) => texto(plano?.nome).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === 'basico';
+
+function precoEmpresa(plano: any, betaFundador: boolean) {
+  return betaFundador && ehPlanoBasico(plano) ? 49.90 : Number(plano?.preco_referencia || 0);
+}
+
+function ofertaPeriodo(precoMensal: number, quantidadeMeses: number) {
+  const percentual = quantidadeMeses >= 12 ? 15 : quantidadeMeses >= 6 ? 10 : quantidadeMeses >= 3 ? 5 : 0;
+  const semDesconto = Number((precoMensal * quantidadeMeses).toFixed(2));
+  const total = Number((semDesconto * (1 - percentual / 100)).toFixed(2));
+  return { precoMensal, quantidadeMeses, percentualDesconto: percentual, valorSemDesconto: semDesconto, valorTotal: total };
+}
 
 async function salvarSegredo(admin: any, integracao: any, segredoAberto: Record<string, unknown>) {
   const segredo = await cifrarJson(segredoAberto);
@@ -74,7 +86,7 @@ Deno.serve(async (req) => {
       let alertas: any[] = [];
       if (empresaId && !contexto.administrador_global) {
         const [empresaConsulta, cobrancasConsulta, alertasConsulta] = await Promise.all([
-          admin.from('empresas').select('id,nome_fantasia,plano_id,licenca_status,data_vencimento,periodo_graca_ate,contato_cobranca_nome,contato_cobranca_email,contato_cobranca_whatsapp,avisos_cobranca_ativos,plano:planos(id,nome)').eq('id', empresaId).single(),
+          admin.from('empresas').select('id,nome_fantasia,plano_id,licenca_status,data_vencimento,periodo_graca_ate,contato_cobranca_nome,contato_cobranca_email,contato_cobranca_whatsapp,avisos_cobranca_ativos,beta_fundador,plano:planos(id,nome)').eq('id', empresaId).single(),
           admin.from('cobrancas_assinatura').select('id,plano_id,tipo_alteracao,valor,status,checkout_url,expira_em,pago_em,aplicado_em,created_at,plano:planos(nome)').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(10),
           admin.from('alertas_assinatura').select('id,tipo,titulo,mensagem,lido_em,created_at').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(20)
         ]);
@@ -86,7 +98,19 @@ Deno.serve(async (req) => {
         if (!cobrancasConsulta.error) cobrancas = cobrancasConsulta.data || [];
         if (!alertasConsulta.error) alertas = alertasConsulta.data || [];
       }
-      return resposta(200, { planos: planos || [], empresa, cobrancas, alertas });
+      const betaFundador = empresa?.beta_fundador === true;
+      const planosPersonalizados = (planos || []).map((plano: any) => {
+        const precoTabela = Number(plano.preco_referencia || 0);
+        const preco = precoEmpresa(plano, betaFundador);
+        return {
+          ...plano,
+          preco_referencia: preco,
+          preco_tabela: precoTabela,
+          oferta_beta_fundador: betaFundador && ehPlanoBasico(plano),
+          descontos_periodo: { 3: 5, 6: 10, 12: 15 }
+        };
+      });
+      return resposta(200, { planos: planosPersonalizados, empresa, cobrancas, alertas });
     }
 
     const eAdminGeral = await administradorGeral(admin, autenticacao.user.id);
@@ -123,14 +147,14 @@ Deno.serve(async (req) => {
         .eq('id', planoId).eq('ativo', true).is('excluido_em', null).maybeSingle();
       if (planoErro) throw planoErro;
       if (!plano || Number(plano.preco_referencia) <= 0) return resposta(400, { erro: 'Plano pago invalido ou indisponivel.' });
-      const quantidadeMeses = Math.max(1, Math.min(12, Number.isInteger(Number(dados.quantidadeMeses)) ? Number(dados.quantidadeMeses) : 1));
-      const valorTotal = Number((Number(plano.preco_referencia) * quantidadeMeses).toFixed(2));
-      const duracaoTotal = Number(plano.duracao_dias) * quantidadeMeses;
-
       const { data: empresa, error: empresaErro } = await admin.from('empresas')
-        .select('id,nome_fantasia,plano_id,licenca_status,contato_cobranca_nome,contato_cobranca_email')
+        .select('id,nome_fantasia,plano_id,licenca_status,contato_cobranca_nome,contato_cobranca_email,beta_fundador')
         .eq('id', contexto.empresa_id).single();
       if (empresaErro) throw empresaErro;
+      const quantidadeMeses = Math.max(1, Math.min(12, Number.isInteger(Number(dados.quantidadeMeses)) ? Number(dados.quantidadeMeses) : 1));
+      const oferta = ofertaPeriodo(precoEmpresa(plano, empresa.beta_fundador === true), quantidadeMeses);
+      const valorTotal = oferta.valorTotal;
+      const duracaoTotal = Number(plano.duracao_dias) * quantidadeMeses;
       const { data: pendente, error: pendenteErro } = await admin.from('cobrancas_assinatura')
         .select('id,checkout_url,expira_em,status').eq('empresa_id', empresa.id).eq('plano_id', plano.id)
         .eq('duracao_dias', duracaoTotal).eq('valor', valorTotal)
@@ -138,12 +162,14 @@ Deno.serve(async (req) => {
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (pendenteErro) throw pendenteErro;
       if (pendente?.checkout_url) {
-        return resposta(200, { cobranca: pendente, link: pendente.checkout_url, reutilizada: true });
+        return resposta(200, { cobranca: pendente, link: pendente.checkout_url, reutilizada: true, oferta });
       }
 
       const { integracao, segredo } = await carregarIntegracaoPlataforma(admin, 'mercado_pago');
       const accessToken = texto(segredo?.access_token);
-      if (!integracao || !accessToken) return resposta(409, { erro: 'O Mercado Pago das assinaturas ainda nao foi configurado pelo suporte.' });
+      if (!integracao || !accessToken || integracao.metadados?.webhook_assinado !== true || integracao.metadados?.ambiente !== 'producao') {
+        return resposta(409, { erro: 'O Mercado Pago das assinaturas ainda nao esta pronto para cobrar. Cadastre a credencial de producao e a assinatura secreta do webhook no suporte.' });
+      }
 
       const cobrancaId = crypto.randomUUID();
       const referencia = `SAAS-${empresa.id}-${cobrancaId}`;
@@ -173,17 +199,17 @@ Deno.serve(async (req) => {
         items: [{
           id: plano.id,
           title: `Sistema OS - Plano ${plano.nome}`.slice(0, 250),
-          description: texto(plano.descricao).slice(0, 250),
-          quantity: quantidadeMeses,
+          description: `${quantidadeMeses} mes(es)${oferta.percentualDesconto ? ` com ${oferta.percentualDesconto}% de desconto` : ''}`.slice(0, 250),
+          quantity: 1,
           currency_id: 'BRL',
-          unit_price: Number(Number(plano.preco_referencia).toFixed(2))
+          unit_price: valorTotal
         }],
         external_reference: referencia,
         notification_url: notificationUrl,
         expires: true,
         expiration_date_to: expiraEm,
         statement_descriptor: 'SISTEMA OS',
-        metadata: { cobranca_id: cobrancaId, empresa_id: empresa.id, plano_id: plano.id, quantidade_meses: quantidadeMeses },
+        metadata: { cobranca_id: cobrancaId, empresa_id: empresa.id, plano_id: plano.id, quantidade_meses: quantidadeMeses, desconto_percentual: oferta.percentualDesconto, beta_fundador: empresa.beta_fundador === true },
         ...(emailValido(email) ? { payer: { email, name: texto(empresa.contato_cobranca_nome || empresa.nome_fantasia).slice(0, 120) } } : {})
       };
       if (/^https:\/\//i.test(returnUrl)) {
@@ -198,7 +224,8 @@ Deno.serve(async (req) => {
           'Content-Type': 'application/json',
           'X-Idempotency-Key': String(cobranca.idempotency_key)
         },
-        body: JSON.stringify(preferenciaBody)
+        body: JSON.stringify(preferenciaBody),
+        signal: AbortSignal.timeout(15000)
       });
       const preferencia = await mpResposta.json().catch(() => ({}));
       const link = texto(preferencia.init_point || preferencia.sandbox_init_point);
@@ -212,7 +239,7 @@ Deno.serve(async (req) => {
       }).eq('id', cobrancaId)
         .select('id,plano_id,tipo_alteracao,valor,status,checkout_url,expira_em,created_at').single();
       if (atualizarErro) throw atualizarErro;
-      return resposta(200, { cobranca: atualizada, link, reutilizada: false });
+      return resposta(200, { cobranca: atualizada, link, reutilizada: false, oferta });
     }
 
     if (acao === 'marcar_alerta_lido') {
@@ -320,20 +347,21 @@ Deno.serve(async (req) => {
     if (acao === 'conectar_mercado_pago') {
       const accessToken = texto(dados.accessToken);
       const webhookSecret = texto(dados.webhookSecret);
-      if (!/^(APP_USR-|TEST-)/.test(accessToken)) return resposta(400, { erro: 'Access Token do Mercado Pago invalido.' });
-      const teste = await fetch('https://api.mercadopago.com/users/me', { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!/^APP_USR-/.test(accessToken)) return resposta(400, { erro: 'Informe um Access Token de producao do Mercado Pago (APP_USR-). Credenciais TEST nao podem ativar assinaturas reais.' });
+      if (webhookSecret.length < 16) return resposta(400, { erro: 'Informe a assinatura secreta do webhook do Mercado Pago para confirmar pagamentos com seguranca.' });
+      const teste = await fetch('https://api.mercadopago.com/users/me', { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(15000) });
       const conta = await teste.json().catch(() => ({}));
       if (!teste.ok) return resposta(400, { erro: 'O Mercado Pago recusou essa credencial.' });
       const mascara = texto(conta.nickname || conta.email || conta.id || 'Conta Mercado Pago').slice(0, 100);
       const { data: integracao, error } = await admin.from('integracoes_plataforma').upsert({
         tipo: 'mercado_pago', status: 'conectada', provedor: 'mercado_pago', conta_mascarada: mascara,
         conectado_em: new Date().toISOString(), ultima_verificacao_em: new Date().toISOString(), ultimo_erro: null,
-        metadados: { webhook_assinado: Boolean(webhookSecret) }, criado_por: autenticacao.user.id,
+        metadados: { webhook_assinado: true, ambiente: 'producao', checkout_automatico: true, ativacao_automatica: true }, criado_por: autenticacao.user.id,
         atualizado_por: autenticacao.user.id, updated_at: new Date().toISOString()
       }, { onConflict: 'tipo' }).select('id,tipo,status,provedor,conta_mascarada,metadados').single();
       if (error) throw error;
-      await salvarSegredo(admin, integracao, { access_token: accessToken, webhook_secret: webhookSecret || null });
-      return resposta(200, { integracao, mensagem: 'Mercado Pago das assinaturas conectado e validado.' });
+      await salvarSegredo(admin, integracao, { access_token: accessToken, webhook_secret: webhookSecret });
+      return resposta(200, { integracao, mensagem: 'Mercado Pago conectado. Checkout, confirmação e ativação automática estão prontos.' });
     }
 
     if (acao === 'conectar_whatsapp') {

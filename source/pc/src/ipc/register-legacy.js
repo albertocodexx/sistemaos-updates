@@ -1332,8 +1332,18 @@ function registerLegacyHandlers(deps) {
     catch (err) { return { sucesso: false, erro: err.message }; }
   });
   
-  ipcMain.handle('auth:gerarAutomatico', (_e, perfil) => {
-    try { return { sucesso: true, usuario: auth.gerarUsuarioAutomatico(perfil) }; }
+  ipcMain.handle('auth:gerarAutomatico', (_e, dados) => {
+    try { return { sucesso: true, usuario: auth.gerarUsuarioAutomatico(dados) }; }
+    catch (err) { return { sucesso: false, erro: err.message }; }
+  });
+
+  ipcMain.handle('auth:gerarSenhaTemporaria', (_e, id) => {
+    try { return { sucesso: true, usuario: auth.gerarSenhaTemporaria(id) }; }
+    catch (err) { return { sucesso: false, erro: err.message }; }
+  });
+
+  ipcMain.handle('auth:atualizarMinhaSenha', (_e, id, novaSenha) => {
+    try { return { sucesso: true, usuario: auth.editarUsuario(id, { novaSenha }) }; }
     catch (err) { return { sucesso: false, erro: err.message }; }
   });
   

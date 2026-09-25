@@ -35,6 +35,8 @@ async function reconciliarMercadoPago(admin: any) {
     .order('updated_at', { ascending: true }).limit(25);
   if (error) throw error;
   let aplicadas = 0;
+  let falhas = 0;
+  let ultimoErro = '';
   for (const cobranca of cobrancas || []) {
     // Faz a fila rodar: 25 cobranças antigas sem pagamento não podem impedir
     // indefinidamente a consulta das próximas. Aprovada sem aplicado_em é retry.
@@ -44,7 +46,11 @@ async function reconciliarMercadoPago(admin: any) {
       `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(cobranca.referencia_externa)}&status=approved&sort=date_created&criteria=desc&limit=100`,
       { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) }
     );
-    if (!consulta.ok) continue;
+    if (!consulta.ok) {
+      falhas += 1;
+      ultimoErro = `Consulta recusada pelo Mercado Pago (HTTP ${consulta.status}).`;
+      continue;
+    }
     const retorno = await consulta.json().catch(() => ({}));
     const pagamento = (Array.isArray(retorno.results) ? retorno.results : [])
       .find((item: any) => texto(item.external_reference) === cobranca.referencia_externa
@@ -84,10 +90,22 @@ async function reconciliarMercadoPago(admin: any) {
     }
     } catch (_) {
       // Uma consulta indisponível não interrompe as outras cobranças/mensagens.
+      falhas += 1;
+      ultimoErro = 'Consulta do Mercado Pago temporariamente indisponível.';
       console.error('[assinaturas-worker] Consulta de pagamento adiada.');
     }
   }
-  return { consultadas: (cobrancas || []).length, aplicadas, indisponivel: false };
+  // Mantém a integração conectada para permitir a recuperação automática, mas
+  // deixa a falha visível no suporte em vez de registrar o cron como saudável.
+  if (integracao?.id) {
+    const { error: estadoErro } = await admin.from('integracoes_plataforma').update({
+      ultima_verificacao_em: new Date().toISOString(),
+      ultimo_erro: ultimoErro || null,
+      updated_at: new Date().toISOString()
+    }).eq('id', integracao.id);
+    if (estadoErro) console.error('[assinaturas-worker] estado Mercado Pago:', estadoErro.message);
+  }
+  return { consultadas: (cobrancas || []).length, aplicadas, falhas, indisponivel: false };
 }
 
 const valoresTemplate = (parametros: Record<string, unknown>, alias: string) => {

@@ -34,6 +34,9 @@ assert.ok(recebidos.includes("if (tipo !== 'entrega' && tipo !== 'desbloqueio') 
 assert.ok(recebidos.includes("if (tipo !== 'entrega' && tipo !== 'desbloqueio') {"), 'Resposta manual de Entrega e desbloqueio não pode enviar assinatura da assistência');
 assert.ok(css.includes('--cor-fundo: #000000'), 'fundo padrão do APK deve ser preto');
 assert.ok(injetor.includes('data-assinatura-estado="1"'), 'PDF móvel deve marcar visualmente documento sem assinatura');
+assert.ok(injetor.includes('var ESPACO_ALTURA_MIN = 58'), 'espaço da assinatura deve reservar folga antes da linha');
+assert.ok(injetor.includes('var IMG_ALTURA_MAX = 50'), 'assinatura não pode encostar ou atravessar a linha');
+assert.ok(injetor.includes('var DISTANCIA_DA_LINHA = 4'), 'assinatura deve manter distância fixa da linha horizontal');
 assert.ok(app.includes("'AGUARDANDO ASSINATURA'") && app.includes("'NÃO ASSINADO'"), 'preview móvel deve distinguir pendente e não assinado');
 
 console.log('OK: assinatura posterior cobre OS, Compra, Venda e Entrega; Entrega usa uma assinatura e o fundo é preto.');

@@ -31,6 +31,10 @@ assert.match(modulo, /autoUpdater\.checkForUpdates/);
 assert.match(publicador, /SistemaOS-Android-\$\{VERSAO_ANDROID\}\.apk/,
   'a release deve publicar um APK versionado reconhecido pelo atualizador Android');
 assert.match(modulo, /atualizacaoObrigatoriaDetectada/);
+assert.match(modulo, /atualizacao-reinicio\.json/,
+  'primeiro boot após instalar deve evitar uma segunda espera de rede');
+assert.match(modulo, /setTimeout\(\(\) => instalar\(\), 150\)/,
+  'instalação deve começar sem atraso visual desnecessário');
 assert.match(modulo, /setTimeout\(\(\) => verificar\(\)\.catch\(\(\) => \{\}\), 15000\)/,
   'download obrigatório deve tentar novamente após queda temporária');
 assert.doesNotMatch(modulo, /resultado\?\.updateInfo\?\.version\s*\?\s*'verificando'/);

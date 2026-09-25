@@ -7,6 +7,7 @@
   let atual = null;
   let timer = null;
   let novoContexto = null;
+  let geracao = 0;
 
   const $ = (id) => document.getElementById(id);
   const texto = (valor) => String(valor == null ? '' : valor);
@@ -23,8 +24,80 @@
     sugestao: 'Sugestão de melhoria',
     outro: 'Outro motivo'
   });
+  const fluxosMotivo = Object.freeze({
+    trial_assinatura: {
+      pergunta: 'O que você precisa?',
+      opcoes: [['contratar', 'Contratar após o período de teste'], ['renovar', 'Renovar assinatura'], ['trocar_plano', 'Trocar de plano'], ['acesso_bloqueado', 'Acesso bloqueado ou vencido'], ['outro', 'Outra questão sobre assinatura']],
+      mensagem: 'Conte o que você precisa sobre o teste ou a assinatura *',
+      placeholder: 'Ex.: meu período de teste terminou e quero contratar o plano…'
+    },
+    cobranca_pagamento: {
+      pergunta: 'O que aconteceu com o pagamento?',
+      opcoes: [['nao_reconhecido', 'Pagamento ainda não reconhecido'], ['checkout', 'Não consigo abrir ou concluir o pagamento'], ['valor_incorreto', 'Valor ou vencimento incorreto'], ['duplicado', 'Cobrança ou pagamento duplicado'], ['reembolso', 'Reembolso ou cancelamento'], ['outro', 'Outro problema de pagamento']],
+      referencia: 'Pagamento, cobrança, plano ou protocolo (opcional)',
+      mensagem: 'Explique o problema com a cobrança *',
+      placeholder: 'Informe o valor, a data e o que apareceu na tela…'
+    },
+    acesso_login: {
+      pergunta: 'Qual é o problema de acesso?',
+      opcoes: [['nao_entra', 'Não consigo entrar'], ['senha', 'Senha ou troca de senha'], ['bloqueado', 'Usuário bloqueado ou pausado'], ['trocar_usuario', 'Troca de usuário não funciona'], ['conta', 'Conta ou empresa não aparece'], ['outro', 'Outro problema de acesso']],
+      plataforma: true,
+      mensagem: 'Explique o que acontece ao tentar entrar *',
+      placeholder: 'Ex.: após tocar em Entrar, volto para a mesma tela…'
+    },
+    sincronizacao_backup: {
+      pergunta: 'O que não está sincronizando?',
+      opcoes: [['os', 'Ordens de serviço'], ['assinaturas', 'Assinaturas ou documentos'], ['estoque', 'Estoque ou vendas'], ['clientes', 'Clientes'], ['cobrancas', 'Cobranças ou pagamentos'], ['configuracoes', 'Configurações da empresa'], ['backup', 'Backup ou restauração'], ['outro', 'Outro dado']],
+      plataforma: true,
+      complemento: { pergunta: 'Onde o dado está faltando?', opcoes: [['no_pc', 'Foi criado no celular e não chegou ao PC'], ['no_celular', 'Foi criado no PC e não chegou ao celular'], ['ambos', 'Está diferente nos dois'], ['backup', 'Problema no backup ou restauração']] },
+      referencia: 'Número da OS, venda ou registro (opcional)',
+      mensagem: 'Diga o que está diferente *',
+      placeholder: 'Informe o registro, onde foi criado e o que aparece em cada aparelho…'
+    },
+    documento_assinatura: {
+      pergunta: 'Qual é o problema?',
+      opcoes: [['pdf', 'PDF vazio, preto ou incorreto'], ['assinatura_nao_chega', 'Assinatura não chega ao outro aparelho'], ['assinatura_visual', 'Assinatura pequena, torta ou fora do lugar'], ['compartilhar', 'Compartilhar não abre ou não envia'], ['documento_reaparece', 'Documento excluído reaparece'], ['outro', 'Outro problema com documento']],
+      plataforma: true,
+      complemento: { pergunta: 'Qual documento?', opcoes: [['os', 'Ordem de serviço'], ['entrega', 'Entrega'], ['garantia', 'Garantia'], ['desbloqueio', 'Desbloqueio'], ['compra', 'Compra'], ['venda', 'Venda'], ['outro', 'Outro documento']] },
+      referencia: 'Número do documento (opcional)',
+      mensagem: 'Explique o problema com o documento *',
+      placeholder: 'Conte o que fez e como o PDF ou a assinatura ficou…'
+    },
+    erro_sistema: {
+      pergunta: 'Em qual área ocorreu o erro?',
+      opcoes: [['os', 'Ordens de serviço'], ['clientes', 'Clientes'], ['estoque', 'Estoque ou vendas'], ['financeiro', 'Financeiro ou cobranças'], ['usuarios', 'Usuários e permissões'], ['ia', 'Assistente de IA'], ['relatorios', 'Relatórios'], ['configuracoes', 'Configurações'], ['atualizacao', 'Atualização do aplicativo'], ['outro', 'Outra área']],
+      plataforma: true,
+      complemento: { pergunta: 'Com que frequência acontece?', opcoes: [['sempre', 'Acontece sempre'], ['as_vezes', 'Acontece às vezes'], ['uma_vez', 'Aconteceu uma vez'], ['apos_atualizar', 'Começou depois de uma atualização']] },
+      referencia: 'OS, venda ou registro relacionado (opcional)',
+      mensagem: 'Descreva o erro *',
+      placeholder: 'Informe o que estava fazendo, o que esperava e a mensagem exibida…'
+    },
+    configuracao_integracao: {
+      pergunta: 'Qual configuração ou integração?',
+      opcoes: [['whatsapp', 'WhatsApp'], ['mercado_pago', 'Mercado Pago'], ['ia', 'Assistente de IA'], ['nota_fiscal', 'Nota fiscal'], ['backup', 'Backup'], ['atualizacao', 'Atualizações'], ['empresa', 'Dados da empresa'], ['outro', 'Outra configuração']],
+      plataforma: true,
+      mensagem: 'Diga o que você precisa configurar *',
+      placeholder: 'Explique qual resultado deseja e onde encontrou dificuldade…'
+    },
+    duvida_funcionalidade: {
+      pergunta: 'Sobre qual área é a dúvida?',
+      opcoes: [['os', 'Ordens de serviço'], ['clientes', 'Clientes'], ['documentos', 'Documentos e assinaturas'], ['estoque', 'Estoque, compras ou vendas'], ['financeiro', 'Financeiro e cobranças'], ['usuarios', 'Usuários e permissões'], ['ia', 'Assistente de IA'], ['relatorios', 'Relatórios'], ['outro', 'Outra área']],
+      mensagem: 'Qual é a sua dúvida? *',
+      placeholder: 'Conte o que deseja fazer no sistema…'
+    },
+    sugestao: {
+      pergunta: 'Qual área pode melhorar?',
+      opcoes: [['os', 'Ordens de serviço'], ['clientes', 'Clientes'], ['documentos', 'Documentos e assinaturas'], ['estoque', 'Estoque, compras ou vendas'], ['financeiro', 'Financeiro e cobranças'], ['usuarios', 'Usuários e permissões'], ['ia', 'Assistente de IA'], ['relatorios', 'Relatórios'], ['outro', 'Outra área']],
+      mensagem: 'Conte sua sugestão *',
+      placeholder: 'Explique a melhoria e como ela ajudaria no trabalho…'
+    },
+    outro: {
+      mensagem: 'Explique como podemos ajudar *',
+      placeholder: 'Descreva sua solicitação…'
+    }
+  });
   const statusNome = (valor) => ({
-    aberto: 'Aberto', em_atendimento: 'Em atendimento', resolvido: 'Resolvido', fechado: 'Fechado'
+    aberto: 'Aguardando suporte', em_atendimento: 'Atendido', resolvido: 'Finalizado', fechado: 'Finalizado', cancelado: 'Cancelado'
   })[texto(valor)] || 'Aberto';
 
   function notificar(mensagem, tipo) {
@@ -65,28 +138,28 @@
           <div><h2>Suporte Sistema OS</h2><p class="campo-desc">Abra um chamado ou continue uma conversa anterior.</p></div>
           <button type="button" class="botao-fechar" id="btnFecharCentralChamados" aria-label="Fechar">×</button>
         </div>
-        <form id="formNovoChamadoCentral" class="suporte-novo-chamado escondido">
-          <div class="suporte-novo-chamado-titulo"><strong>Como podemos ajudar?</strong><span>Seu chamado ficará salvo na nuvem e vinculado ao usuário informado.</span></div>
+        <form id="formNovoChamadoCentral" class="suporte-novo-chamado escondido" novalidate>
+          <div class="suporte-novo-chamado-titulo"><strong>Como podemos ajudar?</strong><span>Escolha o motivo. Mostraremos somente o que for necessário.</span></div>
           <div class="suporte-novo-chamado-grade">
-            <div class="suporte-form-secao campo-largo"><strong>Identificação</strong><span>Confirme quem está solicitando o atendimento.</span></div>
-            <div class="campo" id="campoEmpresaNovoChamado"><label for="empresaNovoChamado">Código da empresa *</label><input id="empresaNovoChamado" maxlength="40" autocomplete="organization" /></div>
-            <div class="campo" id="campoUsuarioNovoChamado"><label for="usuarioNovoChamado">Usuário do Sistema OS *</label><input id="usuarioNovoChamado" maxlength="30" autocomplete="username" required /></div>
-            <div class="campo" id="campoNomeNovoChamado"><label for="nomeNovoChamado">Nome completo *</label><input id="nomeNovoChamado" maxlength="120" autocomplete="name" required /></div>
-            <div class="campo"><label for="cargoEmpresaNovoChamado">Cargo na empresa *</label><select id="cargoEmpresaNovoChamado" required><option value="">Selecione</option><option value="proprietario">Proprietário(a)</option><option value="administrador">Administrador(a)</option><option value="gerente">Gerente</option><option value="tecnico">Técnico(a)</option><option value="atendente">Atendente</option><option value="financeiro">Financeiro</option><option value="outro">Outro</option></select></div>
-            <div class="campo campo-largo" id="campoCargoOutroNovoChamado" hidden><label for="cargoOutroNovoChamado">Informe seu cargo *</label><input id="cargoOutroNovoChamado" maxlength="80" /></div>
-            <div class="suporte-form-secao campo-largo"><strong>Contato</strong><span>Informe como o suporte pode retornar.</span></div>
-            <div class="campo"><label for="telefoneNovoChamado">Telefone ou WhatsApp *</label><input id="telefoneNovoChamado" type="tel" inputmode="tel" maxlength="20" autocomplete="tel" placeholder="(00) 00000-0000" required /></div>
-            <div class="campo"><label for="emailNovoChamado">E-mail <span class="campo-opcional">opcional</span></label><input id="emailNovoChamado" type="email" maxlength="160" autocomplete="email" /></div>
-            <div class="campo"><label for="preferenciaContatoNovoChamado">Prefiro receber retorno por *</label><select id="preferenciaContatoNovoChamado" required><option value="whatsapp">WhatsApp</option><option value="ligacao">Ligação</option><option value="email">E-mail</option></select></div>
-            <div class="campo"><label for="horarioContatoNovoChamado">Melhor horário <span class="campo-opcional">opcional</span></label><input id="horarioContatoNovoChamado" maxlength="80" placeholder="Ex.: 9h às 18h" /></div>
-            <div class="suporte-form-secao campo-largo"><strong>Solicitação</strong><span>Escolha o motivo para exibirmos somente os campos necessários.</span></div>
-            <div class="campo campo-largo"><label for="motivoNovoChamado">Motivo do chamado *</label><select id="motivoNovoChamado" required><option value="">Selecione o motivo</option>${Object.entries(motivos).map(([valor, nome]) => `<option value="${valor}">${nome}</option>`).join('')}</select></div>
+            <div class="campo campo-largo suporte-motivo-principal"><label for="motivoNovoChamado">Motivo do chamado *</label><select id="motivoNovoChamado"><option value="">Selecione o motivo</option>${Object.entries(motivos).map(([valor, nome]) => `<option value="${valor}">${nome}</option>`).join('')}</select></div>
             <div class="campo campo-largo" id="campoMotivoOutroNovoChamado" hidden><label for="motivoOutroNovoChamado">Qual é o motivo? *</label><input id="motivoOutroNovoChamado" maxlength="160" /></div>
-            <div class="campo" id="campoPlataformaNovoChamado" hidden><label for="plataformaNovoChamado">Onde acontece? *</label><select id="plataformaNovoChamado"><option value="pc">Computador</option><option value="celular">Celular</option><option value="ambos">Computador e celular</option></select></div>
-            <div class="campo" id="campoReferenciaNovoChamado" hidden><label for="referenciaNovoChamado" id="labelReferenciaNovoChamado">OS ou documento relacionado</label><input id="referenciaNovoChamado" maxlength="80" placeholder="Ex.: OS-0020" /></div>
-            <div class="campo"><label for="prioridadeNovoChamado">Prioridade</label><select id="prioridadeNovoChamado"><option value="normal">Normal</option><option value="baixa">Baixa</option><option value="alta">Alta</option><option value="critica">Crítica</option></select></div>
-            <div class="campo"><label for="assuntoNovoChamado">Resumo do pedido *</label><input id="assuntoNovoChamado" maxlength="160" placeholder="Descreva em uma frase" required /></div>
-            <div class="campo campo-largo"><label for="mensagemNovoChamado">Explique o que aconteceu *</label><textarea id="mensagemNovoChamado" rows="5" maxlength="8000" placeholder="Conte o que tentou fazer e o que apareceu na tela…" required></textarea></div>
+            <div id="detalhesNovoChamado" class="suporte-detalhes-motivo campo-largo" hidden>
+              <div class="campo campo-largo" id="campoDetalheNovoChamado" hidden><label for="detalheNovoChamado" id="labelDetalheNovoChamado">O que aconteceu?</label><select id="detalheNovoChamado"></select></div>
+              <div class="campo" id="campoPlataformaNovoChamado" hidden><label for="plataformaNovoChamado">Onde acontece? *</label><select id="plataformaNovoChamado"><option value="pc">Computador</option><option value="celular">Celular</option><option value="ambos">Computador e celular</option></select></div>
+              <div class="campo" id="campoComplementoNovoChamado" hidden><label for="complementoNovoChamado" id="labelComplementoNovoChamado">Detalhe</label><select id="complementoNovoChamado"></select></div>
+              <div class="campo" id="campoReferenciaNovoChamado" hidden><label for="referenciaNovoChamado" id="labelReferenciaNovoChamado">OS ou documento relacionado</label><input id="referenciaNovoChamado" maxlength="80" placeholder="Ex.: OS-0020" /></div>
+              <div class="campo campo-largo"><label for="mensagemNovoChamado" id="labelMensagemNovoChamado">Explique o que aconteceu *</label><textarea id="mensagemNovoChamado" rows="5" maxlength="8000" placeholder="Conte o que tentou fazer e o que apareceu na tela…"></textarea></div>
+              <div class="suporte-identidade-automatica campo-largo"><strong>Empresa e usuário identificados automaticamente</strong><span>O chamado será vinculado com segurança ao acesso atual.</span></div>
+              <div class="suporte-form-secao campo-largo"><strong>Contato para retorno</strong><span>Informe apenas como o suporte pode falar com você.</span></div>
+              <div class="campo"><label for="telefoneNovoChamado">Telefone ou WhatsApp *</label><input id="telefoneNovoChamado" type="tel" inputmode="tel" maxlength="20" autocomplete="tel" placeholder="(00) 00000-0000" /></div>
+              <div class="campo"><label for="emailNovoChamado">E-mail <span class="campo-opcional">opcional</span></label><input id="emailNovoChamado" type="email" maxlength="160" autocomplete="email" /></div>
+            </div>
+            <input type="hidden" id="cargoEmpresaNovoChamado" value="" />
+            <input type="hidden" id="cargoOutroNovoChamado" />
+            <input type="hidden" id="preferenciaContatoNovoChamado" value="whatsapp" />
+            <input type="hidden" id="horarioContatoNovoChamado" />
+            <input type="hidden" id="prioridadeNovoChamado" value="normal" />
+            <input type="hidden" id="assuntoNovoChamado" />
           </div>
           <p id="statusNovoChamadoCentral" class="campo-desc" role="status"></p>
           <div class="linha-acoes suporte-novo-chamado-acoes"><button type="button" class="botao botao-fantasma" id="btnCancelarNovoChamado">Cancelar</button><button type="submit" class="botao botao-primario" id="btnEnviarNovoChamado">Enviar chamado</button></div>
@@ -108,13 +181,21 @@
         </div>
       </div>`;
     document.body.appendChild(modal);
+    root.SistemaOSAnexosChamado.montar($('formNovoChamadoCentral'), 'printsNovoChamado');
+    root.SistemaOSAnexosChamado.montar($('formMensagemChamado'), 'printsRespostaChamado');
+    const navegacao = document.createElement('div'); navegacao.className='linha-acoes';
+    const historico=document.createElement('button');historico.type='button';historico.className='botao botao-secundario';historico.textContent='Histórico de chamados';historico.onclick=()=>abrir().catch(e=>notificar(e.message,'erro'));
+    const novo=document.createElement('button');novo.type='button';novo.className='botao botao-primario';novo.textContent='Novo chamado';novo.onclick=()=>mostrarNovoChamado(novoContexto || {origem:'config_pc'});
+    navegacao.append(historico,novo);modal.querySelector('.modal-cabecalho').after(navegacao);
+    const visitante=document.createElement('div');visitante.id='visitanteChamado';visitante.hidden=true;
+    visitante.innerHTML='<label><input type="checkbox" id="semContaChamado"> Ainda não tenho conta</label><label>Seu nome<input id="nomeVisitanteChamado" maxlength="120"></label><p>Sem conta, acompanhe pelo histórico neste aparelho. Somente quem tem o acesso de acompanhamento e o suporte pode ler este chamado.</p>';
+    $('formNovoChamadoCentral').prepend(visitante);
     $('btnFecharCentralChamados').addEventListener('click', fechar);
-    $('btnCancelarNovoChamado').addEventListener('click', ocultarNovoChamado);
+    $('btnCancelarNovoChamado').addEventListener('click', () => abrir().catch(e => notificar(e.message, 'erro')));
     modal.addEventListener('click', (evento) => { if (evento.target === modal) fechar(); });
     $('formMensagemChamado').addEventListener('submit', enviarMensagem);
     $('formNovoChamadoCentral').addEventListener('submit', enviarNovoChamado);
     $('motivoNovoChamado').addEventListener('change', atualizarCamposCondicionais);
-    $('cargoEmpresaNovoChamado').addEventListener('change', atualizarCamposCondicionais);
     $('textoMensagemChamado').addEventListener('keydown', (evento) => {
       if (evento.key === 'Enter' && !evento.shiftKey) {
         evento.preventDefault();
@@ -125,65 +206,89 @@
 
   function atualizarCamposCondicionais() {
     const motivo = $('motivoNovoChamado')?.value || '';
-    const cargo = $('cargoEmpresaNovoChamado')?.value || '';
-    const tecnico = ['acesso_login', 'sincronizacao_backup', 'documento_assinatura', 'erro_sistema', 'configuracao_integracao'].includes(motivo);
-    const referencia = ['cobranca_pagamento', 'sincronizacao_backup', 'documento_assinatura', 'erro_sistema'].includes(motivo);
+    const fluxo = fluxosMotivo[motivo] || null;
+    $('detalhesNovoChamado').hidden = !motivo;
     $('campoMotivoOutroNovoChamado').hidden = motivo !== 'outro';
-    $('motivoOutroNovoChamado').required = motivo === 'outro';
-    $('campoCargoOutroNovoChamado').hidden = cargo !== 'outro';
-    $('cargoOutroNovoChamado').required = cargo === 'outro';
-    $('campoPlataformaNovoChamado').hidden = !tecnico;
-    $('plataformaNovoChamado').required = tecnico;
-    $('campoReferenciaNovoChamado').hidden = !referencia;
-    if (motivo === 'cobranca_pagamento') $('labelReferenciaNovoChamado').textContent = 'Cobrança, plano ou protocolo relacionado';
-    else $('labelReferenciaNovoChamado').textContent = 'OS ou documento relacionado';
-    if ($('assuntoNovoChamado').dataset.automatico === 'true') {
-      $('assuntoNovoChamado').value = motivo ? motivos[motivo] : '';
+    if (motivo !== 'outro') $('motivoOutroNovoChamado').value = '';
+    if (!fluxo?.opcoes) $('detalheNovoChamado').replaceChildren();
+    if (!fluxo?.complemento) $('complementoNovoChamado').replaceChildren();
+    if (!fluxo?.referencia) $('referenciaNovoChamado').value = '';
+    const preencherSelect = (id, pergunta, opcoes) => {
+      const select = $(id);
+      select.replaceChildren();
+      const inicial = document.createElement('option');
+      inicial.value = '';
+      inicial.textContent = 'Selecione';
+      select.appendChild(inicial);
+      (opcoes || []).forEach(([valor, rotulo]) => {
+        const opcao = document.createElement('option');
+        opcao.value = valor;
+        opcao.textContent = rotulo;
+        select.appendChild(opcao);
+      });
+      if (pergunta) select.setAttribute('aria-label', pergunta);
+    };
+    $('campoDetalheNovoChamado').hidden = !fluxo?.opcoes?.length;
+    if (fluxo?.opcoes?.length) {
+      $('labelDetalheNovoChamado').textContent = fluxo.pergunta + ' *';
+      preencherSelect('detalheNovoChamado', fluxo.pergunta, fluxo.opcoes);
     }
+    $('campoPlataformaNovoChamado').hidden = !fluxo?.plataforma;
+    $('campoComplementoNovoChamado').hidden = !fluxo?.complemento;
+    if (fluxo?.complemento) {
+      $('labelComplementoNovoChamado').textContent = fluxo.complemento.pergunta + ' *';
+      preencherSelect('complementoNovoChamado', fluxo.complemento.pergunta, fluxo.complemento.opcoes);
+    }
+    $('campoReferenciaNovoChamado').hidden = !fluxo?.referencia;
+    if (fluxo?.referencia) $('labelReferenciaNovoChamado').textContent = fluxo.referencia;
+    $('labelMensagemNovoChamado').textContent = fluxo?.mensagem || 'Explique o que aconteceu *';
+    $('mensagemNovoChamado').placeholder = fluxo?.placeholder || 'Conte o que tentou fazer e o que apareceu na tela…';
+    $('assuntoNovoChamado').value = motivo ? motivos[motivo] : '';
   }
 
   function mostrarNovoChamado(contexto) {
+    geracao++; atual = null;
     criarEstrutura();
     novoContexto = Object.assign({}, contexto || {});
-    const publico = String(novoContexto.origem || '').startsWith('login_');
-    $('campoEmpresaNovoChamado').hidden = !publico;
-    $('empresaNovoChamado').value = novoContexto.empresa || '';
-    $('nomeNovoChamado').value = novoContexto.nome || novoContexto.usuario || '';
-    $('nomeNovoChamado').readOnly = !publico;
-    $('usuarioNovoChamado').value = novoContexto.usuario || '';
-    $('usuarioNovoChamado').readOnly = !publico;
+    $('visitanteChamado').hidden=!String(novoContexto.origem||'').startsWith('login_');
+    $('semContaChamado').checked=false;$('nomeVisitanteChamado').value=novoContexto.nome||novoContexto.usuario||'';
+    $('printsNovoChamado').value='';
     $('telefoneNovoChamado').value = novoContexto.telefone || novoContexto.contato || '';
     $('emailNovoChamado').value = novoContexto.email || '';
     $('cargoEmpresaNovoChamado').value = novoContexto.cargoEmpresa || '';
-    $('cargoOutroNovoChamado').value = '';
-    $('preferenciaContatoNovoChamado').value = 'whatsapp';
-    $('horarioContatoNovoChamado').value = '';
     $('motivoNovoChamado').value = novoContexto.motivo || '';
     $('motivoOutroNovoChamado').value = '';
     $('plataformaNovoChamado').value = novoContexto.plataforma || (novoContexto.origem === 'config_celular' ? 'celular' : 'pc');
+    $('detalheNovoChamado').replaceChildren();
+    $('complementoNovoChamado').replaceChildren();
     $('referenciaNovoChamado').value = '';
     $('assuntoNovoChamado').value = novoContexto.assunto || '';
-    $('assuntoNovoChamado').dataset.automatico = novoContexto.assunto ? 'false' : 'true';
     $('mensagemNovoChamado').value = novoContexto.mensagem || '';
-    $('prioridadeNovoChamado').value = 'normal';
     atualizarCamposCondicionais();
     $('statusNovoChamadoCentral').textContent = '';
     $('formNovoChamadoCentral').classList.remove('escondido');
     $('layoutCentralChamados').classList.add('escondido');
-    setTimeout(() => (publico ? $('empresaNovoChamado') : $('assuntoNovoChamado'))?.focus(), 60);
+    setTimeout(() => $('motivoNovoChamado')?.focus(), 60);
   }
 
   function ocultarNovoChamado() {
+    geracao++;
     $('formNovoChamadoCentral')?.classList.add('escondido');
     $('layoutCentralChamados')?.classList.remove('escondido');
+    atual=null;
+    $('mensagensCentralChamados')?.replaceChildren();
+    if ($('formMensagemChamado')) $('formMensagemChamado').classList.add('escondido');
+    if ($('cabecalhoConversaChamado')) $('cabecalhoConversaChamado').textContent='Selecione um chamado para consultar o histórico.';
   }
 
   async function enviarNovoChamado(evento) {
     evento.preventDefault();
+    if ($('btnEnviarNovoChamado').disabled) return;
     const publico = String(novoContexto?.origem || '').startsWith('login_');
-    const empresa = $('empresaNovoChamado').value.trim().toLowerCase();
-    const usuario = $('usuarioNovoChamado').value.trim().toLowerCase();
-    const nome = $('nomeNovoChamado').value.trim();
+    const semConta = publico && $('semContaChamado').checked;
+    const empresa = texto(novoContexto?.empresa).trim().toLowerCase();
+    const usuario = texto(novoContexto?.usuario).trim().toLowerCase();
+    const nome = texto(semConta ? $('nomeVisitanteChamado').value : novoContexto?.nome || novoContexto?.usuario).trim();
     const telefone = somenteDigitos($('telefoneNovoChamado').value);
     const email = $('emailNovoChamado').value.trim().toLowerCase();
     const preferenciaContato = $('preferenciaContatoNovoChamado').value;
@@ -191,20 +296,19 @@
     const cargoOutro = $('cargoOutroNovoChamado').value.trim();
     const motivo = $('motivoNovoChamado').value;
     const motivoOutro = $('motivoOutroNovoChamado').value.trim();
-    const assunto = $('assuntoNovoChamado').value.trim();
+    const fluxo = fluxosMotivo[motivo] || null;
+    const detalhe = $('detalheNovoChamado').value;
+    const complemento = $('complementoNovoChamado').value;
+    const detalheRotulo = $('detalheNovoChamado').selectedOptions?.[0]?.textContent || '';
+    const assunto = [motivos[motivo], detalheRotulo && detalheRotulo !== 'Selecione' ? detalheRotulo : ''].filter(Boolean).join(' — ');
     const mensagem = $('mensagemNovoChamado').value.trim();
-    if (publico && !/^[a-z0-9-]{3,40}$/.test(empresa)) {
-      $('statusNovoChamadoCentral').textContent = 'Informe o código correto da empresa.';
-      $('empresaNovoChamado').focus();
+    if (publico && !semConta && !/^[a-z0-9-]{3,40}$/.test(empresa)) {
+      $('statusNovoChamadoCentral').textContent = 'Preencha o código da empresa na tela de entrada antes de abrir o suporte.';
       return;
     }
-    if (!/^[a-z0-9._-]{3,30}$/.test(usuario)) {
-      $('statusNovoChamadoCentral').textContent = 'Informe o usuário usado para entrar no Sistema OS.';
-      $('usuarioNovoChamado').focus(); return;
-    }
-    if (nome.length < 2) {
-      $('statusNovoChamadoCentral').textContent = 'Informe seu nome completo.';
-      $('nomeNovoChamado').focus(); return;
+    if (publico && ((!semConta && !/^[a-z0-9._-]{3,30}$/.test(usuario)) || nome.length < 2)) {
+      $('statusNovoChamadoCentral').textContent = 'Preencha o usuário na tela de entrada antes de abrir o suporte.';
+      return;
     }
     if (!/^\d{10,15}$/.test(telefone)) {
       $('statusNovoChamadoCentral').textContent = 'Informe um telefone ou WhatsApp com DDD.';
@@ -214,18 +318,21 @@
       $('statusNovoChamadoCentral').textContent = 'Confira o e-mail informado.';
       $('emailNovoChamado').focus(); return;
     }
-    if (preferenciaContato === 'email' && !email) {
-      $('statusNovoChamadoCentral').textContent = 'Informe o e-mail escolhido para retorno.';
-      $('emailNovoChamado').focus(); return;
-    }
-    if (!cargoEmpresa || (cargoEmpresa === 'outro' && cargoOutro.length < 2)) {
-      $('statusNovoChamadoCentral').textContent = 'Selecione seu cargo na empresa.'; return;
-    }
     if (!motivo || (motivo === 'outro' && motivoOutro.length < 3)) {
-      $('statusNovoChamadoCentral').textContent = 'Selecione ou descreva o motivo do chamado.'; return;
+      $('statusNovoChamadoCentral').textContent = 'Selecione ou descreva o motivo do chamado.';
+      $('motivoNovoChamado').focus(); return;
+    }
+    if (fluxo?.opcoes?.length && !detalhe) {
+      $('statusNovoChamadoCentral').textContent = 'Escolha a opção que melhor descreve sua solicitação.';
+      $('detalheNovoChamado').focus(); return;
+    }
+    if (fluxo?.complemento && !complemento) {
+      $('statusNovoChamadoCentral').textContent = 'Preencha o detalhe solicitado para este motivo.';
+      $('complementoNovoChamado').focus(); return;
     }
     if (!assunto || mensagem.length < 10) {
-      $('statusNovoChamadoCentral').textContent = 'Informe o assunto e descreva o problema com pelo menos 10 caracteres.';
+      $('statusNovoChamadoCentral').textContent = 'Explique a solicitação com pelo menos 10 caracteres.';
+      $('mensagemNovoChamado').focus();
       return;
     }
     const botao = $('btnEnviarNovoChamado');
@@ -234,19 +341,22 @@
     $('statusNovoChamadoCentral').textContent = 'Criando o chamado com segurança…';
     try {
       const resposta = await root.api?.supabasecriarchamadosuporte?.({
-        origem: novoContexto?.origem || 'config_pc', empresa,
-        nome, usuario, telefone, email, preferenciaContato,
+        origem: novoContexto?.origem || 'config_pc',
+        ...(publico ? { empresa, nome, usuario } : {}), telefone, email, preferenciaContato,
         horarioContato: $('horarioContatoNovoChamado').value.trim(),
         cargoEmpresa, cargoOutro, motivo, motivoOutro,
-        plataforma: $('plataformaNovoChamado').value,
-        referencia: $('referenciaNovoChamado').value.trim(),
-        assunto, prioridade: $('prioridadeNovoChamado').value, mensagem
+        detalhe, complemento,
+        plataforma: fluxo?.plataforma ? $('plataformaNovoChamado').value : '',
+        referencia: fluxo?.referencia ? $('referenciaNovoChamado').value.trim() : '',
+        assunto, prioridade: $('prioridadeNovoChamado').value, mensagem, semConta,
+        anexos: await root.SistemaOSAnexosChamado.ler('printsNovoChamado')
       });
       if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível abrir o chamado.');
       registrar(resposta);
       ocultarNovoChamado();
       notificar('Chamado ' + (resposta.protocolo || '') + ' criado.', 'sucesso');
-      await carregarListaEAbrir(resposta.chamadoId);
+      try { await carregarListaEAbrir(''); }
+      catch (_) { $('statusCentralChamados').textContent = 'Chamado ' + (resposta.protocolo || '') + ' enviado. Reabra o suporte para carregar a conversa.'; }
     } catch (erro) {
       $('statusNovoChamadoCentral').textContent = erro.message || String(erro);
     } finally {
@@ -300,18 +410,21 @@
       const data = document.createElement('time');
       data.textContent = mensagem.criado_em ? new Date(mensagem.criado_em).toLocaleString('pt-BR') : '';
       balao.append(autor, corpo, data);
+      root.SistemaOSAnexosChamado.mostrar(balao,mensagem.anexos);
       alvo.appendChild(balao);
     });
     alvo.scrollTop = alvo.scrollHeight;
   }
 
   async function carregarConversa(chamado, silencioso) {
+    const versao = geracao;
     let resposta;
     if (chamado._modo === 'publico') {
       resposta = await invocar('acompanhar_publico', { token: chamado._token });
     } else {
       resposta = await invocar('listar_mensagens', { chamadoId: chamado.id });
     }
+    if (versao !== geracao || !atual || atual.id !== chamado.id) return;
     const atualizado = Object.assign({}, chamado, resposta.chamado || {});
     atual = atualizado;
     chamados = chamados.map((item) => item.id === atualizado.id ? atualizado : item);
@@ -323,7 +436,7 @@
     $('cabecalhoConversaChamado').append(titulo, assunto);
     desenharMensagens(resposta.mensagens || []);
     desenharLista();
-    const encerrado = ['resolvido', 'fechado'].includes(String(atual.status));
+    const encerrado = ['resolvido', 'fechado', 'cancelado'].includes(String(atual.status));
     $('formMensagemChamado').classList.toggle('escondido', encerrado);
     $('textoMensagemChamado').disabled = encerrado;
     $('btnEnviarMensagemChamado').disabled = encerrado;
@@ -334,6 +447,10 @@
   }
 
   async function abrirConversa(chamado) {
+    geracao++;
+    $('mensagensCentralChamados').replaceChildren();
+    $('textoMensagemChamado').value = '';
+    $('printsRespostaChamado').value = '';
     atual = chamado;
     localStorage.setItem(CHAVE_ATUAL, chamado.id || '');
     $('statusCentralChamados').textContent = 'Carregando conversa…';
@@ -344,7 +461,7 @@
   async function enviarMensagem(evento) {
     evento.preventDefault();
     if (!atual) return;
-    if (['resolvido', 'fechado'].includes(String(atual.status))) {
+    if (['resolvido', 'fechado', 'cancelado'].includes(String(atual.status))) {
       $('statusCentralChamados').textContent = 'Este chamado está encerrado e não aceita novas mensagens.';
       return;
     }
@@ -352,18 +469,23 @@
     const mensagem = campo.value.trim();
     if (!mensagem) return;
     const botao = $('btnEnviarMensagemChamado');
+    if (botao.disabled) return;
+    const selecionado = atual;
+    const versao = geracao;
     botao.disabled = true;
     $('statusCentralChamados').textContent = 'Enviando…';
     try {
       const acao = atual._modo === 'suporte' ? 'responder_suporte'
         : atual._modo === 'publico' ? 'responder_publico' : 'responder_autenticado';
-      await invocar(acao, { chamadoId: atual.id, token: atual._token || '', mensagem });
+      await invocar(acao, { chamadoId: atual.id, token: atual._token || '', mensagem, anexos:await root.SistemaOSAnexosChamado.ler('printsRespostaChamado') });
+      if (versao !== geracao || atual?.id !== selecionado.id) return;
+      $('printsRespostaChamado').value='';
       campo.value = '';
       await carregarConversa(atual, true);
       $('statusCentralChamados').textContent = 'Mensagem enviada.';
     } catch (erro) {
       $('statusCentralChamados').textContent = erro.message || String(erro);
-    } finally { botao.disabled = false; }
+    } finally { botao.disabled = ['resolvido', 'fechado', 'cancelado'].includes(String(atual?.status)); }
   }
 
   async function listarDoAcesso() {
@@ -371,7 +493,11 @@
     try {
       const resposta = await invocar('listar_meus', {});
       (resposta.chamados || []).forEach((item) => encontrados.push(Object.assign({ _modo: 'autenticado' }, item)));
-    } catch (_) { /* Tela de login: ainda não existe sessão autenticada. */ }
+      return encontrados;
+    } catch (erro) {
+      // Falha na rede numa conta autenticada não deve mostrar chamados públicos de outro acesso.
+      if (!String(novoContexto?.origem || '').startsWith('login_')) throw erro;
+    }
     for (const salvo of carregarLocais()) {
       try {
         const resposta = await invocar('acompanhar_publico', { token: salvo.tokenAcompanhamento });
@@ -384,21 +510,24 @@
   }
 
   async function carregarListaEAbrir(chamadoId) {
-    chamados = await listarDoAcesso();
+    const versao = geracao;
+    const lista = await listarDoAcesso();
+    if (versao !== geracao) return;
+    chamados = lista;
     desenharLista();
-    const preferido = chamados.find((item) => item.id === chamadoId)
-      || chamados.find((item) => !['resolvido', 'fechado'].includes(String(item.status)))
-      || chamados[0];
+    const preferido = chamadoId ? chamados.find((item) => item.id === chamadoId) : null;
     $('statusCentralChamados').textContent = chamados.length ? 'Atendimento conectado.' : 'Nenhum chamado neste acesso.';
     if (preferido) await abrirConversa(preferido);
   }
 
-  async function abrir() {
+  async function abrir(contexto) {
     criarEstrutura();
+    if (contexto) novoContexto = Object.assign({}, contexto);
     $('modalCentralChamados').classList.remove('escondido');
     ocultarNovoChamado();
+    chamados=[];desenharLista();
     $('statusCentralChamados').textContent = 'Buscando chamados…';
-    await carregarListaEAbrir(localStorage.getItem(CHAVE_ATUAL) || '');
+    await carregarListaEAbrir('');
     clearInterval(timer);
     timer = setInterval(() => {
       if (document.hidden || root.__SISTEMA_OS_MODO_SEGUNDO_PLANO__ === true) return;
@@ -426,6 +555,7 @@
   }
 
   function fechar() {
+    geracao++;
     clearInterval(timer);
     timer = null;
     atual = null;

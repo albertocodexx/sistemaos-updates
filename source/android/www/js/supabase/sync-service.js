@@ -17,6 +17,7 @@
   var registroDispositivoEmVoo = null;
   var registroDispositivoIdentidade = '';
   var sessaoValidadaParaRetryEm = 0;
+  var retryOcupadoTimer = null;
 
   function uuid() {
     if (root.crypto && typeof root.crypto.randomUUID === 'function') return root.crypto.randomUUID();
@@ -392,6 +393,39 @@
     throw new Error('Operacao de fila desconhecida: ' + operacao.operacao);
   }
 
+  function esperar(ms) {
+    return new Promise(function (resolver) {
+      (root.setTimeout || setTimeout)(resolver, Math.max(0, Number(ms) || 0));
+    });
+  }
+
+  function ehOcupado(erro) {
+    var tipo = erro && erro.tipo || servico()._classificarErro(erro);
+    return tipo === 'ocupado';
+  }
+
+  async function executarComRetryOcupado(operacao) {
+    var ultimaFalha = null;
+    for (var tentativa = 0; tentativa < 4; tentativa += 1) {
+      try {
+        return await executar(operacao);
+      } catch (erro) {
+        ultimaFalha = erro;
+        if (!ehOcupado(erro) || tentativa === 3) throw erro;
+        await esperar(120 * (tentativa + 1) + Math.floor(Math.random() * 180));
+      }
+    }
+    throw ultimaFalha;
+  }
+
+  function agendarRetryOcupado() {
+    if (retryOcupadoTimer) return;
+    retryOcupadoTimer = (root.setTimeout || setTimeout)(function () {
+      retryOcupadoTimer = null;
+      processarFila();
+    }, 1500 + Math.floor(Math.random() * 1000));
+  }
+
   function podeEnviarAgora() {
     return estaOnline() && estadoSessao().tipo === 'autenticado';
   }
@@ -399,7 +433,7 @@
   async function executarOuEnfileirarSemDuplicar(operacao) {
     if (!podeEnviarAgora()) return enfileirar(operacao, 'offline');
     try {
-      var dados = await executar(operacao);
+      var dados = await executarComRetryOcupado(operacao);
       await confirmarLocal(operacao, dados);
       return {
         enviado: true,
@@ -423,7 +457,11 @@
           origem: 'supabase'
         };
       }
-      if (tipo === 'rede') return enfileirar(operacao, 'rede');
+      if (tipo === 'rede' || tipo === 'ocupado') {
+        var enfileirada = await enfileirar(operacao, tipo);
+        if (tipo === 'ocupado') agendarRetryOcupado();
+        return enfileirada;
+      }
       return { enviado: false, enfileirado: false, motivo: tipo, erro: erro, origem: 'supabase' };
     }
   }
@@ -530,7 +568,7 @@
         proximaTentativaEm: new Date(inicioTentativa.getTime() + (5 * 60 * 1000)).toISOString()
       });
       try {
-        var remoto = await executar(item);
+        var remoto = await executarComRetryOcupado(item);
         await historico().atualizarOperacaoNuvem(item.id, {
           status: 'concluido',
           concluidoEm: new Date().toISOString(),
@@ -570,11 +608,15 @@
           contagem.conflitos += 1;
           emitir('sistema-os:conflito-sincronizacao', { operacao: item, erro: erro });
         } else {
+          var atraso = tipo === 'ocupado'
+            ? 1500 + Math.floor(Math.random() * 1000)
+            : atrasoMs(tentativas);
           await historico().atualizarOperacaoNuvem(item.id, {
             status: 'erro',
             ultimoErro: erro.message || String(erro),
-            proximaTentativaEm: new Date(Date.now() + atrasoMs(tentativas)).toISOString()
+            proximaTentativaEm: new Date(Date.now() + atraso).toISOString()
           });
+          if (tipo === 'ocupado') agendarRetryOcupado();
           contagem.falharam += 1;
         }
         // Preserva a ordem: nenhuma operacao posterior ultrapassa uma que

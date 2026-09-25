@@ -913,7 +913,7 @@
     btnAbrirChamadoConfig.addEventListener('click', async function () {
       if (window.SistemaOSChamados && window.SistemaOSChamados.abrirNovo) {
         try {
-          await window.SistemaOSChamados.abrirNovo({ origem: 'config_celular' });
+          await window.SistemaOSChamados.abrir({ origem: 'config_celular' });
         } catch (erroChamado) {
           window.SistemaOSToast.mostrar(
             'Não foi possível abrir a central: ' + (erroChamado && erroChamado.message ? erroChamado.message : String(erroChamado)),

@@ -156,7 +156,9 @@ function criarApiPublica({ invocar, assinar, removerAssinatura }) {
   authexcluirusuario:  (id, solId)          => invocar('auth:excluirUsuario', id, solId),
   authlistarusuarios:  ()       => invocar('auth:listarUsuarios'),
   authcriarusuario:    (d)      => invocar('auth:criarUsuario', d),
-  authgerarautomatico: (perfil) => invocar('auth:gerarAutomatico', perfil),
+  authgerarautomatico: (dados) => invocar('auth:gerarAutomatico', dados),
+  authgerarsenhatemporaria: (id) => invocar('auth:gerarSenhaTemporaria', id),
+  authatualizarminhasenha: (id, senha) => invocar('auth:atualizarMinhaSenha', id, senha),
   autheditar:          (id, d)  => invocar('auth:editarUsuario', id, d),
   authalterarstatus:   (id, s)  => invocar('auth:alterarStatus', id, s),
   // Cargos e Permissões (Etapa 11.3)

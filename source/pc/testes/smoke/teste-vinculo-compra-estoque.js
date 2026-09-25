@@ -67,5 +67,18 @@ const sincronizado = db.obterItemEstoquePorId(aparelho.id);
 assert.strictEqual(sincronizado.valorPago, 150, 'editar a compra deve sincronizar o valor pago');
 assert.strictEqual(sincronizado.valorGastoPecas, 95, 'editar a compra deve sincronizar os custos');
 
+db.atualizarItemEstoque(aparelho.id, { ...sincronizado, status: 'Vendido', valorGastoPecas: 290,
+  pecasUsadas: [{ nome: 'Tela', valor: 0 }, { nome: 'Carcaça completa', valor: 0 }] });
+db.atualizarCompra('CP-0001', { assinaturaPendente: false });
+db.atualizarCompra('CP-0001', { dadosCompra: db.obterCompraPorNumero('CP-0001').dadosCompra });
+const preservado = db.obterItemEstoquePorId(aparelho.id);
+assert.strictEqual(preservado.status, 'Vendido');
+assert.strictEqual(preservado.valorGastoPecas, 290, 'reimportar a compra não restaura custos antigos');
+assert.strictEqual(preservado.pecasUsadas.length, 2);
+const compraSemPecas = db.criarCompra({ vendedor: { nome: 'Teste' }, aparelho: { marca: 'Samsung', modelo: 'S20FE' }, dadosCompra: { valor: 140 } });
+const outro = db.criarItemEstoque({ numeroCompra: compraSemPecas.numero, status: 'Vendido', valorGastoPecas: 290, pecasUsadas: [{ nome: 'Tela', valor: 0 }] });
+db.atualizarCompra(compraSemPecas.numero, { assinaturaPendente: false });
+assert.strictEqual(db.obterItemEstoquePorId(outro.id).valorGastoPecas, 290, 'campo ausente na compra não significa zerar peças');
+
 fs.rmSync(dirTemp, { recursive: true, force: true });
 console.log('OK: compra sem CPF e vínculo CP automático sincronizam o aparelho de revenda.');

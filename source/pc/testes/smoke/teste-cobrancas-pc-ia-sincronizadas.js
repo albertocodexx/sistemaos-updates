@@ -53,6 +53,10 @@ assert.match(html, /id="cobrancasPCTipos"[\s\S]*data-cobranca-tipo="todos"[\s\S]
 assert.match(html, /data-orc-subaba="finalizadas"/);
 assert.match(tela, /Promise\.all\(\[window\.api\.oslistar\(\), window\.api\.estoquelistar\(\)\]\)/);
 assert.match(tela, /Após esta cobrança resta/);
+assert.match(tela, /recarregarPendente/,
+  'evento recebido durante a carga deve provocar uma segunda leitura da lista');
+assert.match(tela, /setInterval\(sincronizarSeVisivel, 15000\)/,
+  'aba aberta deve conferir alteracoes do celular mesmo apos falha do Realtime');
 assert.match(dominio, /valorRecebidoBaseCobrancas/);
 assert.match(dominio, /lembretesCobrancaExcluidos/);
 assert.match(runtime, /\['autorizado', 'autorizada'\]\.includes\(statusTecnico\)/,

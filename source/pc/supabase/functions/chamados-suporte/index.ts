@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { contextoUsuarioAtivo, ehAdministradorEmpresa } from '../_shared/access.ts';
+import { validarAnexos } from './anexos.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -11,7 +12,7 @@ const responder = (status: number, corpo: Record<string, unknown>) =>
 const texto = (valor: unknown, limite = 8000) => String(valor ?? '').trim().slice(0, limite);
 const origensPublicas = new Set(['login_pc', 'login_celular']);
 const origensAutenticadas = new Set(['config_pc', 'config_celular']);
-const statusValidos = new Set(['aberto', 'em_atendimento', 'resolvido', 'fechado']);
+const statusValidos = new Set(['aberto', 'em_atendimento', 'resolvido', 'fechado', 'cancelado']);
 const prioridadesValidas = new Set(['baixa', 'normal', 'alta', 'critica']);
 const motivosValidos = new Set([
   'trial_assinatura', 'cobranca_pagamento', 'acesso_login', 'sincronizacao_backup',
@@ -71,10 +72,14 @@ function camposChamado(dados: Record<string, any>) {
   const telefone = telefoneNormalizado(dados.telefone);
   const email = texto(dados.email, 160).toLowerCase();
   const preferenciaContato = texto(dados.preferenciaContato, 20);
-  const cargoEmpresa = texto(dados.cargoEmpresa, 30);
+  // Versões anteriores enviavam este marcador oculto, sem perguntar o cargo.
+  const cargoInformado = texto(dados.cargoEmpresa, 30);
+  const cargoEmpresa = cargoInformado === 'nao_informado' ? '' : cargoInformado;
   const cargoOutro = texto(dados.cargoOutro, 80);
   const plataforma = ['pc', 'celular', 'ambos'].includes(texto(dados.plataforma, 20)) ? texto(dados.plataforma, 20) : '';
   const referencia = texto(dados.referencia, 80);
+  const detalhe = texto(dados.detalhe, 80);
+  const complemento = texto(dados.complemento, 80);
   const horarioContato = texto(dados.horarioContato, 80);
   const erro = !motivosValidos.has(motivo) ? 'Selecione o motivo do chamado.'
     : motivo === 'outro' && motivoOutro.length < 3 ? 'Descreva o outro motivo do chamado.'
@@ -82,14 +87,20 @@ function camposChamado(dados: Record<string, any>) {
     : !emailValido(email) ? 'Confira o e-mail informado.'
     : !preferenciasContatoValidas.has(preferenciaContato) ? 'Selecione como prefere receber o retorno.'
     : preferenciaContato === 'email' && !email ? 'Informe o e-mail escolhido para retorno.'
-    : !cargosEmpresaValidos.has(cargoEmpresa) ? 'Selecione seu cargo na empresa.'
+    : cargoEmpresa && !cargosEmpresaValidos.has(cargoEmpresa) ? 'Cargo da empresa inválido.'
     : cargoEmpresa === 'outro' && cargoOutro.length < 2 ? 'Informe seu cargo na empresa.'
     : '';
   return {
     erro, motivo, motivoOutro: motivoOutro || null, telefone, email: email || null,
-    preferenciaContato, cargoEmpresa, cargoOutro: cargoOutro || null,
+    preferenciaContato, cargoEmpresa: cargoEmpresa || null, cargoOutro: cargoOutro || null,
     contato: [telefone, email].filter(Boolean).join(' · '),
-    detalhes: { plataforma: plataforma || null, referencia: referencia || null, horario_contato: horarioContato || null }
+    detalhes: {
+      plataforma: plataforma || null,
+      referencia: referencia || null,
+      detalhe: detalhe || null,
+      complemento: complemento || null,
+      horario_contato: horarioContato || null
+    }
   };
 }
 
@@ -114,7 +125,7 @@ async function chamadoPorToken(admin: Cliente, token: string) {
 }
 
 async function adicionarMensagem(admin: Cliente, chamado: Record<string, any>, dados: Record<string, any>) {
-  if (['resolvido', 'fechado'].includes(chamado.status) && !dados.permitirEncerrado) {
+  if (['resolvido', 'fechado', 'cancelado'].includes(chamado.status) && !dados.permitirEncerrado) {
     throw new Error('Este chamado já foi encerrado e não aceita novas mensagens.');
   }
   const mensagem = texto(dados.mensagem);
@@ -126,7 +137,7 @@ async function adicionarMensagem(admin: Cliente, chamado: Record<string, any>, d
     autor_id: dados.autorId || null,
     autor_nome: texto(dados.autorNome, 120) || null,
     mensagem,
-    anexos: Array.isArray(dados.anexos) ? dados.anexos.slice(0, 10) : []
+    anexos: validarAnexos(dados.anexos)
   }).select('id,chamado_id,autor_tipo,autor_nome,mensagem,anexos,criado_em').single();
   if (error) throw error;
 
@@ -153,9 +164,12 @@ Deno.serve(async (req) => {
     const authorization = req.headers.get('Authorization') || '';
     const cliente = createClient(url, anonKey, { global: { headers: { Authorization: authorization } } });
     const admin = createClient(url, serviceRole, { auth: { persistSession: false } });
-    const corpo = await req.json();
+    const corpoTexto = await req.text();
+    if (corpoTexto.length > 4500000) return responder(413, { erro: 'Os prints ultrapassam o tamanho permitido.' });
+    const corpo = JSON.parse(corpoTexto);
     const acao = texto(corpo?.acao, 50);
     const dados = corpo?.dados && typeof corpo.dados === 'object' ? corpo.dados : {};
+    const anexos = validarAnexos(dados.anexos);
 
     if (acao === 'criar_publico') {
       const codigo = texto(dados.empresa, 40).toLowerCase();
@@ -163,25 +177,26 @@ Deno.serve(async (req) => {
       const mensagem = texto(dados.mensagem);
       const nome = texto(dados.nome, 120);
       const usuario = texto(dados.usuario, 30).toLowerCase();
+      const semConta = dados.semConta === true;
       const assunto = texto(dados.assunto, 160) || 'Atendimento de suporte';
       const prioridade = prioridadesValidas.has(texto(dados.prioridade, 20)) ? texto(dados.prioridade, 20) : 'normal';
       const campos = camposChamado(dados);
-      if (!/^[a-z0-9-]{3,40}$/.test(codigo) || !origensPublicas.has(origem)
-          || !/^[a-z0-9._-]{3,30}$/.test(usuario) || nome.length < 2 || mensagem.length < 10 || campos.erro) {
+      if ((!semConta && (!/^[a-z0-9-]{3,40}$/.test(codigo) || !/^[a-z0-9._-]{3,30}$/.test(usuario))) || !origensPublicas.has(origem)
+          || nome.length < 2 || mensagem.length < 10 || campos.erro) {
         return responder(400, { erro: campos.erro || 'Informe empresa, usuário, nome e uma descrição com pelo menos 10 caracteres.' });
       }
-      const { data: empresa, error: empresaErro } = await admin.from('empresas')
-        .select('id').eq('codigo', codigo).eq('ativo', true).maybeSingle();
-      if (empresaErro || !empresa) return responder(404, { erro: 'Não foi possível confirmar a empresa e o usuário informados.' });
-      const { data: identidade } = await admin.from('identidades_login')
-        .select('usuario_id').eq('empresa_id', empresa.id).ilike('usuario', usuario).eq('ativo', true).maybeSingle();
+      const { data: empresa, error: empresaErro } = semConta ? {data:null,error:null} : await admin.from('empresas')
+        .select('id').eq('codigo', codigo).maybeSingle();
+      if (!semConta && (empresaErro || !empresa)) return responder(404, { erro: 'Não foi possível confirmar a empresa e o usuário informados.' });
+      const { data: identidade } = semConta ? {data:null} : await admin.from('identidades_login')
+        .select('usuario_id').eq('empresa_id', empresa!.id).ilike('usuario', usuario).maybeSingle();
       const { data: perfil } = identidade?.usuario_id
-        ? await admin.from('perfis').select('id').eq('id', identidade.usuario_id).eq('empresa_id', empresa.id).eq('ativo', true).maybeSingle()
+        ? await admin.from('perfis').select('id').eq('id', identidade.usuario_id).eq('empresa_id', empresa!.id).maybeSingle()
         : { data: null };
-      if (!identidade || !perfil) return responder(404, { erro: 'Não foi possível confirmar a empresa e o usuário informados.' });
+      if (!semConta && (!identidade || !perfil)) return responder(404, { erro: 'Não foi possível confirmar a empresa e o usuário informados.' });
 
       const enderecoRede = texto(req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || 'sem-rede', 120).split(',')[0];
-      const chaveLimite = await sha256([empresa.id, usuario, enderecoRede].join(':'));
+      const chaveLimite = await sha256([semConta ? 'visitante' : empresa!.id, semConta ? '' : usuario, enderecoRede].join(':'));
       const { data: permitido, error: limiteErro } = await admin.rpc('registrar_limite_chamado_publico', {
         p_chave_hash: chaveLimite, p_limite: 5, p_janela_minutos: 60
       });
@@ -192,20 +207,20 @@ Deno.serve(async (req) => {
       const tokenHash = await sha256(tokenAcompanhamento);
       const agora = new Date().toISOString();
       const { data: chamado, error } = await admin.from('chamados_suporte').insert({
-        empresa_id: empresa.id, origem, aberto_por: null, public_token: null, token_hash: tokenHash,
+        empresa_id: empresa?.id || null, origem, aberto_por: null, public_token: null, token_hash: tokenHash,
         contato_nome: nome, contato_usuario: usuario,
         contato: campos.contato, telefone_contato: campos.telefone, email_contato: campos.email,
         preferencia_contato: campos.preferenciaContato, cargo_empresa: campos.cargoEmpresa,
         cargo_outro: campos.cargoOutro, motivo: campos.motivo, motivo_outro: campos.motivoOutro,
-        detalhes_contato: campos.detalhes,
+        detalhes_contato: { ...campos.detalhes, semConta },
         mensagem, assunto, prioridade, status: 'aberto', ultima_mensagem_em: agora
       }).select('id').single();
       if (error || !chamado) throw error || new Error('Falha ao criar chamado.');
       await adicionarMensagem(admin, { id: chamado.id, status: 'aberto' }, {
-        autorTipo: 'cliente', autorNome: nome || usuario || 'Cliente', mensagem
+        autorTipo: 'cliente', autorNome: nome || usuario || 'Cliente', mensagem, anexos
       });
       await admin.from('auditoria_comercial').insert({
-        empresa_id: empresa.id, autor_id: null, acao: 'chamado_publico_criado',
+        empresa_id: empresa?.id || null, autor_id: null, acao: 'chamado_publico_criado',
         entidade: 'chamado_suporte', entidade_id: chamado.id,
         metadados: { origem, motivo: campos.motivo, usuario }
       });
@@ -240,7 +255,7 @@ Deno.serve(async (req) => {
       if (error || !chamado) throw error || new Error('Falha ao criar chamado.');
       await adicionarMensagem(admin, { id: chamado.id, status: 'aberto' }, {
         autorTipo: 'cliente', autorId: autenticado.usuario.id,
-        autorNome: texto(atual.perfil_nome, 120) || texto(atual.usuario, 60) || 'Cliente', mensagem
+        autorNome: texto(atual.perfil_nome, 120) || texto(atual.usuario, 60) || 'Cliente', mensagem, anexos
       });
       await admin.from('auditoria_comercial').insert({
         empresa_id: atual.empresa_id, autor_id: autenticado.usuario.id,
@@ -310,7 +325,7 @@ Deno.serve(async (req) => {
       const chamado = await chamadoPorToken(admin, uuidValido(dados.token));
       if (!chamado) return responder(404, { erro: 'Chamado não encontrado neste aparelho.' });
       const mensagem = await adicionarMensagem(admin, chamado, {
-        autorTipo: 'cliente', autorNome: chamado.contato_nome || chamado.contato_usuario || 'Cliente', mensagem: dados.mensagem
+        autorTipo: 'cliente', autorNome: chamado.contato_nome || chamado.contato_usuario || 'Cliente', mensagem: dados.mensagem, anexos
       });
       await admin.from('auditoria_comercial').insert({
         empresa_id: chamado.empresa_id, autor_id: null,
@@ -327,7 +342,7 @@ Deno.serve(async (req) => {
       if (!chamado || chamado.excluido_em || !podeAcessarAutenticado(chamado, autenticado)) return responder(403, { erro: 'Você não pode responder este chamado.' });
       const mensagem = await adicionarMensagem(admin, chamado, {
         autorTipo: 'cliente', autorId: autenticado?.usuario.id,
-        autorNome: autenticado?.contexto?.perfil_nome || autenticado?.contexto?.usuario || 'Cliente', mensagem: dados.mensagem
+        autorNome: autenticado?.contexto?.perfil_nome || autenticado?.contexto?.usuario || 'Cliente', mensagem: dados.mensagem, anexos
       });
       await admin.from('auditoria_comercial').insert({
         empresa_id: chamado.empresa_id, autor_id: autenticado?.usuario.id,
@@ -345,7 +360,7 @@ Deno.serve(async (req) => {
       if (!chamado || chamado.excluido_em) return responder(404, { erro: 'Chamado não encontrado.' });
       const mensagem = await adicionarMensagem(admin, chamado, {
         autorTipo: 'suporte', autorId: autenticado?.usuario.id,
-        autorNome: autenticado?.contexto?.perfil_nome || 'Suporte Sistema OS', mensagem: dados.mensagem
+        autorNome: autenticado?.contexto?.perfil_nome || 'Suporte Sistema OS', mensagem: dados.mensagem, anexos
       });
       await admin.from('auditoria_comercial').insert({
         empresa_id: chamado.empresa_id, autor_id: autenticado?.usuario.id,
@@ -403,7 +418,7 @@ Deno.serve(async (req) => {
       const nomeSuporte = texto(autenticado?.contexto?.perfil_nome, 120) || 'Suporte Sistema OS';
       const campos: Record<string, unknown> = { status, atualizado_em: agora };
       if (status === 'em_atendimento') campos.atendido_por = autenticado?.usuario.id;
-      if (status === 'resolvido' || status === 'fechado') campos.encerrado_em = agora;
+      if (status === 'resolvido' || status === 'fechado' || status === 'cancelado') campos.encerrado_em = agora;
       if (status === 'aberto') {
         campos.encerrado_em = null;
         campos.resolucao = null;
@@ -416,16 +431,16 @@ Deno.serve(async (req) => {
           autorTipo: 'suporte', autorId: autenticado?.usuario.id, autorNome: nomeSuporte,
           mensagem: `Seu chamado foi assumido por ${nomeSuporte}. O atendimento foi iniciado.`
         });
-      } else if (status !== statusAnterior && (status === 'resolvido' || status === 'fechado')) {
+      } else if (status !== statusAnterior && (status === 'resolvido' || status === 'fechado' || status === 'cancelado')) {
         const conclusao = resolucao || (status === 'resolvido'
           ? 'O atendimento foi concluído pelo suporte.'
           : 'O atendimento foi encerrado pelo suporte.');
         await adicionarMensagem(admin, { ...chamado, status }, {
           autorTipo: 'suporte', autorId: autenticado?.usuario.id, autorNome: nomeSuporte,
-          mensagem: `${status === 'resolvido' ? 'Chamado resolvido.' : 'Chamado fechado.'} ${conclusao} Este chat foi encerrado e não aceita novas mensagens.`,
+          mensagem: `${status === 'cancelado' ? 'Chamado cancelado.' : 'Chamado finalizado.'} ${conclusao} O histórico continua disponível, mas não aceita novas mensagens.`,
           permitirEncerrado: true
         });
-      } else if (resolucao && !['resolvido', 'fechado'].includes(status)) {
+      } else if (resolucao && !['resolvido', 'fechado', 'cancelado'].includes(status)) {
         await adicionarMensagem(admin, { ...chamado, status }, {
           autorTipo: 'suporte', autorId: autenticado?.usuario.id,
           autorNome: nomeSuporte, mensagem: resolucao

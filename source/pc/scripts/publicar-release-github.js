@@ -16,13 +16,21 @@ const raiz = path.resolve(__dirname, '..');
 const dist = path.join(raiz, 'dist');
 
 function obterToken() {
-  const resposta = execFileSync('git', ['credential', 'fill'], {
+  const opcoes = {
     input: 'protocol=https\nhost=github.com\n\n',
     encoding: 'utf8',
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' },
     timeout: 15000,
     windowsHide: true
-  });
+  };
+  let resposta = '';
+  try {
+    // Consulta direta evita que `git credential fill` fique aguardando a
+    // cadeia completa de helpers em algumas versões do Git for Windows.
+    resposta = execFileSync('git', ['credential-manager', 'get'], opcoes);
+  } catch (_) {
+    resposta = execFileSync('git', ['credential', 'fill'], opcoes);
+  }
   const linha = resposta.split(/\r?\n/).find((item) => item.startsWith('password='));
   if (!linha) throw new Error('Credencial do GitHub não encontrada no Gerenciador de Credenciais.');
   return linha.slice('password='.length);

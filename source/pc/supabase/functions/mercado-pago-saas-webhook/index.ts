@@ -47,6 +47,13 @@ async function carregarIntegracaoPlataforma(admin: any, tipo: string) {
     .eq('tipo', tipo).maybeSingle();
   if (error) throw error;
   if (!integracao || integracao.status !== 'conectada') return { integracao, segredo: null };
+  if (tipo === 'mercado_pago') {
+    const accessToken = texto(Deno.env.get('MERCADO_PAGO_ACCESS_TOKEN'));
+    const webhookSecret = texto(Deno.env.get('MERCADO_PAGO_WEBHOOK_SECRET'));
+    if (accessToken && webhookSecret) {
+      return { integracao, segredo: { access_token: accessToken, webhook_secret: webhookSecret } };
+    }
+  }
   const { data: cofre, error: cofreErro } = await admin.from('integracoes_plataforma_segredos')
     .select('iv_base64,segredo_cifrado_base64').eq('integracao_id', integracao.id).maybeSingle();
   if (cofreErro) throw cofreErro;
@@ -103,7 +110,10 @@ async function validarAssinatura(req: Request, dataId: string, segredo: string) 
   if (!Number.isFinite(timestampRecebido)) return false;
   const timestampMs = timestampRecebido < 1_000_000_000_000 ? timestampRecebido * 1000 : timestampRecebido;
   if (Math.abs(Date.now() - timestampMs) > 10 * 60 * 1000) return false;
-  const manifesto = `id:${dataId};request-id:${requestId};ts:${ts};`;
+  // A documentação do Mercado Pago exige o data.id em minúsculas no
+  // manifesto. IDs de pagamento são numéricos, mas merchant_order pode ser
+  // alfanumérico e chegar em maiúsculas.
+  const manifesto = `id:${dataId.toLowerCase()};request-id:${requestId};ts:${ts};`;
   const chave = await crypto.subtle.importKey(
     'raw', new TextEncoder().encode(segredo), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
   );

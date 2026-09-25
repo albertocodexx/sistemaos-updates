@@ -6,6 +6,7 @@ const { spawnSync } = require('child_process');
 
 const raiz = path.resolve(__dirname, '..', '..');
 const testes = [
+  'teste-chamados-historico-anexos.js',
   'teste-autorizacao-runtime.js',
   'teste-autorizacao-edge-functions.js',
   'teste-postgresql-cache-offline.js',
@@ -85,6 +86,7 @@ const testes = [
   'teste-comercial-supabase.js',
   'teste-pdf-comercial-nuvem.js',
   'teste-assinaturas-saas-automaticas.js',
+  'teste-precos-beta-mercado-pago.js',
   'teste-lembretes-assinatura-baileys.js',
   'teste-telefones-empresa-cobranca.js',
   'teste-fiscal-oculto-suporte.js',
@@ -95,6 +97,7 @@ const testes = [
   'teste-trial-45-chamados-seguros.js',
   'teste-migracao-supabase.js',
   'teste-cobrancas-pc-ia-sincronizadas.js',
+  'teste-cobrancas-retry-sincronizacao.js',
   'teste-ia-custos-compra-local.js',
   'teste-ia-chat-online.js',
   'teste-pdf-assinaturas-recorte.js'

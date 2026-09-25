@@ -880,7 +880,7 @@
     <section class="painel-config" id="painel-config" hidden>
 
       <form id="form-config" class="form-os" novalidate>
-        <p class="config-versao-aplicativo">Aplicativo instalado: <strong>20.5.11</strong></p>
+        <p class="config-versao-aplicativo">Aplicativo instalado: <strong>20.5.16</strong></p>
 
         <fieldset class="secao-config config-empresa-somente-leitura">
           <legend>Dados da empresa</legend>
@@ -1151,10 +1151,6 @@
             Os dados permanecem salvos e protegidos na nuvem.
           </p>
           <button type="button" id="btn-trocar-usuario-config" class="btn-secundario">Sair e trocar usuário</button>
-          <label id="linha-ativar-troca-rapida" class="checkbox-linha" hidden>
-            <input type="checkbox" id="cfg-troca-rapida-contas" />
-            Permitir contas salvas e troca rápida nesta empresa
-          </label>
           <div id="contas-rapidas-config" class="contas-rapidas" hidden>
             <p class="aviso aviso-tecnico">As senhas nunca são armazenadas. As sessões são cifradas somente neste aparelho.</p>
             <button type="button" id="btn-adicionar-conta-rapida" class="btn-secundario">Adicionar outra conta</button>
@@ -1801,6 +1797,7 @@
 <script src="js/auth/contas-rapidas.js"></script>
 <script src="js/auth/sessao.js"></script>
 <script src="js/relatorio-erros.js"></script>
+<script src="js/chamado-anexos.js"></script>
 <script src="js/chamados.js"></script>
 <script src="js/atualizacao-app.js"></script>
 <script src="js/auth/login-tela.js"></script>
@@ -1819,6 +1816,7 @@
   <script src="js/historico.js"></script>
   <script src="js/supabase/arquivo-service.js"></script>
   <script src="js/supabase/consultas-service.js"></script>
+  <script src="js/supabase/cobrancas-sync.js"></script>
   <script src="js/supabase/sync-service.js"></script>
   <script src="js/supabase/estoque-service.js"></script>
   <script src="js/supabase/precos-service.js"></script>

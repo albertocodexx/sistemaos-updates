@@ -4,6 +4,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { stripTypeScriptTypes } = require('node:module');
+const saasWorker = fs.readFileSync(path.join(__dirname, '../../supabase/functions/assinaturas-worker/saas.ts'), 'utf8');
+assert.match(saasWorker, /Deno\.env\.get\('MERCADO_PAGO_ACCESS_TOKEN'\)/,
+  'o worker precisa carregar a mesma credencial nativa usada pelo checkout e webhook');
+assert.match(saasWorker, /Deno\.env\.get\('MERCADO_PAGO_WEBHOOK_SECRET'\)/);
 
 // Simula respostas HTTP e tabelas em memória; executa as funções reais do worker.
 function bancoMemoria(tabelas, rpc) {
@@ -43,7 +47,7 @@ async function main() {
       max_tentativas: 6, agendada_para: agora, created_at: agora, updated_at: agora,
       template_nome: 'sistemaos_pagamento_confirmado', parametros: {} }))
   ];
-  let falhaAplicacao = true, aplicacoes = 0, envios = 0;
+  let falhaAplicacao = true, falhaHttp = false, aplicacoes = 0, envios = 0;
   const banco = bancoMemoria({ cobrancas_assinatura: cobrancas, fila_whatsapp: fila }, async (_nome, p) => {
     if (falhaAplicacao && p.p_cobranca_id === 'c1') return { error: { message: 'falha simulada' } };
     const c = cobrancas.find(c => c.id === p.p_cobranca_id);
@@ -63,6 +67,7 @@ async function main() {
         if (++envios === 1) throw new Error('Conexão perdida depois da transmissão');
         return new Response(JSON.stringify({ messages: [{ id: 'wamid.fixture' }] }));
       }
+      if (falhaHttp) return new Response(JSON.stringify({ message: 'token recusado' }), { status: 401 });
       const ref = new URL(url).searchParams.get('external_reference');
       const c = cobrancas.find(c => c.referencia_externa === ref);
       const valido = { id: c.id === 'c1' ? '1' : '2', external_reference: ref, transaction_amount: c.valor,
@@ -84,6 +89,12 @@ async function main() {
   assert.equal(aplicacoes, 2, 'aprovada sem aplicado_em volta para reconciliação');
   await contexto.reconciliar(banco);
   assert.equal(aplicacoes, 2, 'repetição não renova dias em dobro');
+  cobrancas.push({ id: 'c3', referencia_externa: 'SAAS-c3', valor: 80, moeda: 'BRL', status: 'pendente', aplicado_em: null, updated_at: agora });
+  falhaHttp = true;
+  const degradado = await contexto.reconciliar(banco);
+  assert.equal(degradado.falhas, 1, 'falha HTTP do provedor não pode parecer uma execução saudável');
+  assert.equal(degradado.aplicadas, 0);
+  falhaHttp = false;
   const resultado = await contexto.mensagens(banco);
   assert.equal(resultado.enviadas, 1);
   assert.equal(resultado.falhas, 1);

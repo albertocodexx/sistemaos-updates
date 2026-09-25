@@ -36,10 +36,18 @@ assert.match(assinatura, /Seu período de teste chegou ao fim/);
 assert.match(assinatura, /Falar com o suporte/);
 assert.match(assinatura, /motivo: 'trial_assinatura'/);
 
-for (const id of ['usuarioNovoChamado', 'telefoneNovoChamado', 'emailNovoChamado', 'cargoEmpresaNovoChamado', 'motivoNovoChamado', 'preferenciaContatoNovoChamado']) {
+for (const id of ['telefoneNovoChamado', 'emailNovoChamado', 'motivoNovoChamado', 'detalheNovoChamado', 'complementoNovoChamado', 'preferenciaContatoNovoChamado']) {
   assert.match(formulario, new RegExp(id));
 }
+assert.doesNotMatch(formulario, /for="(?:empresa|usuario|nome)NovoChamado"/);
+assert.match(formulario, /Empresa e usuário identificados automaticamente/);
+for (const fluxo of ['cobranca_pagamento', 'acesso_login', 'sincronizacao_backup', 'documento_assinatura', 'erro_sistema', 'configuracao_integracao']) {
+  assert.match(formulario, new RegExp(fluxo + ':'));
+}
 assert.match(formulario, /outro: 'Outro motivo'/);
+assert.match(chamados, /detalhe: detalhe \|\| null/);
+assert.match(chamados, /complemento: complemento \|\| null/);
+assert.match(chamados, /cargoEmpresa && !cargosEmpresaValidos/);
 assert.match(chamados, /identidades_login/);
 assert.match(chamados, /\.eq\('aberto_por', autenticado\.usuario\.id\)/);
 assert.match(chamados, /podeAcessarAutenticado/);

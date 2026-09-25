@@ -13,6 +13,15 @@ assert.match(fonte, /URL\.createObjectURL\(arquivo\)/, 'foto grande deve ser lid
 assert.match(fonte, /URL\.revokeObjectURL\(urlTemporaria\)/, 'memória da foto original deve ser liberada após compressão');
 assert.match(fonte, /width:\s*LADO_MAXIMO[\s\S]*height:\s*LADO_MAXIMO/, 'plugin deve reduzir a imagem antes de atravessar a WebView');
 assert.match(fonte, /var MAX_FOTOS = 10/, 'limite total deve ser de dez fotos');
+assert.match(fonte, /saveToGallery:\s*false/, 'fotos de documentos não devem ser salvas automaticamente na galeria');
+
+const atividade = fs.readFileSync(path.join(raiz, 'android', 'app', 'src', 'main', 'java', 'com', 'assistencia', 'sistemaos', 'MainActivity.java'), 'utf8');
+['getFilesDir()', 'getCacheDir()', 'getExternalFilesDir(null)', 'getExternalCacheDir()'].forEach((pasta) => {
+  const protecao = 'MidiaPrivada.proteger(' + pasta + ')';
+  assert(atividade.includes(protecao), 'pasta exclusiva do app deve ter proteção de mídia: ' + pasta);
+  assert(atividade.indexOf(protecao) < atividade.indexOf('super.onCreate(savedInstanceState)'), 'proteção deve existir antes de carregar os plugins');
+});
+assert.doesNotMatch(atividade, /getExternalStoragePublicDirectory|getExternalStorageDirectory|MediaScannerConnection/, 'não alterar a galeria nem a pasta pública do usuário');
 
 ['os', 'compra', 'entrega'].forEach((contexto) => {
   const padrao = new RegExp('id="input-foto-' + contexto + '"[^>]*multiple');

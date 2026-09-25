@@ -13,6 +13,13 @@
     return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
+  function calcularOferta(plano, meses) {
+    const quantidade = Math.max(1, Math.min(12, Number(meses) || 1));
+    const desconto = quantidade >= 12 ? 15 : quantidade >= 6 ? 10 : quantidade >= 3 ? 5 : 0;
+    const semDesconto = Number(plano?.preco_referencia || 0) * quantidade;
+    return { quantidade, desconto, semDesconto, total: semDesconto * (1 - desconto / 100) };
+  }
+
   function escaparHtml(valor) {
     return String(valor == null ? '' : valor).replace(/[&<>"']/g, (caractere) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -39,6 +46,7 @@
       .assinatura-planos{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:14px}.assinatura-plano{border:1.5px solid var(--borda);border-radius:12px;background:var(--bg-card);padding:15px;text-align:left;color:var(--texto);cursor:pointer}.assinatura-plano:hover,.assinatura-plano.selecionado{border-color:var(--cor-principal);box-shadow:0 0 0 2px color-mix(in srgb,var(--cor-principal) 22%,transparent)}
       .assinatura-plano h3{margin:0 0 6px}.assinatura-plano .preco{font-size:21px;font-weight:800;color:var(--cor-principal)}.assinatura-plano ul{padding-left:18px;margin:10px 0 0;color:var(--texto-sec);font-size:12px}.assinatura-plano .tipo{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--texto-sec)}
       .assinatura-resumo{padding:13px;border:1px solid var(--borda);border-radius:10px;background:var(--bg);display:grid;gap:4px}.assinatura-pagamento-status{min-height:22px;font-size:13px;color:var(--texto-sec)}
+      .assinatura-seguranca{margin-top:16px;padding:14px;border:1px solid var(--borda);border-radius:10px;background:var(--bg);display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.assinatura-seguranca div{display:grid;gap:4px}.assinatura-seguranca strong{font-size:13px}.assinatura-seguranca span{font-size:12px;color:var(--texto-sec);line-height:1.45}
       .trial-encerrado-fundo{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px;background:var(--bg);color:var(--texto)}
       .trial-encerrado-fundo[hidden]{display:none}.trial-encerrado-card{width:min(560px,100%);border:1px solid var(--borda);border-radius:16px;background:var(--bg-card);padding:34px;box-shadow:0 24px 70px rgba(0,0,0,.28)}
       .trial-encerrado-marca{width:54px;height:54px;border-radius:14px;display:grid;place-items:center;background:var(--texto);color:var(--bg);font-weight:900;letter-spacing:-2px;font-size:21px}
@@ -46,7 +54,7 @@
       .trial-encerrado-identidade{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:22px 0}.trial-encerrado-identidade div{padding:13px;border:1px solid var(--borda);border-radius:10px;background:var(--bg)}
       .trial-encerrado-identidade span,.trial-encerrado-identidade strong{display:block}.trial-encerrado-identidade span{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--texto-sec);margin-bottom:4px}
       .trial-encerrado-acoes{display:flex;gap:10px}.trial-encerrado-acoes .botao{flex:1}.trial-encerrado-seguranca{display:block;margin-top:16px;color:var(--texto-sec);line-height:1.45}
-      @media(max-width:600px){.trial-encerrado-card{padding:24px}.trial-encerrado-identidade{grid-template-columns:1fr}.trial-encerrado-acoes{flex-direction:column}}
+      @media(max-width:700px){.assinatura-seguranca{grid-template-columns:1fr}}@media(max-width:600px){.trial-encerrado-card{padding:24px}.trial-encerrado-identidade{grid-template-columns:1fr}.trial-encerrado-acoes{flex-direction:column}}
     `;
     document.head.appendChild(estilo);
 
@@ -66,7 +74,8 @@
         <div id="resumoAssinaturaAtual" class="assinatura-resumo"></div>
         <div style="margin-top:18px"><strong>Continuar com o mesmo plano ou escolher outro?</strong><p class="campo-desc">A renovação soma os novos dias ao período que você ainda tem.</p></div>
         <div id="listaPlanosAssinatura" class="assinatura-planos"></div>
-        <div class="campo" id="campoMesesAssinatura" style="margin-top:16px;max-width:280px" hidden><label for="quantidadeMesesAssinatura">Período que deseja pagar</label><select id="quantidadeMesesAssinatura"><option value="1">1 mês</option><option value="2">2 meses</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option></select><p class="campo-desc">Os meses são somados ao prazo restante após a confirmação.</p></div>
+        <div class="campo" id="campoMesesAssinatura" style="margin-top:16px;max-width:320px" hidden><label for="quantidadeMesesAssinatura">Período que deseja pagar</label><select id="quantidadeMesesAssinatura"><option value="1">1 mês</option><option value="2">2 meses</option><option value="3">3 meses · 5% de desconto</option><option value="6">6 meses · 10% de desconto</option><option value="12">12 meses · 15% de desconto</option></select><p class="campo-desc">Os meses são somados ao prazo restante após a confirmação.</p></div>
+        <div class="assinatura-seguranca"><div><strong>Formas de pagamento</strong><span>Pix, cartão e demais opções liberadas pela conta Mercado Pago no checkout.</span></div><div><strong>Pagamento protegido</strong><span>A cobrança abre no ambiente oficial do Mercado Pago; o Sistema OS não recebe nem guarda dados do cartão.</span></div><div><strong>Ativação automática</strong><span>O servidor valida assinatura, valor e moeda do pagamento antes de liberar o plano e somar os dias.</span></div></div>
         <div id="statusPagamentoAssinatura" class="assinatura-pagamento-status" role="status" aria-live="polite"></div>
       </div>
       <div class="modal-rodape"><button type="button" id="btnSuporteAssinatura" class="botao botao-fantasma">Dúvidas / suporte</button><button type="button" class="botao botao-fantasma" data-fechar-assinatura>Agora não</button><button type="button" id="btnPagarAssinatura" class="botao botao-primario" disabled>Pagar agora</button></div>
@@ -152,7 +161,8 @@
     if (!empresa) return;
     const atual = planoAtual();
     const dias = diasRestantes(empresa.data_vencimento);
-    $('resumoAssinaturaAtual').innerHTML = `<strong>Plano atual: ${escaparHtml(atual?.nome || empresa.plano?.nome || 'Não definido')}</strong><span>Vencimento: ${escaparHtml(dataBr(empresa.data_vencimento))}</span><span>Situação: ${dias == null ? 'consulte o suporte' : dias < 0 ? 'vencida' : dias === 0 ? 'vence hoje' : `${dias} dia(s) restante(s)`}</span>${planoEscolhido ? `<span>Total selecionado: <strong>${escaparHtml(moeda(Number(planoEscolhido.preco_referencia) * quantidadeMeses))}</strong> por ${quantidadeMeses} mês(es)</span>` : ''}`;
+    const oferta = planoEscolhido ? calcularOferta(planoEscolhido, quantidadeMeses) : null;
+    $('resumoAssinaturaAtual').innerHTML = `<strong>Plano atual: ${escaparHtml(atual?.nome || empresa.plano?.nome || 'Não definido')}</strong><span>Vencimento: ${escaparHtml(dataBr(empresa.data_vencimento))}</span><span>Situação: ${dias == null ? 'consulte o suporte' : dias < 0 ? 'vencida' : dias === 0 ? 'vence hoje' : `${dias} dia(s) restante(s)`}</span>${oferta ? `<span>Total selecionado: <strong>${escaparHtml(moeda(oferta.total))}</strong> por ${oferta.quantidade} mês(es)${oferta.desconto ? ` · ${oferta.desconto}% de desconto` : ''}</span>` : ''}`;
     $('campoMesesAssinatura').hidden = !planoEscolhido;
     const lista = $('listaPlanosAssinatura');
     lista.innerHTML = '';
@@ -162,7 +172,10 @@
       botao.className = 'assinatura-plano' + (planoEscolhido?.id === plano.id ? ' selecionado' : '');
       const diferenca = Number(plano.preco_referencia) - Number(atual?.preco_referencia || 0);
       const tipo = plano.id === atual?.id ? 'Continuar neste plano' : diferenca > 0 ? 'Melhorar plano' : 'Plano mais econômico';
-      botao.innerHTML = `<span class="tipo">${escaparHtml(tipo)}</span><h3>${escaparHtml(plano.nome)}</h3><div class="preco">${escaparHtml(moeda(plano.preco_referencia))}</div><small>${escaparHtml(plano.duracao_dias)} dias</small><p>${escaparHtml(plano.descricao || '')}</p><ul>${recursosPlano(plano).map((recurso) => `<li>${escaparHtml(recurso.nome || recurso.chave || '')}</li>`).join('')}</ul>`;
+      const seloBeta = plano.oferta_beta_fundador ? '<span class="tipo">Preço fundador do beta</span>' : '';
+      const precoTabela = plano.oferta_beta_fundador && Number(plano.preco_tabela) > Number(plano.preco_referencia)
+        ? `<small><s>${escaparHtml(moeda(plano.preco_tabela))}</s> / mês</small>` : `<small>${escaparHtml(plano.duracao_dias)} dias</small>`;
+      botao.innerHTML = `<span class="tipo">${escaparHtml(tipo)}</span>${seloBeta}<h3>${escaparHtml(plano.nome)}</h3><div class="preco">${escaparHtml(moeda(plano.preco_referencia))}</div>${precoTabela}<p>${escaparHtml(plano.descricao || '')}</p><ul>${recursosPlano(plano).map((recurso) => `<li>${escaparHtml(recurso.nome || recurso.chave || '')}</li>`).join('')}</ul>`;
       botao.addEventListener('click', () => { planoEscolhido = plano; desenhar(); $('btnPagarAssinatura').disabled = false; });
       lista.appendChild(botao);
     });

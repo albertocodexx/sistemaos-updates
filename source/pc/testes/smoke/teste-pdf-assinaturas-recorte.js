@@ -9,4 +9,14 @@ for(const fundo of ['transparente','branco']) {
 assert.equal(limites(new Uint8ClampedArray(400),10,10),null);
 const branco=new Uint8ClampedArray(400).fill(255);assert.equal(limites(branco,10,10),null);
 const borda=new Uint8ClampedArray(400);borda.set([0,0,0,255],0);assert.deepEqual(limites(borda,10,10),{x:0,y:0,width:3,height:3});
+const fs=require('node:fs'),path=require('node:path');
+const raiz=path.resolve(__dirname,'..','..');
+const assinatura=fs.readFileSync(path.join(raiz,'src','pdf-assinaturas.js'),'utf8');
+assert.match(assinatura,/height = '50px'/);
+assert.match(assinatura,/paddingBottom = '4px'/);
+for(const arquivo of ['os-template.js','compra-template.js','venda-template.js','comprovante-os-template.js','desbloqueio-template.js']) {
+  const template=fs.readFileSync(path.join(raiz,'src','templates',arquivo),'utf8');
+  assert.match(template,/border:0;border-top:/,`${arquivo} deve desenhar uma unica linha horizontal`);
+  assert.match(template,/transform:none/,`${arquivo} nao pode inclinar a linha de assinatura`);
+}
 console.log('OK: recorte de assinatura transparente/branca, margens, vazio e traço na borda.');

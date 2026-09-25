@@ -1712,6 +1712,11 @@ function importarLoteDoCelular(conteudoArquivo) {
                 naoAssinado: d.naoAssinado === true
               });
             } else if (tipoDocumento === 'venda') {
+              // Reenvio de uma solicitação antiga não desfaz uma venda concluída.
+              if (existente.registro.status === 'Vendido' && d.assinaturaPendente === true && d.naoAssinado !== true && !d.assinaturaCompradorBase64) {
+                pulados += 1;
+                continue;
+              }
               atualizarItemEstoque(existente.registro.id, {
                 marca: d.marca,
                 modelo: d.modelo,
@@ -1801,6 +1806,10 @@ function importarLoteDoCelular(conteudoArquivo) {
         const estoqueLocalId = String(d.estoqueLocalId || '').trim();
         const aparelhoExistente = estoqueLocalId ? obterItemEstoquePorId(estoqueLocalId) : null;
         if (aparelhoExistente) {
+          if (aparelhoExistente.status === 'Vendido' && statusVenda === 'Reservado' && !d.assinaturaCompradorBase64) {
+            pulados += 1;
+            continue;
+          }
           atualizarItemEstoque(aparelhoExistente.id, {
             marca: d.marca,
             modelo: d.modelo,
@@ -2933,8 +2942,8 @@ function patchEstoqueDaCompra(compra) {
     cor: aparelho.cor || '',
     imei: aparelho.imei1 || '',
     valorPago: parseFloat(dadosCompra.valor) || 0,
-    valorGastoPecas: parseFloat(dadosCompra.custoPecas) || 0,
-    pecasUsadas: normalizarPecasUsadasAparelho(dadosCompra.pecasTrocar)
+    ...(dadosCompra.custoPecas !== undefined ? { valorGastoPecas: parseFloat(dadosCompra.custoPecas) || 0 } : {}),
+    ...(dadosCompra.pecasTrocar !== undefined ? { pecasUsadas: normalizarPecasUsadasAparelho(dadosCompra.pecasTrocar) } : {})
   };
 }
 
@@ -2949,6 +2958,11 @@ function aplicarVinculoCompraNosDados(db, dados, idIgnorar) {
   if (!compra) throw new Error(`Compra ${numeroCompra} não encontrada.`);
   const duplicado = (db.estoque || []).find(item => item.numeroCompra === numeroCompra && item.id !== idIgnorar);
   if (duplicado) throw new Error(`Compra ${numeroCompra} já está vinculada ao aparelho ${duplicado.id}.`);
+  const existente = (db.estoque || []).find(item => item.id === idIgnorar);
+  if (existente && normalizarNumeroCompraVinculada(existente.numeroCompra) === numeroCompra) {
+    dados.numeroCompra = numeroCompra;
+    return dados;
+  }
   Object.assign(dados, patchEstoqueDaCompra(compra));
   return dados;
 }
@@ -4518,9 +4532,14 @@ function atualizarCompra(numero, dados) {
     idEnvioAssinatura: dados.idEnvioAssinatura !== undefined ? dados.idEnvioAssinatura : (atual.idEnvioAssinatura || null)
   });
   const compraAtualizada = database.compras[idx];
+  const patchAnterior = patchEstoqueDaCompra(atual);
+  const patchAtual = patchEstoqueDaCompra(compraAtualizada);
+  const alteracoesEstoque = Object.fromEntries(Object.entries(patchAtual).filter(([campo, valor]) =>
+    JSON.stringify(valor) !== JSON.stringify(patchAnterior[campo])));
   (database.estoque || []).forEach((item, indiceEstoque) => {
     if (normalizarNumeroCompraVinculada(item.numeroCompra) !== numero) return;
-    database.estoque[indiceEstoque] = Object.assign({}, item, patchEstoqueDaCompra(compraAtualizada));
+    if (!Object.keys(alteracoesEstoque).length) return;
+    database.estoque[indiceEstoque] = Object.assign({}, item, alteracoesEstoque);
     registrarLogEstoque(database, 'atualizacao', database.estoque[indiceEstoque], {
       obs: `Sincronizado com ${numero}`
     });

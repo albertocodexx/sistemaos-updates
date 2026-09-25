@@ -1078,23 +1078,40 @@ async function responderPergunta(pergunta, historico, usuario, chamarIARemota = 
       // uma margem de segurança, não uma meta de tempo.
       timeoutMs: 30000
     };
-    let respostaGroq;
-    if (typeof chamarIARemota === 'function') {
-      try {
-        // A configuração central por empresa tem prioridade, inclusive
-        // quando foi definida pelo suporte sem revelar a chave ao PC.
-        respostaGroq = await chamarIARemota(mensagens, opcoesIA);
-      } catch (erroRemoto) {
-        if (!apiKey) throw erroRemoto;
-        // Instalações antigas continuam funcionando com o cofre local caso a
-        // integração por empresa ainda não tenha sido configurada.
-        respostaGroq = await chamarIA(configFull, mensagens, opcoesIA);
+    const executarChamada = async (mensagensDaVez) => {
+      if (typeof chamarIARemota === 'function') {
+        try {
+          // A configuração central por empresa tem prioridade, inclusive
+          // quando foi definida pelo suporte sem revelar a chave ao PC.
+          return await chamarIARemota(mensagensDaVez, opcoesIA);
+        } catch (erroRemoto) {
+          if (!apiKey) throw erroRemoto;
+          // Instalações antigas continuam funcionando com o cofre local caso a
+          // integração por empresa ainda não tenha sido configurada.
+          return chamarIA(configFull, mensagensDaVez, opcoesIA);
+        }
       }
-    } else {
-      respostaGroq = await chamarIA(configFull, mensagens, opcoesIA);
+      return chamarIA(configFull, mensagensDaVez, opcoesIA);
+    };
+
+    let respostaGroq = await executarChamada(mensagens);
+    let texto = String(respostaGroq?.choices?.[0]?.message?.content || '').trim();
+
+    // Provedores sinalizam `finish_reason: length` quando o limite econômico
+    // interrompe a resposta. Antes o widget mostrava a frase cortada no meio.
+    // Continuamos somente nesse caso (no máximo duas vezes), preservando o
+    // rate limit das respostas normais e sem repetir o começo já exibido.
+    for (let continuacao = 0; continuacao < 2 && respostaGroq?.choices?.[0]?.finish_reason === 'length'; continuacao += 1) {
+      const mensagensContinuacao = mensagens.concat(
+        { role: 'assistant', content: texto.slice(-12000) },
+        { role: 'user', content: 'Continue exatamente do ponto em que parou. Não repita o texto anterior e conclua a resposta.' }
+      );
+      respostaGroq = await executarChamada(mensagensContinuacao);
+      const trecho = String(respostaGroq?.choices?.[0]?.message?.content || '').trim();
+      if (!trecho) break;
+      texto = `${texto}\n${trecho}`.trim();
     }
 
-    const texto = respostaGroq?.choices?.[0]?.message?.content;
     if (!texto || !texto.trim()) throw new Error('Resposta vazia da IA.');
 
     // v42: extrai eventual proposta de ação (criar/alterar status/excluir OS)

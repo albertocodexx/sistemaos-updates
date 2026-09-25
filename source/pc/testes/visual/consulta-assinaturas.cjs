@@ -32,7 +32,7 @@ app.whenReady().then(async()=>{
  await w.loadURL('data:text/html,'+encodeURIComponent('<div class="assinatura-espaco" style="width:300px;height:34px"><img src="'+assinatura+'"></div><img id="logo" src="'+assinatura+'">'));
  await w.webContents.executeJavaScript(fs.readFileSync(path.join(root,'src/pdf-assinaturas.js'),'utf8'));
  const crop=await w.webContents.executeJavaScript(`(async()=>{let orig=document.querySelector('img').src;SistemaOSPdfAssinaturas.preparar(document);await Promise.all([...document.images].map(i=>i.decode()));let im=document.querySelector('img');return {w:im.naturalWidth,h:im.naturalHeight,height:im.style.height,logo:document.getElementById('logo').src===orig}})()`);
- assert.ok(crop.w<250&&crop.h<150);assert.equal(crop.height,'56px');assert.equal(crop.logo,true);
+ assert.ok(crop.w<250&&crop.h<150);assert.equal(crop.height,'50px');assert.equal(crop.logo,true);
  let html=fs.readFileSync(path.join(mobile,'www/index.html'),'utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');
  html=html.replace('<head>','<head><base href="'+require('url').pathToFileURL(path.join(mobile,'www')+path.sep).href+'">');
  const page=path.join(out,'consulta-fixture.html');fs.writeFileSync(page,html);await w.loadFile(page);

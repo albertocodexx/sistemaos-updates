@@ -183,6 +183,15 @@
       // getUser valida o JWT no servidor; não confiamos só no conteúdo local.
       var usuario = await comTempoLimite(root.SistemaOSAuthService.obterUsuario(), 18000);
       if (!usuario || usuario.id !== usuarioSessao.id) throw new Error('A sessão não corresponde ao usuário autenticado.');
+      if (usuario.app_metadata && usuario.app_metadata.troca_senha_obrigatoria === true) {
+        pararSincronizacaoIdentidadeEmpresa();
+        emitir({
+          tipo: 'recuperacao_senha',
+          mensagem: 'A senha recebida era temporária. Crie uma nova senha para continuar.',
+          usuario: usuario
+        });
+        return obterEstado();
+      }
       var contexto = await comTempoLimite(root.SistemaOSEmpresaService.carregarContexto(), 18000);
       if (numero !== validacaoNumero) return obterEstado();
       var resultado = root.SistemaOSEmpresaService.validarContexto(contexto, usuario.id);

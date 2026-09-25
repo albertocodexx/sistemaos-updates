@@ -9,6 +9,8 @@
   // enquanto o primeiro pull ainda estava em andamento.
   var VERSAO_CACHE = 2;
   var PREFIXO_CACHE = 'sistema-os-estoque-cache-v2:';
+  var filasEmCurso = Object.create(null);
+  var conciliador = root.SistemaOSCobrancasSync || (typeof require === 'function' ? require('./cobrancas-sync') : null);
   var TIPOS_ITEM_ESTOQUE = ['Peça / Componente', 'Consumível', 'Acessório'];
   var STATUS_APARELHO = ['Aguardando chegada', 'Em análise', 'Aguardando peça', 'Em reparo', 'Pronto para venda', 'Reservado', 'Vendido', 'Cancelado'];
 
@@ -48,11 +50,12 @@
     } catch (_) { return padrao; }
   }
 
-  function salvarEstadoCache(estado) {
+  function salvarEstadoCache(estado, obrigatorio) {
     try {
+      if (obrigatorio && !root.localStorage) throw new Error('Armazenamento indisponível');
       estado.atualizadoEm = new Date().toISOString();
       root.localStorage && root.localStorage.setItem(chaveCache(), JSON.stringify(estado));
-    } catch (_) { /* cache e uma otimizacao: nunca bloqueia o estoque */ }
+    } catch (_) { if (obrigatorio) throw new Error('Sem espaço para guardar a alteração offline. Libere espaço e tente salvar novamente.'); }
   }
 
   function chaveLista(tipo) { return tipo === 'peca' ? 'pecas' : 'aparelhos'; }
@@ -98,6 +101,7 @@
     var existente = (estado.fila || []).find(function (item) {
       return item.acao === 'salvar_aparelho' && item.id === id;
     });
+    if (!existente && estado.fila.length >= 100) throw new Error('Fila offline cheia. Conecte-se antes de salvar mais alterações.');
     // Uma única entrada por aparelho, mas acumulando somente os campos que o
     // celular realmente alterou. Guardar a fotografia inteira sobrescrevia
     // mudanças feitas no PC enquanto o Android estava offline.
@@ -107,17 +111,18 @@
     estado.fila.push({
       acao: 'salvar_aparelho', id: id,
       dados: Object.assign({}, existente && existente.dados || {}, alteracoes || {}),
+      versao: Date.now().toString(36) + Math.random().toString(36).slice(2),
       criadoEm: existente && existente.criadoEm || new Date().toISOString()
     });
     estado.fila = estado.fila.slice(-100);
-    salvarEstadoCache(estado);
+    salvarEstadoCache(estado, true);
   }
 
-  function removerEdicaoPendenteAparelho(id) {
+  function removerEdicaoPendenteAparelho(id, versao) {
     var estado = estadoCache();
     var antes = (estado.fila || []).length;
     estado.fila = (estado.fila || []).filter(function (item) {
-      return !(item.acao === 'salvar_aparelho' && item.id === String(id || ''));
+      return !(item.acao === 'salvar_aparelho' && item.id === String(id || '') && item.versao === versao);
     });
     if (estado.fila.length !== antes) salvarEstadoCache(estado);
   }
@@ -163,25 +168,52 @@
   }
 
   async function listar(tipo) {
+    var empresa = empresaIdAtual();
     var resposta = await cliente().from('estoque_itens')
       .select('id,tipo,local_id,dados,revision,updated_at')
       .eq('tipo', tipo).is('deleted_at', null)
       .order('updated_at', { ascending: false }).limit(1000);
     if (resposta.error) throw resposta.error;
+    if (empresa !== empresaIdAtual()) throw new Error('Sessão alterada durante a consulta.');
     var itens = (resposta.data || []).map(mapearItem);
+    if (tipo === 'aparelho') {
+      var fila = estadoCache().fila;
+      itens = itens.map(function (item) {
+        var pendente = fila.find(function (p) { return p.id === item.id; });
+        return pendente ? Object.assign({}, mesclarPatch(item, pendente.dados), { _pendenteNuvem: true }) : item;
+      });
+    }
     atualizarCache(tipo, itens);
     return itens;
   }
 
   async function obterAparelho(localId) {
+    var empresa = empresaIdAtual();
+    if (!estaOnline()) return listarCache('aparelho').find(function (item) { return item.id === localId; }) || null;
     var resposta = await cliente().from('estoque_itens')
       .select('id,tipo,local_id,dados,revision,updated_at')
       .eq('tipo', 'aparelho').eq('local_id', localId).is('deleted_at', null).maybeSingle();
     if (resposta.error) throw resposta.error;
+    if (empresa !== empresaIdAtual()) throw new Error('Sessão alterada durante a consulta.');
     return mapearItem(resposta.data);
   }
 
+  function mesclarPatch(remoto, patch) {
+    var dados = Object.assign({}, remoto, patch);
+    if (remoto.status === 'Vendido' && dados.status === 'Reservado') dados.status = 'Vendido';
+    if (conciliador && (patch.lembretesCobranca || patch.lembretesCobrancaExcluidos)) {
+      var m = conciliador.mesclarLembretes(patch.lembretesCobranca, remoto.lembretesCobranca, patch.lembretesCobrancaExcluidos, remoto.lembretesCobrancaExcluidos);
+      var f = conciliador.recalcularFinanceiro({lembretes_cobranca:m.lembretes,
+        valor_recebido_base_cobrancas:Math.max(Number(patch.valorRecebidoBaseCobrancas)||0, Number(remoto.valorRecebidoBaseCobrancas)||0)}, dados.valorVenda);
+      Object.assign(dados, {lembretesCobranca:m.lembretes,lembretesCobrancaExcluidos:m.exclusoes,
+        valorRecebidoBaseCobrancas:f.valor_recebido_base_cobrancas,valorRecebidoConfirmado:f.valor_recebido_confirmado,valorRestanteVenda:f.valor_restante_servico});
+    }
+    return dados;
+  }
+
   async function salvarAparelho(alteracoes, atual) {
+    var empresa = empresaIdAtual();
+    var pendenteInicial = estadoCache().fila.find(function (item) { return item.id === (atual && atual.id || alteracoes && alteracoes.id); });
     atual = atual || await obterAparelho(alteracoes && alteracoes.id);
     if (!atual || !atual.id) throw new Error('Aparelho não encontrado no estoque sincronizado. Atualize a lista e tente novamente.');
     var baseAtual = semMetadados(atual);
@@ -197,51 +229,63 @@
     if (STATUS_APARELHO.indexOf(dados.status) < 0) {
       throw new Error('Status de estoque inválido.');
     }
+    var patch = Object.assign({}, pendenteInicial && pendenteInicial.dados || {}, calcularAlteracoes(baseAtual, dados));
+    dados = mesclarPatch(baseAtual, patch);
 
     async function enviar(base) {
+      var dispositivo = await dispositivoId();
+      if (empresa !== empresaIdAtual()) throw new Error('Sessão alterada. Salve novamente na empresa correta.');
       var resposta = await cliente().rpc('salvar_item_estoque', {
         p_tipo: 'aparelho', p_local_id: base.id, p_dados: dados,
         p_revision: base._revision || null,
-        p_dispositivo_id: await dispositivoId()
+        p_dispositivo_id: dispositivo
       });
       if (resposta.error) throw resposta.error;
+      if (empresa !== empresaIdAtual()) throw new Error('Sessão alterada durante o envio.');
       return mapearItem(linha(resposta.data));
     }
 
     try {
       var salvo = await enviar(atual);
       atualizarItemCache('aparelho', salvo);
-      removerEdicaoPendenteAparelho(salvo.id);
+      if (pendenteInicial) removerEdicaoPendenteAparelho(salvo.id, pendenteInicial.versao);
       return salvo;
     } catch (erro) {
+      if (empresa !== empresaIdAtual()) throw erro;
       if (erroDeRede(erro) || !estaOnline()) {
         var pendente = Object.assign({}, dados, {
           _idRemoto: atual._idRemoto || '', _revision: atual._revision || null,
           _pendenteNuvem: true, _atualizadoEm: new Date().toISOString()
         });
-        atualizarItemCache('aparelho', pendente);
         enfileirarEdicaoAparelho(atual.id, calcularAlteracoes(baseAtual, dados));
+        atualizarItemCache('aparelho', pendente);
         return pendente;
       }
       if (!/conflito_revision_estoque|revision/i.test(String(erro && (erro.message || erro)))) throw erro;
       var recente = await obterAparelho(atual.id);
       if (!recente) throw erro;
-      dados = Object.assign({}, semMetadados(recente), alteracoes || {}, { id: recente.id });
+      dados = mesclarPatch(semMetadados(recente), patch);
       var conciliado = await enviar(recente);
       atualizarItemCache('aparelho', conciliado);
-      removerEdicaoPendenteAparelho(conciliado.id);
+      if (pendenteInicial) removerEdicaoPendenteAparelho(conciliado.id, pendenteInicial.versao);
       return conciliado;
     }
   }
 
-  async function processarFila() {
+  function processarFila() {
+    var empresa = empresaIdAtual();
+    if (!filasEmCurso[empresa]) filasEmCurso[empresa] = processarFilaEmpresa(empresa).finally(function () { delete filasEmCurso[empresa]; });
+    return filasEmCurso[empresa];
+  }
+
+  async function processarFilaEmpresa(empresa) {
     if (!estaOnline()) return { enviados: 0, pendentes: estadoCache().fila.length, offline: true };
     var estado = estadoCache();
     var pendentes = estado.fila || [];
     if (!pendentes.length) return { enviados: 0, pendentes: 0 };
-    var restantes = [];
     var enviados = 0;
     for (var i = 0; i < pendentes.length; i += 1) {
+      if (empresa !== empresaIdAtual()) break;
       var item = pendentes[i];
       try {
         if (item.acao !== 'salvar_aparelho') continue;
@@ -249,23 +293,27 @@
         // PC pode ter sido ligado e atualizado o mesmo item nesse intervalo.
         var remoto = await obterAparelho(item.id);
         if (!remoto) throw new Error('Aparelho removido do estoque antes da sincronizacao.');
-        var salvo = await salvarAparelho(item.dados, remoto);
+        // A fila pode ter mudado enquanto a consulta estava em andamento.
+        var vigente = estadoCache().fila.find(function (p) { return p.id === item.id; });
+        if (!vigente || vigente.versao !== item.versao) continue;
+        var salvo = await salvarAparelho(mesclarPatch(remoto, item.dados), remoto);
         if (salvo._pendenteNuvem) throw new Error('Conexao ainda indisponivel.');
         enviados += 1;
-      } catch (_) {
-        restantes.push(item);
-      }
+      } catch (_) { /* Mantém a operação durável para a próxima tentativa. */ }
     }
     estado = estadoCache();
-    estado.fila = restantes;
-    salvarEstadoCache(estado);
-    return { enviados: enviados, pendentes: restantes.length };
+    return { enviados: enviados, pendentes: estado.fila.length };
   }
 
   async function registrarVenda(venda) {
     if (!venda || !venda.estoqueLocalId) throw new Error('Venda sem vínculo com o aparelho do estoque.');
     if (!(Number(venda.valorVenda) > 0)) throw new Error('Informe um valor de venda maior que zero.');
+    var atual = await obterAparelho(venda.estoqueLocalId);
+    if (!atual) throw new Error('Aparelho não encontrado no estoque sincronizado.');
     var pendente = venda.assinaturaPendente === true && venda.naoAssinado !== true && !venda.assinaturaCompradorBase64;
+    // Uma solicitação antiga de assinatura não pode rebaixar uma venda que o
+    // PC já confirmou. Cancelamentos usam um estado explícito e outro fluxo.
+    var statusVenda = atual.status === 'Vendido' ? 'Vendido' : (pendente ? 'Reservado' : 'Vendido');
     return salvarAparelho({
       tipoEquipamento: venda.tipoEquipamento,
       marca: venda.marca,
@@ -285,8 +333,8 @@
       dataVenda: venda.dataVenda || new Date().toISOString(),
       assinaturaPendente: pendente,
       naoAssinado: venda.naoAssinado === true,
-      status: pendente ? 'Reservado' : 'Vendido'
-    }, await obterAparelho(venda.estoqueLocalId));
+      status: statusVenda
+    }, atual);
   }
 
   async function salvarPeca(dados, atual) {

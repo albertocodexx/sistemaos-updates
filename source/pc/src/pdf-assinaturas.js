@@ -44,11 +44,14 @@
         recorte.getContext('2d').drawImage(img, box.x / escala, box.y / escala, box.width / escala, box.height / escala, 0, 0, recorte.width, recorte.height);
         img.src = recorte.toDataURL('image/png');
         img.dataset.recorteAssinatura = 'ok';
-        img.style.height = '56px'; img.style.maxHeight = '56px';
+        img.style.height = '50px'; img.style.maxHeight = '50px';
         img.style.width = '100%'; img.style.maxWidth = '100%';
         img.style.objectFit = 'contain'; img.style.objectPosition = 'center bottom';
         var espaco = img.closest('.assinatura-espaco,.assin-esp');
-        if (espaco) { espaco.style.minHeight = '56px'; espaco.style.height = '56px'; }
+        if (espaco) {
+          espaco.style.minHeight = '58px'; espaco.style.height = '58px';
+          espaco.style.paddingBottom = '4px'; espaco.style.boxSizing = 'border-box';
+        }
         total++;
       } catch (_) { /* Conservar a imagem válida original se o recorte falhar. */ }
     });

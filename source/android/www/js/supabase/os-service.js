@@ -52,6 +52,7 @@
   var listaEmAndamento = null;
   var listaEmAndamentoLimite = 0;
   var listaEmCache = null;
+  var geracaoCache = 0;
 
   function texto(valor) {
     return String(valor == null ? '' : valor).trim();
@@ -102,18 +103,23 @@
     }
     if (!forcar && consultasEmAndamento[chave]) return consultasEmAndamento[chave];
 
+    var geracao = geracaoCache;
     var consulta = buscarLinhaNoServidor(numero).then(function (linha) {
-      consultasEmCache[chave] = { em: Date.now(), linha: linha };
+      if (geracao === geracaoCache) consultasEmCache[chave] = { em: Date.now(), linha: linha };
       return linha;
     }).finally(function () {
-      delete consultasEmAndamento[chave];
+      if (consultasEmAndamento[chave] === consulta) delete consultasEmAndamento[chave];
     });
     consultasEmAndamento[chave] = consulta;
     return consulta;
   }
 
   function invalidarConsultasLeves() {
+    geracaoCache += 1;
     consultasEmCache = Object.create(null);
+    consultasEmAndamento = Object.create(null);
+    listaEmAndamento = null;
+    listaEmAndamentoLimite = 0;
     listaEmCache = null;
   }
 
@@ -263,8 +269,9 @@
     }
 
     listaEmAndamentoLimite = limitePedido;
+    var geracao = geracaoCache;
     var operacaoLista = listarLevesNoServidor(limitePedido).then(function (linhas) {
-      listaEmCache = { em: Date.now(), limite: limitePedido, linhas: linhas };
+      if (geracao === geracaoCache) listaEmCache = { em: Date.now(), limite: limitePedido, linhas: linhas };
       return linhas;
     }).finally(function () {
       // Se surgiu uma consulta maior enquanto esta ainda terminava, ela é a
@@ -295,6 +302,7 @@
     var aparelho = dados.aparelho || {};
     var semPrazo = dados.semPrazo === true || (!primeiro(dados.data_prevista, dados.dataPrevista) && !primeiro(dados.hora_prevista, dados.horaPrevista));
     return {
+      cliente_id: primeiro(dados.cliente_id, cliente.id),
       cliente_nome_snapshot: primeiro(dados.cliente_nome_snapshot, cliente.nome),
       cliente_telefone_snapshot: primeiro(dados.cliente_telefone_snapshot, cliente.telefone),
       cliente_cpf_snapshot: primeiro(dados.cliente_cpf_snapshot, cliente.cpf),
@@ -382,6 +390,7 @@
 
   function classificarErro(erro) {
     if (erro && (erro.code === '40001' || /conflito_revision/i.test(erro.message || ''))) return 'conflito';
+    if (erro && (erro.code === '55000' || /sincronizacao_em_andamento|sincroniza[cç][aã]o em andamento/i.test(erro.message || ''))) return 'ocupado';
     if (ehErroRede(erro)) return 'rede';
     if (erro && (erro.code === 'P0002' || /nao encontrada|n.o encontrada/i.test(erro.message || ''))) return 'nao-encontrada';
     if (erro && erro.code === '42501') return 'permissao';
@@ -397,12 +406,14 @@
   async function criar(dados, idExportacao, origemDispositivoId) {
     var id = texto(idExportacao);
     if (!id) throw new Error('idExportacao e obrigatorio para criar a OS.');
-    var resposta = await root.SupabaseClientApp.obterCliente().rpc('criar_ordem_servico', {
+    var resposta = await root.SupabaseClientApp.obterCliente().rpc('criar_ordem_servico_mobile_v2', {
       p_id_exportacao: id,
       p_dados: dadosParaCriacao(dados),
       p_origem_dispositivo_id: origemDispositivoId || null
     });
-    return normalizar(lancarResposta(resposta));
+    var criado = normalizar(lancarResposta(resposta));
+    invalidarConsultasLeves();
+    return criado;
   }
 
   async function atualizar(id, revisionEsperada, patch) {
@@ -415,7 +426,32 @@
       p_revision: Number(revisionEsperada),
       p_patch: patchServidor
     });
-    return normalizar(lancarResposta(resposta));
+    // A fila offline guarda a revisão original. Reconciliar somente cobranças
+    // por ID evita que um pagamento fique preso ou apague uma parcela do PC.
+    if (resposta.error && /conflito|revision/i.test(String(resposta.error.message || '')) &&
+        patchServidor.dados_extras && Array.isArray(patchServidor.dados_extras.lembretes_cobranca) &&
+        Object.keys(patchServidor).every(function (k) { return k === 'dados_extras' || k === 'status_pagamento'; })) {
+      var conciliador = root.SistemaOSCobrancasSync || (typeof require === 'function' ? require('./cobrancas-sync') : null);
+      if (conciliador) {
+        var atual = await root.SupabaseClientApp.obterCliente().from(TABELA)
+          .select('id,revision,valor,dados_extras').eq('id', id).is('deleted_at', null).maybeSingle();
+        if (atual.error) throw atual.error;
+        if (atual.data) {
+          var mescla = conciliador.mesclarExtrasCobranca(patchServidor.dados_extras, atual.data.dados_extras, atual.data.valor);
+          var extras = Object.assign({}, atual.data.dados_extras || {});
+          ['lembretes_cobranca','lembretes_cobranca_excluidos','valor_recebido_base_cobrancas','valor_recebido_confirmado',
+            'valor_restante_servico','percentual_pagamento_confirmado','valor_total_servico','status_pagamento_local'].forEach(function(k) { extras[k] = mescla[k]; });
+          var reconciliado = { dados_extras: extras };
+          if (extras.status_pagamento_local === 'Pago') reconciliado.status_pagamento = 'Autorizado';
+          resposta = await root.SupabaseClientApp.obterCliente().rpc('atualizar_ordem_servico', {
+            p_id:id,p_revision:Number(atual.data.revision),p_patch:reconciliado
+          });
+        }
+      }
+    }
+    var atualizado = normalizar(lancarResposta(resposta));
+    invalidarConsultasLeves();
+    return atualizado;
   }
 
   async function excluir(id, revisionEsperada) {

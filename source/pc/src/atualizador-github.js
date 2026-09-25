@@ -19,6 +19,7 @@ let instalacaoSolicitada = false;
 let temporizadorInstalacao = null;
 let temporizadorNovaTentativa = null;
 let atualizacaoObrigatoriaDetectada = false;
+let versaoBaixada = '';
 let estado = { fase: 'ocioso', versaoAtual: '0.0.0', versaoNova: null, progresso: 0, mensagem: '' };
 let ultimaFaseJanela = 'ocioso';
 
@@ -62,6 +63,38 @@ function erroLegivel(erro) {
   return texto;
 }
 
+function caminhoMarcadorReinicio() {
+  try {
+    const pasta = appElectron?.getPath?.('userData');
+    return pasta ? path.join(pasta, 'atualizacao-reinicio.json') : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function registrarReinicioAtualizado() {
+  const destino = caminhoMarcadorReinicio();
+  if (!destino || !versaoBaixada) return;
+  try {
+    fs.mkdirSync(path.dirname(destino), { recursive: true });
+    fs.writeFileSync(destino, JSON.stringify({ versao: versaoBaixada, criadoEm: Date.now() }), 'utf8');
+  } catch (_) { /* a atualização continua normalmente sem a otimização */ }
+}
+
+function consumirReinicioAtualizado() {
+  const destino = caminhoMarcadorReinicio();
+  if (!destino || !fs.existsSync(destino)) return false;
+  try {
+    const marcador = JSON.parse(fs.readFileSync(destino, 'utf8'));
+    fs.unlinkSync(destino);
+    return marcador?.versao === versaoAtual()
+      && Date.now() - Number(marcador?.criadoEm || 0) < 15 * 60 * 1000;
+  } catch (_) {
+    try { fs.unlinkSync(destino); } catch (_) { /* best effort */ }
+    return false;
+  }
+}
+
 function inicializar({ app, getJanela, onEstado }) {
   if (iniciado) return;
   iniciado = true;
@@ -103,6 +136,7 @@ function inicializar({ app, getJanela, onEstado }) {
     });
   });
   autoUpdater.on('update-downloaded', (info) => {
+    versaoBaixada = String(info.version || '');
     publicar({
       fase: 'pronto', versaoNova: info.version || null, progresso: 100,
       mensagem: 'Atualização pronta. Reiniciando o Sistema OS...'
@@ -110,7 +144,7 @@ function inicializar({ app, getJanela, onEstado }) {
     // No PC a atualização faz parte do boot: depois do download não existe
     // uma segunda confirmação. O atraso permite que a barra chegue a 100%.
     clearTimeout(temporizadorInstalacao);
-    temporizadorInstalacao = setTimeout(() => instalar(), 900);
+    temporizadorInstalacao = setTimeout(() => instalar(), 150);
     temporizadorInstalacao.unref?.();
   });
   autoUpdater.on('error', (erro) => {
@@ -131,6 +165,17 @@ function inicializar({ app, getJanela, onEstado }) {
 
 async function verificar() {
   if (!appElectron?.isPackaged) return publicar({ fase: 'desenvolvimento', mensagem: 'Instale a versão distribuída para verificar atualizações.' });
+  if (consumirReinicioAtualizado()) {
+    const pronto = publicar({
+      fase: 'atualizado', versaoNova: null, progresso: 100,
+      mensagem: 'Atualização concluída. Abrindo o Sistema OS...'
+    });
+    // Evita repetir a consulta de rede durante o primeiro boot pós-instalação,
+    // mas confirma em segundo plano logo depois que a interface já abriu.
+    const confirmarDepois = setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 1500);
+    confirmarDepois.unref?.();
+    return pronto;
+  }
   try {
     // Os eventos update-available/update-not-available/download-progress são a
     // fonte de verdade do estado. Não volte artificialmente para "verificando"
@@ -153,6 +198,7 @@ function instalar() {
 
   instalacaoSolicitada = true;
   publicar({ fase: 'instalando', mensagem: 'Fechando o Sistema OS para instalar a atualização...' });
+  registrarReinicioAtualizado();
   setTimeout(() => {
     try {
       // O NSIS só pode iniciar depois que a resposta IPC retornou ao renderer.
@@ -164,7 +210,7 @@ function instalar() {
       instalacaoSolicitada = false;
       publicar({ fase: 'erro', mensagem: `Não foi possível iniciar o instalador: ${erroLegivel(erro)}` });
     }
-  }, 350);
+  }, 75);
   return { sucesso: true, mensagem: 'Fechando o Sistema OS para iniciar o instalador...' };
 }
 

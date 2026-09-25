@@ -48,7 +48,7 @@
     return ({ login_pc: 'Login do PC', login_celular: 'Login do celular', config_pc: 'Configurações do PC', config_celular: 'Configurações do celular' })[texto(origem)] || 'Origem não informada';
   }
   function statusChamado(valor) {
-    return ({ aberto: 'Aberto', em_atendimento: 'Em atendimento', resolvido: 'Resolvido', fechado: 'Fechado' })[texto(valor)] || 'Aberto';
+    return ({ aberto: 'Aguardando suporte', em_atendimento: 'Atendido', resolvido: 'Finalizado', fechado: 'Finalizado', cancelado: 'Cancelado' })[texto(valor)] || 'Aberto';
   }
   function motivoChamado(valor, outro) {
     if (valor === 'outro' && outro) return outro;
@@ -57,6 +57,21 @@
       documento_assinatura: 'Documento / assinatura', erro_sistema: 'Erro no sistema',
       configuracao_integracao: 'Configuração / integração', duvida_funcionalidade: 'Dúvida',
       sugestao: 'Sugestão', outro: 'Outro motivo' })[texto(valor)] || 'Motivo não informado';
+  }
+  function resumoContextoChamado(detalhes) {
+    var dados = detalhes && typeof detalhes === 'object' ? detalhes : {};
+    var rotulos = {
+      contratar: 'Contratar após o teste', renovar: 'Renovar assinatura', trocar_plano: 'Trocar de plano', acesso_bloqueado: 'Acesso bloqueado ou vencido',
+      nao_reconhecido: 'Pagamento não reconhecido', checkout: 'Falha ao pagar', valor_incorreto: 'Valor ou vencimento incorreto', duplicado: 'Cobrança duplicada', reembolso: 'Reembolso ou cancelamento',
+      nao_entra: 'Não consegue entrar', senha: 'Senha', bloqueado: 'Usuário bloqueado', trocar_usuario: 'Troca de usuário', conta: 'Conta ou empresa ausente',
+      os: 'Ordem de serviço', assinaturas: 'Assinaturas ou documentos', estoque: 'Estoque ou vendas', clientes: 'Clientes', cobrancas: 'Cobranças', configuracoes: 'Configurações', backup: 'Backup',
+      no_pc: 'Criado no celular e ausente no PC', no_celular: 'Criado no PC e ausente no celular', ambos: 'Diferente nos dois',
+      pdf: 'PDF vazio, preto ou incorreto', assinatura_nao_chega: 'Assinatura não sincroniza', assinatura_visual: 'Assinatura com tamanho ou posição incorreta', compartilhar: 'Falha ao compartilhar', documento_reaparece: 'Documento excluído reaparece',
+      entrega: 'Entrega', garantia: 'Garantia', desbloqueio: 'Desbloqueio', compra: 'Compra', venda: 'Venda', financeiro: 'Financeiro ou cobranças', usuarios: 'Usuários e permissões', ia: 'Assistente de IA', relatorios: 'Relatórios', atualizacao: 'Atualização',
+      sempre: 'Acontece sempre', as_vezes: 'Acontece às vezes', uma_vez: 'Aconteceu uma vez', apos_atualizar: 'Após atualização', whatsapp: 'WhatsApp', mercado_pago: 'Mercado Pago', nota_fiscal: 'Nota fiscal', empresa: 'Dados da empresa', documentos: 'Documentos e assinaturas', outro: 'Outro'
+    };
+    var plataformas = { pc: 'Computador', celular: 'Celular', ambos: 'Computador e celular' };
+    return [dados.detalhe ? 'Detalhe: ' + (rotulos[dados.detalhe] || dados.detalhe) : '', dados.complemento ? 'Contexto: ' + (rotulos[dados.complemento] || dados.complemento) : '', dados.plataforma ? 'Onde: ' + (plataformas[dados.plataforma] || dados.plataforma) : '', dados.referencia ? 'Referência: ' + dados.referencia : ''].filter(Boolean).join(' · ');
   }
   function desenharChamados() {
     if (!listaChamados) return;
@@ -73,17 +88,22 @@
       var meta = document.createElement('small');
       meta.textContent = [statusChamado(chamado.status), origemChamado(chamado.origem), motivoChamado(chamado.motivo, chamado.motivo_outro), chamado.contato_nome || 'Sem nome', chamado.contato_usuario ? 'usuário ' + chamado.contato_usuario : '', chamado.criado_em ? new Date(chamado.criado_em).toLocaleString('pt-BR') : ''].filter(Boolean).join(' · ');
       var contato = document.createElement('small');
-      contato.textContent = [chamado.telefone_contato ? 'Tel. ' + chamado.telefone_contato : '', chamado.email_contato || '', chamado.preferencia_contato ? 'retorno por ' + chamado.preferencia_contato : '', chamado.cargo_outro || chamado.cargo_empresa || ''].filter(Boolean).join(' · ');
+      contato.textContent = [chamado.telefone_contato ? 'Tel. ' + chamado.telefone_contato : '', chamado.email_contato || '', chamado.preferencia_contato ? 'retorno por ' + chamado.preferencia_contato : ''].filter(Boolean).join(' · ');
+      var contexto = document.createElement('small');
+      contexto.textContent = resumoContextoChamado(chamado.detalhes_contato);
+      contexto.hidden = !contexto.textContent;
       var mensagem = document.createElement('p');
       mensagem.textContent = texto(chamado.mensagem);
-      card.append(titulo, meta, contato, mensagem);
+      card.append(titulo, meta, contato, contexto, mensagem);
       if (chamado.resolucao) {
         var resposta = document.createElement('small');
         resposta.textContent = 'Resposta: ' + texto(chamado.resolucao);
         card.appendChild(resposta);
       }
       var acoes = document.createElement('div'); acoes.className = 'suporte-chamado-acoes';
-      if (['resolvido', 'fechado'].indexOf(texto(chamado.status)) === -1) {
+      if (['resolvido', 'fechado', 'cancelado'].indexOf(texto(chamado.status)) === -1) {
+        var cancelar=document.createElement('button');cancelar.type='button';cancelar.className='btn-secundario';cancelar.textContent='Cancelar chamado';
+        cancelar.addEventListener('click',function(){atualizarChamado(chamado,'cancelado');});acoes.appendChild(cancelar);
         if (chamado.status === 'aberto') {
           var assumir = document.createElement('button'); assumir.type = 'button'; assumir.className = 'btn-secundario'; assumir.textContent = 'Assumir';
           assumir.addEventListener('click', function () { atualizarChamado(chamado, 'em_atendimento'); }); acoes.appendChild(assumir);
@@ -165,7 +185,7 @@
   }
   async function atualizarChamado(chamado, novoStatus) {
     var resolucao = '';
-    if (novoStatus === 'resolvido' || novoStatus === 'fechado') {
+    if (novoStatus === 'resolvido' || novoStatus === 'fechado' || novoStatus === 'cancelado') {
       var valor = window.prompt(novoStatus === 'resolvido' ? 'Resumo da solução (opcional):' : 'Motivo do fechamento (opcional):');
       if (valor === null) return;
       resolucao = texto(valor);
@@ -181,7 +201,7 @@
   }
   async function excluirChamado(chamado) {
     var protocolo = chamado.protocolo || ('CH-' + texto(chamado.id).slice(0, 8).toUpperCase());
-    if (!window.confirm('Excluir permanentemente o chamado ' + protocolo + '?\n\nA conversa inteira será apagada e esta ação não pode ser desfeita.')) return;
+    if (!window.confirm('Arquivar o chamado ' + protocolo + '?\n\nEle sairá da lista. Os registros serão preservados para auditoria.')) return;
     var digitado = window.prompt('Digite ' + protocolo + ' para confirmar:');
     if (digitado === null) return;
     if (texto(digitado).trim().toUpperCase() !== protocolo.toUpperCase()) { status.textContent = 'Protocolo de confirmação incorreto.'; return; }
