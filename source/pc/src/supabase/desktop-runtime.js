@@ -2169,7 +2169,9 @@ class DesktopSupabaseRuntime {
   }
 
   async fiscalDocumentos(acao, dados = {}) {
-    if (!this.client || !this.contexto || this.contexto.administrador_global) {
+    const acoesSuporte = new Set(['resumo', 'listar', 'salvar_configuracao']);
+    if (!this.client || !this.contexto ||
+        (this.contexto.administrador_global && !acoesSuporte.has(String(acao || '')))) {
       return { sucesso: false, erro: 'Entre em uma empresa para usar a nota fiscal.' };
     }
     try {
@@ -2436,6 +2438,7 @@ class DesktopSupabaseRuntime {
       configurado: !!(cfg.url && cfg.anonKey),
       operacional: !!this.client,
       autenticado: !!this.usuario,
+      administradorGlobal: this.contexto?.administrador_global === true,
       empresaId: this.contexto?.empresa_id || '',
       empresaNome: this.contexto?.empresa_nome || '',
       planoNome: this.contexto?.plano_nome || '',

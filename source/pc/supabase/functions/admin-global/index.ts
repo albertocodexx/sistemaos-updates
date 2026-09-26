@@ -193,11 +193,12 @@ Deno.serve(async (req) => {
       const { data: cadastroSuporte, error: suporteErro } = await admin.from('administradores_globais')
         .select('papel,ativo').eq('usuario_id', sessao.user.id).maybeSingle();
       if (suporteErro) throw suporteErro;
+      if (cadastroSuporte?.ativo !== true) return resposta(403, { erro: 'A conta de suporte está inativa.' });
       papelSuporte = texto(cadastroSuporte?.papel || 'suporte');
     }
     const somenteAdministradorGeral = new Set([
       'salvar_plano', 'excluir_plano', 'definir_senha_exclusao', 'decidir_exclusao', 'definir_papel_suporte',
-      'configurar_fiscal_empresa',
+      'configurar_fiscal_empresa', 'obter_conta_fiscal', 'ajustar_conta_fiscal',
       'obter_integracao_ia_global', 'configurar_integracao_ia_global', 'desconectar_integracao_ia_global',
       'definir_personalizacao_ia_global', 'definir_personalizacao_ia_empresa',
       'obter_integracao_ia_empresa', 'configurar_integracao_ia_empresa', 'desconectar_integracao_ia_empresa'
@@ -1046,6 +1047,46 @@ Deno.serve(async (req) => {
         metadados: { ativa }
       });
       return resposta(200, { sucesso: true, ativa });
+    }
+
+    if (acao === 'obter_conta_fiscal' || acao === 'ajustar_conta_fiscal') {
+      const empresaId = texto(dados.empresaId);
+      if (!/^[0-9a-f-]{36}$/i.test(empresaId)) return resposta(400, { erro: 'Empresa invalida.' });
+      const { data: empresa, error: empresaErro } = await admin.from('empresas')
+        .select('id,nome_fantasia').eq('id', empresaId).maybeSingle();
+      if (empresaErro) throw empresaErro;
+      if (!empresa) return resposta(404, { erro: 'Empresa nao encontrada.' });
+      if (acao === 'obter_conta_fiscal') {
+        const { data, error } = await admin.from('contas_fiscais')
+          .select('limite_gratuito_mensal,preco_excedente_centavos,saldo_centavos,debito_pendente_centavos')
+          .eq('empresa_id', empresaId).maybeSingle();
+        if (error) throw error;
+        return resposta(200, { conta: data || { limite_gratuito_mensal: 100, preco_excedente_centavos: 20,
+          saldo_centavos: 0, debito_pendente_centavos: 0 } });
+      }
+      const limite = Number(dados.limite);
+      const preco = Number(dados.precoCentavos);
+      const ajuste = Number(dados.ajusteCentavos || 0);
+      const motivo = texto(dados.motivo).slice(0, 300);
+      const operacaoId = texto(dados.operacaoId);
+      if (!Number.isInteger(limite) || limite < 0 || limite > 1000000 ||
+          !Number.isInteger(preco) || preco < 0 || preco > 10000000 ||
+          !Number.isSafeInteger(ajuste) || Math.abs(ajuste) > 100000000 ||
+          (ajuste !== 0 && (motivo.length < 8 || !/^[0-9a-f-]{36}$/i.test(operacaoId)))) {
+        return resposta(400, { erro: 'Limite, preco ou ajuste invalido. Justifique qualquer alteracao de saldo.' });
+      }
+      const { data: conta, error } = await admin.rpc('ajustar_conta_fiscal', {
+        p_empresa_id: empresaId, p_limite: limite, p_preco_centavos: preco,
+        p_ajuste_centavos: ajuste, p_referencia: ajuste ? operacaoId : null, p_motivo: ajuste ? motivo : null
+      });
+      if (error) throw error;
+      const { error: auditoriaErro } = await admin.from('auditoria_comercial').insert({
+        empresa_id: empresaId, autor_id: sessao.user.id, acao: 'conta_fiscal_ajustada_suporte',
+        entidade: 'empresa', entidade_id: empresaId,
+        metadados: { limite, preco_centavos: preco, ajuste_centavos: ajuste, motivo }
+      });
+      if (auditoriaErro) console.error('[admin-global] Falha na auditoria fiscal', auditoriaErro.message);
+      return resposta(200, { conta });
     }
 
     if (acao === 'solicitar_exclusao') {

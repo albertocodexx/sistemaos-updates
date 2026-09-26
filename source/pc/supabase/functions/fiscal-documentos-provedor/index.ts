@@ -66,29 +66,62 @@ Deno.serve(async (req) => {
     if (!empresaId || !notaId) return resposta(400, { erro: 'Informe empresa e nota fiscal.' });
 
     const { data: nota, error: notaErro } = await admin.from('notas_fiscais')
-      .select('id,empresa_id,status,numero,danfse_storage_path')
+      .select('id,empresa_id,status,numero,chave_acesso,codigo_verificacao,url_consulta,xml_url,referencia_provedor,danfse_url,danfse_storage_path')
       .eq('id', notaId).eq('empresa_id', empresaId).maybeSingle();
     if (notaErro) throw notaErro;
     if (!nota) return resposta(404, { erro: 'Nota fiscal nao encontrada.' });
 
     const statusInformado = texto(dados.status).toLowerCase();
-    const status = ['autorizada', 'rejeitada', 'cancelada', 'processando'].includes(statusInformado)
-      ? statusInformado : 'processando';
+    if (!['autorizada', 'rejeitada', 'cancelada', 'processando'].includes(statusInformado)) {
+      return resposta(400, { erro: 'Status fiscal invalido.' });
+    }
+    const status = statusInformado;
+    const transicoes: Record<string, string[]> = {
+      na_fila: ['processando', 'autorizada', 'rejeitada', 'cancelada'],
+      processando: ['processando', 'autorizada', 'rejeitada', 'cancelada'],
+      autorizada: ['autorizada', 'cancelada'],
+      rejeitada: ['rejeitada'],
+      cancelada: ['cancelada']
+    };
+    if (!transicoes[nota.status]?.includes(status)) {
+      return resposta(409, { erro: 'Transicao fiscal invalida. Atualize o documento antes de repetir o retorno do provedor.' });
+    }
+    // Retornos repetidos do provedor não podem trocar a identidade de uma nota
+    // autorizada nem reabrir um documento encerrado.
+    if (nota.status === 'autorizada' && status === 'autorizada' && (
+      (texto(dados.numero) && texto(dados.numero) !== texto(nota.numero)) ||
+      (texto(dados.chaveAcesso) && texto(dados.chaveAcesso).replace(/[^0-9A-Za-z]/g, '') !== texto(nota.chave_acesso)) ||
+      (texto(dados.codigoVerificacao) && texto(dados.codigoVerificacao) !== texto(nota.codigo_verificacao))
+    )) return resposta(409, { erro: 'Os identificadores de uma nota autorizada não podem ser alterados.' });
+    if (['rejeitada', 'cancelada'].includes(nota.status) && nota.status === status) {
+      return resposta(200, { sucesso: true, nota, reutilizada: true });
+    }
+    if (nota.status === 'autorizada' && status === 'autorizada' &&
+        (nota.danfse_storage_path || nota.danfse_url || !(dados.danfseBase64 || dados.pdfBase64 || dados.danfseUrl || dados.pdfUrl))) {
+      return resposta(200, { sucesso: true, nota, reutilizada: true,
+        danfseDisponivel: Boolean(nota.danfse_storage_path || nota.danfse_url) });
+    }
     const numero = texto(dados.numero).slice(0, 80) || nota.numero || null;
-    const chaveAcesso = texto(dados.chaveAcesso).replace(/[^0-9A-Za-z]/g, '').slice(0, 100) || null;
-    const codigoVerificacao = texto(dados.codigoVerificacao).slice(0, 120) || null;
-    const urlConsulta = urlHttps(dados.urlConsulta) || null;
-    const danfseUrl = urlHttps(dados.danfseUrl || dados.pdfUrl) || null;
-    const xmlUrl = urlHttps(dados.xmlUrl) || null;
-    const referenciaProvedor = texto(dados.referenciaProvedor).slice(0, 160) || null;
+    const chaveAcesso = texto(dados.chaveAcesso).replace(/[^0-9A-Za-z]/g, '').slice(0, 100) || nota.chave_acesso || null;
+    const codigoVerificacao = texto(dados.codigoVerificacao).slice(0, 120) || nota.codigo_verificacao || null;
+    const urlConsulta = urlHttps(dados.urlConsulta) || nota.url_consulta || null;
+    const danfseUrl = urlHttps(dados.danfseUrl || dados.pdfUrl) || nota.danfse_url || null;
+    const xmlUrl = urlHttps(dados.xmlUrl) || nota.xml_url || null;
+    const referenciaProvedor = texto(dados.referenciaProvedor).slice(0, 160) || nota.referencia_provedor || null;
     const ultimoErro = texto(dados.erro).slice(0, 1000) || null;
+    if (status === 'autorizada' && (!numero || (!chaveAcesso && !codigoVerificacao))) {
+      return resposta(400, { erro: 'Autorizacao exige numero e chave ou codigo de verificacao do documento fiscal.' });
+    }
 
     let caminhoPdf = nota.danfse_storage_path || null;
     const pdf = pdfBase64Bytes(dados.danfseBase64 || dados.pdfBase64);
+    if (pdf && status !== 'autorizada') return resposta(400, { erro: 'DANFSe só pode ser anexado a uma nota autorizada.' });
     if (pdf) {
-      caminhoPdf = `${empresaId}/${notaId}/danfse.pdf`;
+      // Caminho único: dois callbacks simultâneos não sobrescrevem o PDF
+      // oficial enquanto disputam a atualização condicional do banco.
+      caminhoPdf = `${empresaId}/${notaId}/danfse-${crypto.randomUUID()}.pdf`;
       const { error: uploadErro } = await admin.storage.from('documentos-fiscais')
-        .upload(caminhoPdf, pdf, { contentType: 'application/pdf', cacheControl: '3600', upsert: true });
+        .upload(caminhoPdf, pdf, { contentType: 'application/pdf', cacheControl: '3600', upsert: false });
       if (uploadErro) throw uploadErro;
     }
 
@@ -110,7 +143,7 @@ Deno.serve(async (req) => {
       },
       updated_at: agora
     };
-    if (status === 'autorizada') alteracoes.emitida_em = agora;
+    if (status === 'autorizada' && nota.status !== 'autorizada') alteracoes.emitida_em = agora;
     if (pdf || danfseUrl) {
       alteracoes.danfse_storage_path = caminhoPdf;
       alteracoes.danfse_url = danfseUrl;
@@ -119,9 +152,16 @@ Deno.serve(async (req) => {
     }
 
     const { data: atualizada, error: atualizarErro } = await admin.from('notas_fiscais')
-      .update(alteracoes).eq('id', notaId).eq('empresa_id', empresaId)
-      .select('id,status,numero,chave_acesso,danfse_storage_path,danfse_url,danfse_gerado_em,emitida_em').single();
-    if (atualizarErro) throw atualizarErro;
+      .update(alteracoes).eq('id', notaId).eq('empresa_id', empresaId).eq('status', nota.status)
+      .select('id,status,numero,chave_acesso,danfse_storage_path,danfse_url,danfse_gerado_em,emitida_em').maybeSingle();
+    if (atualizarErro || !atualizada) {
+      if (pdf && caminhoPdf) {
+        const { error: limpezaErro } = await admin.storage.from('documentos-fiscais').remove([caminhoPdf]);
+        if (limpezaErro) console.error('[fiscal-documentos-provedor] Limpeza de PDF concorrente falhou', limpezaErro);
+      }
+      if (atualizarErro) throw atualizarErro;
+      return resposta(409, { erro: 'Estado fiscal alterado por outra operacao. Consulte novamente.' });
+    }
     return resposta(200, {
       sucesso: true,
       nota: atualizada,

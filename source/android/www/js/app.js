@@ -74,6 +74,7 @@
   var btnIrDocumentos = document.getElementById('btn-ir-documentos');
   var btnIrConsulta = document.getElementById('btn-ir-consulta');
   var btnIrCobrancas = document.getElementById('btn-ir-cobrancas');
+  var btnIrFiscal = document.getElementById('btn-ir-fiscal');
   var btnIrQr = document.getElementById('btn-ir-qr');
   var btnIrEstatisticas = document.getElementById('btn-ir-estatisticas');
   var btnIrPrazos = document.getElementById('btn-ir-prazos');
@@ -90,6 +91,7 @@
   var painelDocumentos = document.getElementById('painel-documentos');
   var painelConsulta = document.getElementById('painel-consulta');
   var painelCobrancas = document.getElementById('painel-cobrancas');
+  var painelFiscal = document.getElementById('painel-fiscal');
   var painelQr = document.getElementById('painel-qr');
   var painelEstatisticas = document.getElementById('painel-estatisticas');
   var painelPrazos = document.getElementById('painel-prazos');
@@ -153,6 +155,7 @@
     documentos: { elemento: painelDocumentos, botaoNav: btnIrDocumentos },
     consulta: { elemento: painelConsulta, botaoNav: btnIrConsulta },
     cobrancas: { elemento: painelCobrancas, botaoNav: btnIrCobrancas },
+    fiscal: { elemento: painelFiscal, botaoNav: btnIrFiscal },
     qr: { elemento: painelQr, botaoNav: btnIrQr },
     estatisticas: { elemento: painelEstatisticas, botaoNav: btnIrEstatisticas },
     prazos: { elemento: painelPrazos, botaoNav: btnIrPrazos },
@@ -1462,6 +1465,7 @@
       { botao: btnIrDocumentos, chave: 'documentos' },
       { botao: btnIrConsulta, chave: 'consulta' },
       { botao: btnIrCobrancas, chave: 'cobrancas' },
+      { botao: btnIrFiscal, chave: 'fiscal' },
       { botao: btnIrQr, chave: 'qr' },
       { botao: btnIrEstatisticas, chave: 'estatisticas' },
       { botao: btnIrPrazos, chave: 'prazos' }
@@ -1493,6 +1497,7 @@
     } else if (telaAnterior === 'cobrancas') {
       document.dispatchEvent(new CustomEvent('sistema-os:tela-cobrancas-fechada'));
     }
+    if (nome === 'fiscal') document.dispatchEvent(new CustomEvent('sistema-os:tela-fiscal-aberta'));
     if (nome !== 'qr' && window.SistemaOSQRCode && window.SistemaOSQRCode.leituraAtiva()) {
       window.SistemaOSQRCode.cancelarLeitura().catch(function () {});
     }
@@ -1714,6 +1719,10 @@
     btnIrCobrancas.addEventListener('click', function () {
       mostrarTela('cobrancas');
     });
+  }
+
+  if (btnIrFiscal) {
+    btnIrFiscal.addEventListener('click', function () { mostrarTela('fiscal'); });
   }
 
   if (btnIrQr) {

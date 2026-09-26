@@ -6022,12 +6022,20 @@ function criarBotaoSuporte(texto, classe, acao) {
   botao.type = 'button';
   botao.className = 'botao ' + classe + ' botao-pequeno';
   botao.textContent = texto;
-  botao.addEventListener('click', () => Promise.resolve().then(acao).catch((erro) => {
-    const mensagem = erro?.erro || erro?.mensagem || erro?.message || erro?.details || erro?.hint;
-    toast(typeof mensagem === 'string' && mensagem.trim()
-      ? mensagem.trim()
-      : 'Não foi possível concluir a operação. Tente novamente.', 'erro');
-  }));
+  botao.addEventListener('click', async () => {
+    if (botao.disabled) return;
+    botao.disabled = true;
+    try {
+      await acao();
+    } catch (erro) {
+      const mensagem = erro?.erro || erro?.mensagem || erro?.message || erro?.details || erro?.hint;
+      toast(typeof mensagem === 'string' && mensagem.trim()
+        ? mensagem.trim()
+        : 'Não foi possível concluir a operação. Tente novamente.', 'erro');
+    } finally {
+      botao.disabled = false;
+    }
+  });
   return botao;
 }
 
@@ -6266,6 +6274,11 @@ function renderizarEmpresasGlobais(empresas) {
           fiscalAtivo ? 'botao-perigo' : 'botao-secundario',
           () => configurarFiscalEmpresaGlobal(empresa, !fiscalAtivo)
         ));
+        acoes.appendChild(criarBotaoSuporte('Cota e saldo NF', 'botao-secundario', () => ajustarContaFiscalEmpresaGlobal(empresa)));
+        acoes.appendChild(criarBotaoSuporte('Cadastro fiscal', 'botao-secundario', () => {
+          if (typeof window.abrirCadastroFiscalSuporte !== 'function') throw new Error('Cadastro fiscal indisponível. Reabra a central de suporte.');
+          return window.abrirCadastroFiscalSuporte(empresa);
+        }));
       }
     }
     if (!empresaInternaSuporte) {
@@ -7223,6 +7236,51 @@ async function configurarFiscalEmpresaGlobal(empresa, ativa) {
   if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível alterar a função fiscal.');
   toast('Função fiscal ' + (ativa ? 'liberada' : 'ocultada') + ' para a empresa.', 'sucesso');
   await atualizarPainelGlobalSistema();
+}
+
+const operacoesFiscaisPendentes = new Map();
+async function ajustarContaFiscalEmpresaGlobal(empresa) {
+  if (!suporteEhAdministradorGeral()) throw new Error('Somente o Administrador Geral pode alterar a conta fiscal.');
+  const consulta = await window.api.supabaseadministracaoglobal?.('obter_conta_fiscal', { empresaId: empresa.id });
+  if (!consulta?.sucesso) throw new Error(consulta?.erro || 'Não foi possível consultar a cota fiscal.');
+  const conta = consulta.conta || {};
+  const titulo = 'Cota fiscal — ' + (empresa.nome_fantasia || empresa.codigo);
+  const limiteTexto = await promptModal('Notas incluídas por mês:', String(conta.limite_gratuito_mensal ?? 100), { titulo });
+  if (limiteTexto === null) return;
+  const precoTexto = await promptModal('Preço por nota excedente, em R$:', (Number(conta.preco_excedente_centavos ?? 20) / 100).toFixed(2).replace('.', ','), { titulo });
+  if (precoTexto === null) return;
+  const ajusteTexto = await promptModal(
+    `Saldo atual: R$ ${(Number(conta.saldo_centavos || 0) / 100).toFixed(2).replace('.', ',')}. Ajuste de saldo em R$ (0 para manter; use negativo para debitar):`,
+    '0', { titulo }
+  );
+  if (ajusteTexto === null) return;
+  const limite = Number(String(limiteTexto).trim());
+  const precoCentavos = Math.round(Number(String(precoTexto).trim().replace(',', '.')) * 100);
+  const ajusteCentavos = Math.round(Number(String(ajusteTexto).trim().replace(',', '.')) * 100);
+  if (!Number.isInteger(limite) || limite < 0 || !Number.isInteger(precoCentavos) || precoCentavos < 0 ||
+      !Number.isInteger(ajusteCentavos)) throw new Error('Informe limite inteiro e valores monetários válidos.');
+  let motivo = '';
+  if (ajusteCentavos !== 0) {
+    motivo = await promptModal('Justificativa obrigatória para alterar o saldo:', '', { titulo });
+    if (motivo === null) return;
+    if (String(motivo).trim().length < 8) throw new Error('Informe uma justificativa com ao menos 8 caracteres.');
+  }
+  const confirmado = await confirmModal(
+    `Confirmar ${limite} NF/mês, R$ ${(precoCentavos / 100).toFixed(2)} por excedente e ajuste de R$ ${(ajusteCentavos / 100).toFixed(2)} no saldo?`,
+    { titulo: 'Confirmar conta fiscal' }
+  );
+  if (!confirmado) return;
+  const assinaturaOperacao = JSON.stringify([empresa.id, limite, precoCentavos, ajusteCentavos, String(motivo).trim()]);
+  const operacaoId = ajusteCentavos === 0 ? null
+    : (operacoesFiscaisPendentes.get(assinaturaOperacao) || crypto.randomUUID());
+  if (operacaoId) operacoesFiscaisPendentes.set(assinaturaOperacao, operacaoId);
+  const resposta = await window.api.supabaseadministracaoglobal?.('ajustar_conta_fiscal', {
+    empresaId: empresa.id, limite, precoCentavos, ajusteCentavos, motivo: String(motivo).trim(),
+    operacaoId
+  });
+  if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível atualizar a conta fiscal.');
+  if (operacaoId) operacoesFiscaisPendentes.delete(assinaturaOperacao);
+  toast('Cota e saldo fiscal atualizados para a empresa.', 'sucesso');
 }
 
 async function solicitarExclusaoEmpresaGlobal(empresa) {

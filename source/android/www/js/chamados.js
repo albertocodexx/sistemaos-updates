@@ -70,7 +70,7 @@
       '<p id="status-novo-chamado-app" class="suporte-status" role="status"></p><div class="novo-chamado-app-acoes"><button type="button" id="cancelar-novo-chamado-app" class="btn-secundario">Cancelar</button><button type="submit" id="enviar-novo-chamado-app" class="btn-primario">Enviar chamado</button></div></form>' +
       '<main id="conteudo-central-chamados-app" class="conteudo-central-chamados-app">' +
       '<div id="lista-central-chamados-app" class="lista-central-chamados-app"></div>' +
-      '<section id="conversa-central-chamados-app" class="conversa-central-chamados-app" hidden><div id="cabecalho-chamado-app" class="cabecalho-chamado-app"></div><div id="mensagens-chamado-app" class="mensagens-chamado-app"></div>' +
+      '<section id="conversa-central-chamados-app" class="conversa-central-chamados-app" hidden><button type="button" id="voltar-historico-chamado-app" class="btn-secundario">← Histórico de chamados</button><div id="cabecalho-chamado-app" class="cabecalho-chamado-app"></div><div id="mensagens-chamado-app" class="mensagens-chamado-app"></div>' +
       '<form id="form-mensagem-chamado-app" class="form-mensagem-chamado-app"><textarea id="mensagem-chamado-app" maxlength="8000" rows="3" placeholder="Escreva uma mensagem…"></textarea><button type="submit" class="btn-primario">Enviar mensagem</button></form></section>' +
       '<p id="status-chamados-app" class="suporte-status"></p></main>';
     document.body.appendChild(tela);
@@ -84,6 +84,14 @@
     visitante.innerHTML='<label><input type="checkbox" id="sem-conta-chamado-app"> Ainda não tenho conta</label><label>Seu nome<input id="nome-visitante-chamado-app" maxlength="120"></label><p>Sem conta, acompanhe pelo histórico neste aparelho. Somente quem tem o acesso de acompanhamento e o suporte pode ler este chamado.</p>';
     $('form-novo-chamado-app').prepend(visitante);
     $('fechar-central-chamados').addEventListener('click', fechar);
+    $('voltar-historico-chamado-app').addEventListener('click', function () {
+      geracao++; atual = null; clearInterval(timer); timer = null;
+      if (canal) cliente().removeChannel(canal);
+      canal = null;
+      $('conversa-central-chamados-app').hidden = true;
+      $('lista-central-chamados-app').hidden = false;
+      carregar().catch(function (erro) { $('status-chamados-app').textContent = texto(erro?.message || erro); });
+    });
     $('cancelar-novo-chamado-app').addEventListener('click', function () { abrir().catch(function () {}); });
     $('form-novo-chamado-app').addEventListener('submit', enviarNovo);
     $('motivo-novo-chamado-app').addEventListener('change', atualizarCondicionais);
@@ -239,12 +247,13 @@
       : await invocar('listar_mensagens', { chamadoId: atual.id });
     if (versao !== geracao || !atual || atual.id !== selecionado.id) return;
     atual = Object.assign({}, selecionado, resposta.chamado || {});
+    chamados = chamados.map(function (item) { return item.id === atual.id ? atual : item; });
     $('cabecalho-chamado-app').textContent = (atual.protocolo || 'Chamado') + ' · ' + nomeStatus(atual.status) + ' · ' + (atual.assunto || 'Atendimento');
     desenharMensagens(resposta.mensagens || []);
     var encerrado = ['resolvido', 'fechado', 'cancelado'].indexOf(texto(atual.status)) >= 0;
     $('form-mensagem-chamado-app').hidden = encerrado;
     $('mensagem-chamado-app').disabled = encerrado;
-    if (encerrado) $('status-chamados-app').textContent = 'Chamado ' + nomeStatus(atual.status).toLowerCase() + '. O chat foi encerrado e não aceita novas mensagens.';
+    if (encerrado) $('status-chamados-app').textContent = 'Chamado ' + nomeStatus(atual.status).toLowerCase() + '. O histórico continua disponível para consulta.';
     else if (!silencioso) $('status-chamados-app').textContent = 'Conversa atualizada.';
     invocar('marcar_visualizado', { chamadoId: atual.id, token: atual._token || '' }).catch(function () {});
   }
@@ -258,14 +267,14 @@
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chamados_suporte', filter: 'id=eq.' + atual.id }, function () { atualizarConversa(true).catch(function () {}); })
         .subscribe();
     }
-    timer = setInterval(function () { atualizarConversa(true).catch(function () {}); }, atual._modo === 'publico' ? 12000 : 30000);
+    timer = setInterval(function () { atualizarConversa(true).catch(function () {}); }, 10000);
   }
   async function abrirConversa(chamado) {
     geracao++;
     $('mensagens-chamado-app').replaceChildren();
     $('mensagem-chamado-app').value = '';
     $('prints-resposta-chamado-app').value = '';
-    atual = chamado; localStorage.setItem(CHAVE_ATUAL, chamado.id || ''); $('conversa-central-chamados-app').hidden = false; $('status-chamados-app').textContent = 'Carregando conversa…';
+    atual = chamado; localStorage.setItem(CHAVE_ATUAL, chamado.id || ''); $('lista-central-chamados-app').hidden = true; $('conversa-central-chamados-app').hidden = false; $('form-mensagem-chamado-app').hidden = true; $('status-chamados-app').textContent = 'Carregando conversa…';
     try { await atualizarConversa(false); iniciarTempoReal(); } catch (erro) { $('status-chamados-app').textContent = texto(erro && erro.message ? erro.message : erro); }
   }
   async function enviar(evento) {
@@ -282,7 +291,7 @@
       await invocar(acao, { chamadoId: selecionado.id, token: selecionado._token || '', mensagem: mensagem, anexos:await root.SistemaOSAnexosChamado.ler('prints-resposta-chamado-app') });
       if(versao!==geracao || atual?.id!==selecionado.id) return;
       campo.value = ''; $('prints-resposta-chamado-app').value='';await atualizarConversa(true); $('status-chamados-app').textContent = 'Mensagem enviada.';
-    } catch (erro) { $('status-chamados-app').textContent = texto(erro && erro.message ? erro.message : erro); }
+    } catch (erro) { $('status-chamados-app').textContent = texto(erro && erro.message ? erro.message : erro); await atualizarConversa(true).catch(function () {}); }
     finally { botao.disabled = ['resolvido','fechado','cancelado'].includes(atual?.status); }
   }
   async function carregar() {
@@ -305,10 +314,15 @@
     $('status-chamados-app').textContent = chamados.length ? 'Atendimento conectado.' : 'Nenhum chamado neste acesso.';
     if (preferido) await abrirConversa(preferido);
   }
-  async function abrir(contexto) { estrutura(); if (contexto) novoContexto=Object.assign({},contexto); $('central-chamados-app').hidden = false; ocultarNovo(); chamados=[];desenharLista();$('status-chamados-app').textContent = 'Buscando chamados…'; await carregarEAbrir(''); }
-  async function abrirNovo(contexto) { estrutura(); $('central-chamados-app').hidden = false; mostrarNovo(contexto || {}); }
-  async function abrirSuporte(chamado) { estrutura(); $('central-chamados-app').hidden = false; chamados = [Object.assign({ _modo: 'suporte' }, chamado)]; desenharLista(); await abrirConversa(chamados[0]); }
-  function fechar() { geracao++; clearInterval(timer); if (canal) cliente().removeChannel(canal); canal = null; timer = null; atual = null; if ($('central-chamados-app')) $('central-chamados-app').hidden = true; }
+  function mostrarPagina() {
+    $('central-chamados-app').hidden = false;
+    document.documentElement.classList.add('central-chamados-aberta');
+    document.body.classList.add('central-chamados-aberta');
+  }
+  async function abrir(contexto) { estrutura(); if (contexto) novoContexto=Object.assign({},contexto); mostrarPagina(); ocultarNovo(); $('conversa-central-chamados-app').hidden=true; $('lista-central-chamados-app').hidden=false; chamados=[];desenharLista();$('status-chamados-app').textContent = 'Buscando chamados…'; await carregarEAbrir(''); }
+  async function abrirNovo(contexto) { estrutura(); mostrarPagina(); mostrarNovo(contexto || {}); }
+  async function abrirSuporte(chamado) { estrutura(); mostrarPagina(); chamados = [Object.assign({ _modo: 'suporte' }, chamado)]; desenharLista(); await abrirConversa(chamados[0]); }
+  function fechar() { geracao++; clearInterval(timer); if (canal) cliente().removeChannel(canal); canal = null; timer = null; atual = null; if ($('central-chamados-app')) $('central-chamados-app').hidden = true; document.documentElement.classList.remove('central-chamados-aberta'); document.body.classList.remove('central-chamados-aberta'); }
   document.addEventListener('sistema-os:sessao-alterada', function () { fechar(); chamados=[]; novoContexto=null; $('lista-central-chamados-app')?.replaceChildren(); $('mensagens-chamado-app')?.replaceChildren(); });
   root.SistemaOSChamados = Object.freeze({ registrar: registrar, abrir: abrir, abrirNovo: abrirNovo, abrirSuporte: abrirSuporte });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

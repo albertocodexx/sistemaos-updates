@@ -108,6 +108,86 @@ async function reconciliarMercadoPago(admin: any) {
   return { consultadas: (cobrancas || []).length, aplicadas, falhas, indisponivel: false };
 }
 
+async function reconciliarRecargasFiscais(admin: any) {
+  const { integracao, segredo } = await carregarIntegracaoPlataforma(admin, 'mercado_pago');
+  const token = texto(segredo?.access_token);
+  if (!integracao || !token) return { consultadas: 0, creditadas: 0, estornadas: 0, indisponivel: true };
+  const { data: recargas, error } = await admin.from('recargas_fiscais')
+    .select('id,referencia_externa,valor_centavos,valor_estornado_centavos,aplicado_em,pagamento_provedor_id')
+    .is('estornado_em', null)
+    .order('ultima_verificacao_em', { ascending: true, nullsFirst: true }).limit(5);
+  if (error) {
+    console.error('[assinaturas-worker] Recargas fiscais indisponiveis; assinaturas e mensagens continuam.');
+    return { consultadas: 0, creditadas: 0, estornadas: 0, falhas: 1, indisponivel: true };
+  }
+  let creditadas = 0;
+  let estornadas = 0;
+  let falhas = 0;
+  for (const recarga of recargas || []) {
+    // A rodada gira entre recargas pendentes e aplicadas: uma notificação de
+    // estorno também precisa ser conciliada sem depender de PC ou celular.
+    try {
+      const { error: giroErro } = await admin.from('recargas_fiscais')
+        .update({ ultima_verificacao_em: new Date().toISOString() }).eq('id', recarga.id);
+      if (giroErro) throw giroErro;
+      let pagamentoId = texto(recarga.pagamento_provedor_id);
+      if (!pagamentoId) {
+        const busca = await fetch(
+          `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(recarga.referencia_externa)}&sort=date_created&criteria=desc&limit=100`,
+          { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000) }
+        );
+        if (!busca.ok) throw new Error('Consulta de recarga recusada pelo Mercado Pago.');
+        const resultados = await busca.json().catch(() => ({}));
+        const correspondentes = (Array.isArray(resultados.results) ? resultados.results : [])
+          .filter((item: any) => texto(item.external_reference) === recarga.referencia_externa && /^\d+$/.test(texto(item.id)));
+        pagamentoId = texto(correspondentes.find((item: any) =>
+          ['approved', 'refunded', 'charged_back'].includes(texto(item.status)))?.id);
+      }
+      if (!/^\d+$/.test(pagamentoId)) continue;
+      const consulta = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(pagamentoId)}`, {
+        headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000)
+      });
+      if (!consulta.ok) throw new Error('Pagamento da recarga nao pode ser consultado.');
+      const pagamento = await consulta.json().catch(() => ({}));
+      const valorCentavos = Math.round(Number(pagamento.transaction_amount || 0) * 100);
+      if (texto(pagamento.id) !== pagamentoId || texto(pagamento.external_reference) !== recarga.referencia_externa ||
+          pagamento.live_mode === false || texto(pagamento.currency_id) !== 'BRL' ||
+          valorCentavos !== recarga.valor_centavos) continue;
+      const status = mapearStatusMercadoPago(pagamento.status);
+      if (!['aprovada', 'estornada'].includes(status)) continue;
+      const estornadoInformado = Math.round(Number(pagamento.transaction_amount_refunded || 0) * 100);
+      const totalEstornado = status === 'estornada' && estornadoInformado === 0
+        ? recarga.valor_centavos : estornadoInformado;
+      if (!Number.isSafeInteger(totalEstornado) || totalEstornado < 0 || totalEstornado > recarga.valor_centavos ||
+          (recarga.pagamento_provedor_id && recarga.pagamento_provedor_id !== pagamentoId)) continue;
+      const { data: atualizada, error: atualizarErro } = await admin.from('recargas_fiscais').update({
+        status, pagamento_provedor_id: pagamentoId
+      }).eq('id', recarga.id).is('estornado_em', null).select('id').maybeSingle();
+      if (atualizarErro) throw atualizarErro;
+      if (!atualizada) continue;
+      if (status === 'aprovada' && !recarga.aplicado_em) {
+        const { data: credito, error: aplicarErro } = await admin.rpc('aplicar_recarga_fiscal', {
+          p_recarga_id: recarga.id, p_pagamento_id: pagamentoId
+        });
+        if (aplicarErro) throw aplicarErro;
+        if (credito?.aplicado) creditadas += 1;
+      }
+      if (totalEstornado > recarga.valor_estornado_centavos) {
+        const { data: estorno, error: estornoErro } = await admin.rpc('estornar_recarga_fiscal', {
+          p_recarga_id: recarga.id, p_pagamento_id: pagamentoId,
+          p_total_estornado_centavos: totalEstornado
+        });
+        if (estornoErro) throw estornoErro;
+        if (estorno?.estornado) estornadas += 1;
+      }
+    } catch (_) {
+      falhas += 1;
+      console.error('[assinaturas-worker] Conciliacao fiscal adiada; a recarga sera consultada novamente.');
+    }
+  }
+  return { consultadas: (recargas || []).length, creditadas, estornadas, falhas, indisponivel: false };
+}
+
 const valoresTemplate = (parametros: Record<string, unknown>, alias: string) => {
   if (Array.isArray(parametros.template_body)) return parametros.template_body.map((item) => texto(item));
   if (alias === 'pagamento_confirmado') {
@@ -224,8 +304,10 @@ Deno.serve(async (req) => {
     const { data: alertas, error: alertaErro } = await admin.rpc('gerar_alertas_assinatura');
     if (alertaErro) throw alertaErro;
     const mercadoPago = await reconciliarMercadoPago(admin);
+    const recargasFiscais = await reconciliarRecargasFiscais(admin);
     const whatsapp = await processarWhatsApp(admin);
-    return resposta(200, { sucesso: true, alertas_gerados: Number(alertas || 0), mercado_pago: mercadoPago, whatsapp });
+    return resposta(200, { sucesso: true, alertas_gerados: Number(alertas || 0), mercado_pago: mercadoPago,
+      recargas_fiscais: recargasFiscais, whatsapp });
   } catch (erro) {
     console.error('[assinaturas-worker]', erro);
     return resposta(500, { erro: 'Nao foi possivel executar o processamento agendado agora.' });

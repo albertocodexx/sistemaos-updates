@@ -145,6 +145,10 @@
         <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3M17 3v4M7 3v4"/></svg>
         <span>Cobranças</span>
       </button>
+      <button type="button" id="btn-ir-fiscal" class="btn-nav">
+        <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6M9 12h6"/></svg>
+        <span>Notas fiscais</span>
+      </button>
       <button type="button" id="btn-ir-qr" class="btn-nav">
         <svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM19 14h2v4M14 19h4v2M20 20h1v1"/></svg>
         <span>Ler QR</span>
@@ -1426,6 +1430,14 @@
       <button type="button" id="btn-testar-notificacao-cobranca" class="btn-secundario cobrancas-mobile-testar">Testar notificação da próxima cobrança</button>
     </section>
 
+    <section class="painel-fiscal-mobile" id="painel-fiscal" hidden>
+      <header class="fiscal-mobile-cabecalho"><div><span>DOCUMENTOS FISCAIS</span><h2>Notas fiscais</h2><p>Consulte as notas da empresa e compartilhe o PDF autorizado.</p></div><button type="button" id="btn-atualizar-fiscal-mobile" class="btn-secundario">Atualizar</button></header>
+      <p id="fiscal-mobile-status" role="status" aria-live="polite">Abra a aba para consultar.</p>
+      <div class="fiscal-mobile-resumo"><div><small>Incluídas no mês</small><strong id="fiscal-mobile-limite">—</strong></div><div><small>Utilizadas</small><strong id="fiscal-mobile-usadas">—</strong></div><div><small>Restantes</small><strong id="fiscal-mobile-restantes">—</strong></div><div><small>Excedente</small><strong id="fiscal-mobile-preco">—</strong></div><div><small>Saldo</small><strong id="fiscal-mobile-saldo">—</strong></div></div>
+      <div class="fiscal-mobile-recarga"><label for="fiscal-mobile-valor">Adicionar saldo pelo Mercado Pago (mínimo R$ 1,00)</label><div class="fiscal-mobile-opcoes"><button type="button" data-fiscal-recarga="1000">R$ 10</button><button type="button" data-fiscal-recarga="2000">R$ 20</button><button type="button" data-fiscal-recarga="5000">R$ 50</button></div><div class="fiscal-mobile-recarga-linha"><input id="fiscal-mobile-valor" inputmode="decimal" placeholder="Outro valor em R$"><button type="button" id="btn-recarga-fiscal-mobile" class="btn-primario" disabled>Pagar</button></div><small id="fiscal-mobile-recarga-ajuda">Recargas só ficam disponíveis após homologação da emissão fiscal em produção.</small></div>
+      <div id="fiscal-mobile-lista" class="fiscal-mobile-lista"></div>
+    </section>
+
     <section class="painel-estatisticas painel-prazos" id="painel-prazos" hidden>
       <p class="banner-historico-local" id="prazos-status-sync" hidden>
         Entre novamente para ver os prazos da empresa.
@@ -1832,6 +1844,7 @@
   <script src="js/desbloqueios-tela.js"></script>
   <script src="js/consulta.js"></script>
   <script src="js/cobrancas-tela.js"></script>
+  <script src="js/fiscal-tela.js"></script>
   <script src="js/garantia-tela.js"></script>
   <script src="js/qr-os.js"></script>
   <script src="js/estatisticas-tela.js"></script>

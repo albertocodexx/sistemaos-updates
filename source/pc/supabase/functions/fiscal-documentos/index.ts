@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { contextoUsuarioAtivo, licencaPermiteOperacao, temPermissao } from '../_shared/access.ts';
+import { contextoUsuarioAtivo, ehAdministradorEmpresa, licencaPermiteOperacao, temPermissao } from '../_shared/access.ts';
+import { carregarIntegracaoPlataforma } from '../assinaturas-saas/saas.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -12,12 +13,29 @@ const texto = (valor: unknown) => String(valor ?? '').trim();
 
 const digitos = (valor: unknown, limite = 20) => texto(valor).replace(/\D/g, '').slice(0, limite);
 const cnpjNormalizado = (valor: unknown) => texto(valor).toUpperCase().replace(/[^0-9A-Z]/g, '');
-const cnpjValido = (valor: string) => /^[0-9A-Z]{12}\d{2}$/.test(valor);
+const cnpjValido = (valor: string) => {
+  if (!/^[0-9A-Z]{12}\d{2}$/.test(valor) || /^(.)\1{13}$/.test(valor)) return false;
+  const base = [...valor.slice(0, 12)].map((caractere) => caractere.charCodeAt(0) - 48);
+  const digito = (sequencia: number[], pesos: number[]) => {
+    const resto = sequencia.reduce((soma, numero, indice) => soma + numero * pesos[indice], 0) % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+  const primeiro = digito(base, [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  const segundo = digito([...base, primeiro], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  return primeiro === Number(valor[12]) && segundo === Number(valor[13]);
+};
 const decimalOpcional = (valor: unknown) => {
   const bruto = texto(valor).replace(',', '.');
   if (!bruto) return null;
   const numero = Number(bruto);
   return Number.isFinite(numero) && numero >= 0 && numero <= 100 ? numero : null;
+};
+const competenciaAtual = () => {
+  const partes = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit' })
+    .formatToParts(new Date());
+  const ano = partes.find((parte) => parte.type === 'year')?.value;
+  const mes = partes.find((parte) => parte.type === 'month')?.value;
+  return `${ano}-${mes}-01`;
 };
 
 const cpfValido = (valor: string) => {
@@ -55,35 +73,169 @@ Deno.serve(async (req) => {
     const admin = createClient(url, serviceRole, { auth: { persistSession: false } });
     const { data: autenticacao } = await cliente.auth.getUser();
     if (!autenticacao.user) return resposta(401, { erro: 'Sessao invalida.' });
-    const { data: contextoConsulta, error: contextoErro } = await cliente.rpc('obter_contexto_comercial');
-    const contexto = Array.isArray(contextoConsulta) ? contextoConsulta[0] : contextoConsulta;
-    if (contextoErro || !contexto?.empresa_id || contexto.administrador_global ||
-        !contextoUsuarioAtivo(contexto) || !licencaPermiteOperacao(contexto)) {
-      return resposta(403, { erro: 'Entre em uma empresa para usar a NFS-e.' });
-    }
-
     const corpo = await req.json().catch(() => ({}));
     const acao = texto(corpo.acao);
     const dados = corpo.dados && typeof corpo.dados === 'object' ? corpo.dados : {};
-    const empresaId = contexto.empresa_id;
-    if (contexto.recursos_habilitados?.fiscal_habilitado !== true) {
+    const { data: contextoConsulta, error: contextoErro } = await cliente.rpc('obter_contexto_comercial');
+    const contexto = Array.isArray(contextoConsulta) ? contextoConsulta[0] : contextoConsulta;
+    if (contextoErro || !contextoUsuarioAtivo(contexto)) {
+      return resposta(403, { erro: 'Entre em uma empresa para usar a NFS-e.' });
+    }
+    const suporteCadastro = contexto.administrador_global === true;
+    if (suporteCadastro) {
+      if (!['resumo', 'listar', 'salvar_configuracao'].includes(acao)) {
+        return resposta(403, { erro: 'O suporte so pode consultar ou atualizar o cadastro fiscal da empresa.' });
+      }
+      const { data: papel, error: papelErro } = await admin.from('administradores_globais')
+        .select('papel,ativo').eq('usuario_id', autenticacao.user.id).maybeSingle();
+      if (papelErro) throw papelErro;
+      if (papel?.ativo !== true || papel?.papel !== 'administrador_geral') {
+        return resposta(403, { erro: 'Somente o Administrador Geral pode alterar o cadastro fiscal.' });
+      }
+    } else if (!contexto?.empresa_id || !licencaPermiteOperacao(contexto)) {
+      return resposta(403, { erro: 'Entre em uma empresa ativa para usar a NFS-e.' });
+    }
+    const empresaId = suporteCadastro ? texto(dados.empresaId) : contexto.empresa_id;
+    if (suporteCadastro) {
+      if (!/^[0-9a-f-]{36}$/i.test(empresaId)) return resposta(400, { erro: 'Empresa invalida.' });
+      const { data: empresa, error: empresaErro } = await admin.from('empresas')
+        .select('id').eq('id', empresaId).maybeSingle();
+      if (empresaErro) throw empresaErro;
+      if (!empresa) return resposta(404, { erro: 'Empresa nao encontrada.' });
+    }
+    if (!suporteCadastro && contexto.recursos_habilitados?.fiscal_habilitado !== true) {
       return resposta(403, { erro: 'A emissão de NFS-e ainda não está liberada para esta empresa.' });
     }
-    const podeConfigurar = temPermissao(contexto, 'configuracoes', 'editar');
-    const podeLerFinanceiro = temPermissao(contexto, 'financeiro', 'ler');
-    const podeEmitir = temPermissao(contexto, 'financeiro', 'criar') ||
-      temPermissao(contexto, 'financeiro', 'editar');
-    const podeCancelar = temPermissao(contexto, 'financeiro', 'editar');
+    const podeConfigurar = suporteCadastro || temPermissao(contexto, 'configuracoes', 'editar');
+    const podeLerFinanceiro = suporteCadastro || temPermissao(contexto, 'financeiro', 'ler');
+    const podeEmitir = !suporteCadastro && (temPermissao(contexto, 'financeiro', 'criar') ||
+      temPermissao(contexto, 'financeiro', 'editar'));
+    const podeCancelar = !suporteCadastro && temPermissao(contexto, 'financeiro', 'editar');
+    const podeGerirLimites = !suporteCadastro && ehAdministradorEmpresa(contexto);
+    const emissorOperacional = Deno.env.get('FISCAL_EMISSOR_ATIVO') === 'true';
+
+    if (['listar_limites', 'salvar_limite', 'remover_limite'].includes(acao)) {
+      if (!podeGerirLimites) return resposta(403, { erro: 'Somente o administrador da empresa pode definir limites fiscais da equipe.' });
+      if (acao === 'listar_limites') {
+        const [regras, perfis] = await Promise.all([
+          admin.from('limites_emissao_fiscal').select('tipo_alvo,alvo,limite_mensal,limite_gasto_centavos,atualizado_em')
+            .eq('empresa_id', empresaId).order('tipo_alvo').order('alvo'),
+          admin.from('perfis').select('id,nome,cargo,ativo').eq('empresa_id', empresaId).eq('ativo', true).order('nome')
+        ]);
+        if (regras.error) throw regras.error;
+        if (perfis.error) throw perfis.error;
+        return resposta(200, { regras: regras.data || [], usuarios: perfis.data || [] });
+      }
+      const tipoAlvo = texto(dados.tipoAlvo);
+      const alvo = texto(dados.alvo).toLowerCase();
+      if (!['usuario', 'cargo'].includes(tipoAlvo) || !alvo || alvo.length > 120) {
+        return resposta(400, { erro: 'Selecione um usuario ou cargo valido.' });
+      }
+      if (acao === 'remover_limite') {
+        const { data: removido, error } = await admin.rpc('remover_limite_emissao_fiscal', {
+          p_empresa_id: empresaId, p_tipo_alvo: tipoAlvo, p_alvo: alvo,
+          p_autor_id: autenticacao.user.id
+        });
+        if (error) throw error;
+        return resposta(200, { removido: Boolean(removido) });
+      }
+      const limiteMensal = dados.limiteMensal == null || dados.limiteMensal === '' ? null : Number(dados.limiteMensal);
+      const limiteGasto = dados.limiteGastoCentavos == null || dados.limiteGastoCentavos === ''
+        ? null : Number(dados.limiteGastoCentavos);
+      if ((limiteMensal === null && limiteGasto === null) ||
+          (limiteMensal !== null && (!Number.isInteger(limiteMensal) || limiteMensal < 0 || limiteMensal > 1000000)) ||
+          (limiteGasto !== null && (!Number.isSafeInteger(limiteGasto) || limiteGasto < 0 || limiteGasto > 1000000000))) {
+        return resposta(400, { erro: 'Informe limite mensal e/ou gasto mensal em centavos validos. Zero bloqueia o uso.' });
+      }
+      const { data: regra, error } = await admin.rpc('definir_limite_emissao_fiscal', {
+        p_empresa_id: empresaId, p_tipo_alvo: tipoAlvo, p_alvo: alvo,
+        p_limite_mensal: limiteMensal, p_limite_gasto_centavos: limiteGasto,
+        p_autor_id: autenticacao.user.id
+      });
+      if (error) {
+        if (/nao pertence a empresa/i.test(error.message)) return resposta(400, { erro: error.message });
+        throw error;
+      }
+      return resposta(200, { regra });
+    }
 
     if (acao === 'resumo' || acao === 'listar') {
       if (!podeLerFinanceiro) return resposta(403, { erro: 'Seu usuário não pode consultar documentos fiscais.' });
-      const [configConsulta, notasConsulta] = await Promise.all([
+      const [configConsulta, notasConsulta, contaConsulta, usoConsulta, recargasConsulta] = await Promise.all([
         admin.from('configuracoes_fiscais').select('empresa_id,provedor,ambiente,status,emissao_automatica_os,emissao_automatica_venda,emissao_automatica_assinatura,metadados,ultimo_erro,updated_at').eq('empresa_id', empresaId).maybeSingle(),
-        admin.from('notas_fiscais').select('id,origem_tipo,origem_id,valor,descricao,status,numero,codigo_verificacao,chave_acesso,url_consulta,pdf_url,danfse_url,danfse_storage_path,danfse_gerado_em,emitida_em,ultimo_erro,created_at').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(50)
+        suporteCadastro ? Promise.resolve({ data: [], error: null }) :
+          admin.from('notas_fiscais').select('id,origem_tipo,origem_id,valor,descricao,status,numero,codigo_verificacao,chave_acesso,url_consulta,pdf_url,danfse_url,danfse_storage_path,danfse_gerado_em,emitida_em,ultimo_erro,created_at').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(50),
+        admin.from('contas_fiscais').select('limite_gratuito_mensal,preco_excedente_centavos,saldo_centavos,debito_pendente_centavos').eq('empresa_id', empresaId).maybeSingle(),
+        admin.from('reservas_fiscais').select('status', { count: 'exact', head: true }).eq('empresa_id', empresaId).eq('competencia', competenciaAtual()).in('status', ['reservada', 'consumida']),
+        suporteCadastro ? Promise.resolve({ data: [], error: null }) :
+          admin.from('recargas_fiscais').select('id,valor_centavos,status,checkout_url,criado_em,aplicado_em').eq('empresa_id', empresaId).order('criado_em', { ascending: false }).limit(5)
       ]);
       if (configConsulta.error) throw configConsulta.error;
       if (notasConsulta.error) throw notasConsulta.error;
-      return resposta(200, { configuracao: configConsulta.data, notas: notasConsulta.data || [] });
+      if (contaConsulta.error) throw contaConsulta.error;
+      if (usoConsulta.error) throw usoConsulta.error;
+      if (recargasConsulta.error) throw recargasConsulta.error;
+      const conta = contaConsulta.data || { limite_gratuito_mensal: 100, preco_excedente_centavos: 20,
+        saldo_centavos: 0, debito_pendente_centavos: 0 };
+      const utilizadas = usoConsulta.count || 0;
+      return resposta(200, { configuracao: configConsulta.data, notas: notasConsulta.data || [],
+        emissor_operacional: emissorOperacional,
+        cota: { ...conta, utilizadas, restantes_gratuitas: Math.max(0, conta.limite_gratuito_mensal - utilizadas), competencia: competenciaAtual() },
+        recargas: recargasConsulta.data || [] });
+    }
+
+    if (acao === 'criar_recarga') {
+      if (!podeConfigurar) return resposta(403, { erro: 'Somente o administrador da empresa pode adicionar credito fiscal.' });
+      const valorCentavos = Number(dados.valorCentavos);
+      if (!Number.isInteger(valorCentavos) || valorCentavos < 100 || valorCentavos > 10000000) {
+        return resposta(400, { erro: 'Informe uma recarga entre R$ 1,00 e R$ 100.000,00.' });
+      }
+      const { data: configFiscal, error: configErro } = await admin.from('configuracoes_fiscais')
+        .select('status,ambiente').eq('empresa_id', empresaId).maybeSingle();
+      if (configErro) throw configErro;
+      if (!emissorOperacional || configFiscal?.status !== 'configurada' || configFiscal?.ambiente !== 'producao') {
+        return resposta(409, { erro: 'A recarga so sera liberada apos a emissao fiscal em producao ser homologada para esta empresa.' });
+      }
+      const { integracao, segredo } = await carregarIntegracaoPlataforma(admin, 'mercado_pago');
+      const accessToken = texto(segredo?.access_token);
+      if (!integracao || !accessToken || integracao.metadados?.webhook_assinado !== true || integracao.metadados?.ambiente !== 'producao') {
+        return resposta(409, { erro: 'Mercado Pago indisponivel para recarga fiscal.' });
+      }
+      const id = crypto.randomUUID();
+      const referencia = `FISCAL-${empresaId}-${id}`;
+      const expiraEm = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const { data: recarga, error: recargaErro } = await admin.from('recargas_fiscais').insert({
+        id, empresa_id: empresaId, valor_centavos: valorCentavos, referencia_externa: referencia, expira_em: expiraEm
+      }).select('id,idempotency_key').single();
+      if (recargaErro) throw recargaErro;
+      const retorno = texto(Deno.env.get('SAAS_BILLING_RETURN_URL'));
+      const preferenciaBody: Record<string, unknown> = {
+        items: [{ id, title: 'Sistema OS - Credito para notas fiscais', quantity: 1, currency_id: 'BRL', unit_price: valorCentavos / 100 }],
+        external_reference: referencia,
+        notification_url: `${url.replace(/\/$/, '')}/functions/v1/mercado-pago-saas-webhook`,
+        expires: true, expiration_date_to: expiraEm, statement_descriptor: 'SISTEMA OS',
+        metadata: { recarga_fiscal_id: id, empresa_id: empresaId }
+      };
+      if (/^https:\/\//i.test(retorno)) {
+        preferenciaBody.back_urls = { success: retorno, pending: retorno, failure: retorno };
+        preferenciaBody.auto_return = 'approved';
+      }
+      const mpResposta = await fetch('https://api.mercadopago.com/checkout/preferences', {
+        method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json',
+          'X-Idempotency-Key': String(recarga.idempotency_key) },
+        body: JSON.stringify(preferenciaBody), signal: AbortSignal.timeout(15000)
+      });
+      const preferencia = await mpResposta.json().catch(() => ({}));
+      const link = texto(preferencia.init_point);
+      if (!mpResposta.ok || !/^https:\/\//i.test(link)) {
+        await admin.from('recargas_fiscais').update({ status: 'rejeitada' }).eq('id', id);
+        return resposta(502, { erro: 'Nao foi possivel gerar a recarga no Mercado Pago.' });
+      }
+      const { error: atualizarErro } = await admin.from('recargas_fiscais').update({
+        checkout_url: link, preferencia_id: texto(preferencia.id)
+      }).eq('id', id);
+      if (atualizarErro) throw atualizarErro;
+      return resposta(200, { recarga: { id, valor_centavos: valorCentavos, status: 'pendente', checkout_url: link }, link });
     }
 
     if (acao === 'salvar_configuracao') {
@@ -135,9 +287,22 @@ Deno.serve(async (req) => {
       const rotaEmissao = rotasValidas.has(texto(dados.rotaEmissao)) ? texto(dados.rotaEmissao) : 'nfse_nacional';
       const provedorFiscal = texto(dados.provedorFiscal).slice(0, 120);
       const ambiente = texto(dados.ambiente) === 'producao' ? 'producao' : 'homologacao';
+      const tipoEmitenteProdutos = texto(dados.tipoEmitenteProdutos) === 'cpf' ? 'cpf' : 'cnpj';
+      const documentoEmitenteProdutos = tipoEmitenteProdutos === 'cpf'
+        ? digitos(dados.documentoEmitenteProdutos, 11)
+        : cnpjNormalizado(dados.documentoEmitenteProdutos);
+      const produtorRural = dados.produtorRural === true;
+      const inscricaoEstadual = texto(dados.inscricaoEstadual).replace(/[^0-9A-Za-z]/g, '').slice(0, 20);
       if (tipoPessoa === 'fisica' && documentoPrestador && !cpfValido(cpf)) return resposta(400, { erro: 'CPF do prestador invalido.' });
       if (tipoPessoa === 'juridica' && cnpj && !cnpjValido(cnpj)) {
-        return resposta(400, { erro: 'CNPJ invalido. Informe 14 caracteres; os dois ultimos devem ser numericos.' });
+        return resposta(400, { erro: 'CNPJ invalido: confira os caracteres e digitos verificadores.' });
+      }
+      if (documentoEmitenteProdutos && !(tipoEmitenteProdutos === 'cpf'
+        ? cpfValido(documentoEmitenteProdutos) : cnpjValido(documentoEmitenteProdutos))) {
+        return resposta(400, { erro: 'CPF/CNPJ do emitente de NF-e/NFC-e invalido.' });
+      }
+      if (documentoEmitenteProdutos && tipoEmitenteProdutos === 'cpf' && (!produtorRural || !inscricaoEstadual)) {
+        return resposta(400, { erro: 'Emissao de NF-e/NFC-e por CPF exige produtor rural com inscricao estadual e credenciamento da UF.' });
       }
       if (codigoMunicipio && codigoMunicipio.length !== 7) return resposta(400, { erro: 'Codigo do municipio invalido.' });
       if (codigoMunicipioPrestacao && codigoMunicipioPrestacao.length !== 7) return resposta(400, { erro: 'Codigo do municipio da prestacao invalido.' });
@@ -236,12 +401,25 @@ Deno.serve(async (req) => {
           percentual_tributos_estaduais: tributosAproximadosModo === 'percentuais' ? percentualTributosEstaduais : null,
           percentual_tributos_municipais: tributosAproximadosModo === 'percentuais' ? percentualTributosMunicipais : null,
           rota_emissao: rotaEmissao,
-          provedor_fiscal: provedorFiscal || null
+          provedor_fiscal: provedorFiscal || null,
+          tipo_emitente_produtos: tipoEmitenteProdutos,
+          documento_emitente_produtos: documentoEmitenteProdutos || null,
+          produtor_rural: produtorRural,
+          inscricao_estadual: inscricaoEstadual || null
         },
         ultimo_erro: ultimoErro,
         updated_at: new Date().toISOString()
       }, { onConflict: 'empresa_id' }).select('empresa_id,provedor,ambiente,status,emissao_automatica_os,emissao_automatica_venda,emissao_automatica_assinatura,metadados,ultimo_erro,updated_at').single();
       if (error) throw error;
+      if (suporteCadastro) {
+        const { error: auditoriaErro } = await admin.from('auditoria_comercial').insert({
+          empresa_id: empresaId, autor_id: autenticacao.user.id,
+          acao: 'cadastro_fiscal_atualizado_suporte', entidade: 'empresa', entidade_id: empresaId,
+          metadados: { ambiente, status: statusConfiguracao, tipo_prestador: tipoPrestador,
+            tipo_emitente_produtos: tipoEmitenteProdutos, identidade_mudou: identidadeMudou }
+        });
+        if (auditoriaErro) console.error('[fiscal-documentos] Auditoria de suporte indisponivel', auditoriaErro.message);
+      }
       return resposta(200, {
         configuracao,
         mensagem: manterAtivacao
@@ -258,36 +436,80 @@ Deno.serve(async (req) => {
       const origemId = texto(dados.origemId).slice(0, 120);
       const valor = Number(dados.valor || 0);
       const descricao = texto(dados.descricao).slice(0, 500);
-      if (!['os', 'venda', 'compra', 'avulsa'].includes(origemTipo) || !origemId ||
-          !Number.isFinite(valor) || valor <= 0 || !descricao) {
+      if (!['os', 'venda', 'avulsa'].includes(origemTipo) || !origemId ||
+          !Number.isFinite(valor) || valor <= 0 || valor > 9999999999.99 ||
+          Math.abs(valor * 100 - Math.round(valor * 100)) > 0.000001 || !descricao) {
         return resposta(400, { erro: 'Informe documento, valor e descricao validos.' });
       }
       const { data: existente, error: existenteErro } = await admin.from('notas_fiscais')
         .select('id,origem_tipo,origem_id,valor,descricao,status,numero,chave_acesso,url_consulta,pdf_url,danfse_url,danfse_storage_path,danfse_gerado_em,created_at')
         .eq('empresa_id', empresaId).eq('origem_tipo', origemTipo).eq('origem_id', origemId).maybeSingle();
       if (existenteErro) throw existenteErro;
-      if (existente?.status === 'autorizada') {
-        return resposta(200, { nota: existente, reutilizada: true, mensagem: 'Esta NFS-e ja foi autorizada. O DANFSe continua disponivel no historico.' });
+      if (existente && ['autorizada', 'na_fila', 'processando'].includes(existente.status)) {
+        return resposta(200, { nota: existente, reutilizada: true, mensagem: existente.status === 'autorizada'
+          ? 'Esta NFS-e ja foi autorizada. O DANFSe continua disponivel no historico.'
+          : 'A solicitacao desta NFS-e ja esta em andamento.' });
       }
       const { data: config, error: configErro } = await admin.from('configuracoes_fiscais')
-        .select('status,provedor').eq('empresa_id', empresaId).maybeSingle();
+        .select('status,provedor,ambiente').eq('empresa_id', empresaId).maybeSingle();
       if (configErro) throw configErro;
-      const status = config?.status === 'configurada' ? 'na_fila' : 'aguardando_configuracao';
+      const pronta = emissorOperacional && config?.status === 'configurada' && config?.ambiente === 'producao';
+      const status = pronta ? 'rascunho' : 'aguardando_configuracao';
       const payload = {
         tomador: dados.tomador && typeof dados.tomador === 'object' ? dados.tomador : {},
         observacoes: texto(dados.observacoes).slice(0, 1000)
       };
-      const { data: nota, error } = await admin.from('notas_fiscais').upsert({
+      const mutacao = {
         empresa_id: empresaId, origem_tipo: origemTipo, origem_id: origemId, valor,
         descricao, status, provedor: config?.provedor || 'nfse_nacional', payload,
         ultimo_erro: status === 'aguardando_configuracao' ? 'Configure os dados da NFS-e e conclua a ativacao fiscal.' : null,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'empresa_id,origem_tipo,origem_id' })
-        .select('id,origem_tipo,origem_id,valor,descricao,status,numero,url_consulta,pdf_url,created_at').single();
+      };
+      const consulta = existente
+        ? admin.from('notas_fiscais').update(mutacao).eq('id', existente.id).eq('empresa_id', empresaId)
+            .in('status', ['rascunho', 'aguardando_configuracao', 'rejeitada'])
+        : admin.from('notas_fiscais').insert(mutacao);
+      const { data: nota, error } = await consulta
+        .select('id,origem_tipo,origem_id,valor,descricao,status,numero,url_consulta,pdf_url,created_at').maybeSingle();
+      if (error?.code === '23505') return resposta(409, { erro: 'A NFS-e foi criada por outro usuario. Atualize a lista.' });
       if (error) throw error;
-      return resposta(200, { nota, mensagem: status === 'na_fila'
-        ? 'NFS-e adicionada a fila de emissao.'
-        : 'Solicitacao de NFS-e salva. Conclua a ativacao fiscal para autoriza-la.' });
+      if (!nota) return resposta(409, { erro: 'A NFS-e mudou de estado. Atualize a lista.' });
+      if (pronta) {
+        const { data: reserva, error: reservaErro } = await admin.rpc('reservar_cota_fiscal', {
+          p_nota_id: nota.id, p_usuario_id: autenticacao.user.id
+        });
+        if (reservaErro) {
+          if (/saldo fiscal insuficiente/i.test(reservaErro.message)) {
+            return resposta(409, { erro: 'Cota gratuita esgotada e saldo fiscal insuficiente. Adicione saldo antes de emitir.' });
+          }
+          if (/limite mensal de emissao|limite de gasto fiscal/i.test(reservaErro.message)) {
+            return resposta(409, { erro: 'Seu limite mensal de notas ou de uso do saldo fiscal foi atingido. Fale com o administrador da empresa.' });
+          }
+          throw reservaErro;
+        }
+        return resposta(200, { nota: { ...nota, status: 'na_fila' }, reserva,
+          mensagem: 'NFS-e reservada na cota e adicionada a fila de emissao.' });
+      }
+      return resposta(200, { nota, mensagem: 'Solicitacao de NFS-e salva. Conclua a ativacao fiscal para autoriza-la.' });
+    }
+
+    if (acao === 'alterar_solicitacao') {
+      if (!podeEmitir) return resposta(403, { erro: 'Seu usuário não pode alterar documentos fiscais.' });
+      const id = texto(dados.id);
+      const valor = Number(dados.valor);
+      const descricao = texto(dados.descricao).slice(0, 500);
+      if (!id || !Number.isFinite(valor) || valor <= 0 || valor > 9999999999.99 ||
+          Math.abs(valor * 100 - Math.round(valor * 100)) > 0.000001 || !descricao) {
+        return resposta(400, { erro: 'Informe valor com até duas casas decimais e descrição do serviço.' });
+      }
+      const { data: nota, error } = await admin.from('notas_fiscais')
+        .update({ valor, descricao, updated_at: new Date().toISOString() })
+        .eq('id', id).eq('empresa_id', empresaId)
+        .in('status', ['rascunho', 'aguardando_configuracao'])
+        .select('id,valor,descricao,status').maybeSingle();
+      if (error) throw error;
+      if (!nota) return resposta(409, { erro: 'Esta solicitação já foi enviada ao emissor ou não pertence à empresa. Não pode mais ser editada.' });
+      return resposta(200, { nota, mensagem: 'Solicitação fiscal atualizada.' });
     }
 
     if (acao === 'obter_danfse') {
@@ -332,10 +554,12 @@ Deno.serve(async (req) => {
       const { data: nota, error } = await admin.from('notas_fiscais').update({
         status: 'cancelada', updated_at: new Date().toISOString()
       }).eq('id', id).eq('empresa_id', empresaId)
-        .in('status', ['rascunho', 'aguardando_configuracao', 'na_fila'])
+        // Depois de entrar na fila, a SEFAZ/prefeitura pode já estar processando.
+        // Não cancele só no banco: espere o emissor confirmar o cancelamento.
+        .in('status', ['rascunho', 'aguardando_configuracao'])
         .select('id,status').maybeSingle();
       if (error) throw error;
-      if (!nota) return resposta(409, { erro: 'Esta NFS-e ja foi processada e nao pode ser cancelada por aqui.' });
+      if (!nota) return resposta(409, { erro: 'Esta solicitação já foi enviada ao emissor ou encerrada. O cancelamento fiscal exige confirmação do provedor.' });
       return resposta(200, { nota, mensagem: 'Solicitacao de NFS-e cancelada.' });
     }
 
