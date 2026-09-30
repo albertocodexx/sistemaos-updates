@@ -7,21 +7,17 @@
 
 const TERMOS_OS = `Ao assinar esta Ordem de Serviço, o cliente declara que:
 
-1. Autoriza a análise, a abertura do equipamento e os procedimentos necessários. Orçamento e prazo, quando informados, são estimados.
+1. Autoriza a análise do equipamento. O reparo e qualquer alteração de preço dependem de orçamento informado e aprovação prévia do cliente.
 
-2. A garantia cobre somente o serviço e as peças descritos, no prazo indicado. Não cobre quedas, líquidos, oxidação, mau uso, desgaste, surtos, terceiros ou danos posteriores.
+2. O orçamento deve indicar serviço, peças, valor, condições de pagamento e prazo. A garantia do serviço e das peças respeita os direitos previstos em lei.
 
-3. Backup, senhas e bloqueios necessários são responsabilidade do cliente. A assistência não responde por dados, contas, chips ou acessórios não descritos nesta OS.
+3. Acessórios e condições do aparelho recebidos devem constar nesta OS. Recomenda-se ao cliente manter cópia dos seus dados antes de qualquer intervenção.
 
-4. Avarias ou defeitos preexistentes podem causar novas falhas durante ou após o reparo, sem responsabilidade da assistência por esses efeitos.
+4. A assistência informará riscos específicos identificados na avaliação e registrará a autorização do cliente antes de procedimentos adicionais.
 
-5. Em iPhones, a abertura envolve risco de dano à tela. Em aparelhos Android com tampa traseira já trincada, a avaria pode se agravar ou causar quebra. A assistência não responde por danos decorrentes da fragilidade ou avaria preexistente.
+5. Quando o serviço estiver concluído, a assistência avisará o cliente para retirar o equipamento. A falta de retirada não transfere automaticamente sua propriedade.
 
-6. Eventual ajuste no preço estimado será informado previamente ao cliente e dependerá de sua aprovação antes da continuidade do serviço.
-
-7. Equipamento não retirado em até 90 dias após o aviso de conclusão poderá ser considerado abandonado, conforme a lei.
-
-8. A assinatura confirma a leitura e a aceitação destas condições.`;
+6. A assinatura confirma o recebimento desta OS e a ciência destas condições; a aprovação do orçamento será registrada separadamente quando necessária.`;
 
 const TERMOS_VENDA = `Ao adquirir este equipamento, o comprador declara que:
 

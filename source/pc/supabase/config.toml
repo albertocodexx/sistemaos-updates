@@ -83,6 +83,9 @@ verify_jwt = true
 [functions.mercado-pago-saas-webhook]
 verify_jwt = false
 
+[functions.mercado-pago-os-webhook]
+verify_jwt = false
+
 [functions.assinaturas-worker]
 verify_jwt = false
 
@@ -90,6 +93,9 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.fiscal-documentos-provedor]
+verify_jwt = false
+
+[functions.fiscal-worker]
 verify_jwt = false
 
 [analytics]

@@ -29,7 +29,8 @@ assert.match(renderer, /usuarioAtual\.administradorGlobal \|\| usuarioAtual\.ace
 assert.match(renderer, /statusAtual = empresaInternaSuporte/);
 assert.match(renderer, /vencimentoMs <= Date\.now\(\)/);
 assert.match(saas, /quantidadeMesesAssinatura/);
-assert.match(saas, /quantidadeMeses \}/);
+assert.match(saas, /cotar_checkout.*quantidadeMeses/);
+assert.doesNotMatch(saas, /cotar_checkout.*quantidadeMeses, moduloFiscal/);
 assert.match(saas, /quantidadeMeses = 1;/);
 assert.match(runtime, /venceuPelaData/);
 assert.match(runtime, /async integracaoIA/);

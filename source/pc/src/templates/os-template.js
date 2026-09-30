@@ -121,7 +121,6 @@ function gerarVia(os, config, tituloVia, t) {
           ${Object.entries(EQUIPAMENTO_CAMPOS_LABELS[a.tipoEquipamento]||{}).map(([id,label])=>campo(label.toUpperCase(),(a.dadosEquipamento||{})[id])).join('')}
           ${campo('ACESSÓRIOS', a.acessorios)}
           ${(a.acessoriosChecklist&&a.acessoriosChecklist.length)?campo('ACESSÓRIOS RECEBIDOS',a.acessoriosChecklist.join(', ')):''}
-          ${(a.testesEntrada&&a.testesEntrada.length)?campo('TESTES ENTRADA OK',a.testesEntrada.join(', ')):''}
         </div>
       </div>
 
@@ -294,7 +293,7 @@ function gerarHtmlOS(os, config) {
     break-inside:avoid;page-break-inside:avoid;
   }
   .assinatura-bloco{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;}
-  .assinatura-espaco{height:34px;width:100%;}
+  .assinatura-espaco{height:58px;min-height:58px;width:100%;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px;}
   .linha-assinatura{box-sizing:border-box;height:0;flex:0 0 0;align-self:center;border:0;border-top:1.5px solid #222;width:90%;margin-bottom:5px;transform:none;}
   .assinatura-label{font-size:9px;color:#111;font-weight:800;text-transform:uppercase;letter-spacing:.05em;line-height:1.3;}
   .assinatura-nome{font-size:10px;color:#333;margin-top:2px;font-weight:600;}

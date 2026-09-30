@@ -139,12 +139,10 @@
     var planos = Array.isArray(resumoAtual.planos) ? resumoAtual.planos : [];
     var planosPagos = planos.filter(function (plano) { return Number(plano.preco_referencia) > 0; });
     var planoAtual = planos.find(function (plano) { return plano.id === atualId; });
-    var trialEncerrado = String((planoAtual && planoAtual.nome) || (empresa.plano && empresa.plano.nome) || (contextoBloqueio && contextoBloqueio.plano_nome) || '').toLowerCase() === 'trial';
-    if (bloqueioAtivo && trialEncerrado) {
-      conteudo.innerHTML = '<div class="assinatura-mobile-resumo"><span>Plano</span><strong>Trial completo — 45 dias</strong><small>Encerrado em ' + escapar(data(empresa.fim_trial || empresa.data_vencimento || (contextoBloqueio && contextoBloqueio.fim_trial))) + '</small></div>' +
-        '<div class="assinatura-mobile-aviso">Para obter uma assinatura e continuar usando todas as funções, envie um chamado ao administrador pelo botão abaixo.</div>';
-      return;
-    }
+    var trialEncerrado = ['trial', 'beta'].indexOf(String((planoAtual && planoAtual.nome) || (empresa.plano && empresa.plano.nome) || (contextoBloqueio && contextoBloqueio.plano_nome) || '').toLowerCase()) !== -1;
+    var avisoTrial = bloqueioAtivo && trialEncerrado
+      ? '<div class="assinatura-mobile-aviso">Seu período de teste terminou em ' + escapar(data(empresa.fim_trial || (contextoBloqueio && contextoBloqueio.fim_trial))) + '. O administrador da empresa pode selecionar um plano abaixo; os demais usuários podem falar com o suporte.</div>'
+      : '';
     var cobranca = (resumoAtual.cobrancas || []).find(function (item) {
       return ['pendente', 'em_processamento'].indexOf(String(item.status)) !== -1;
     });
@@ -159,6 +157,7 @@
           (plano.oferta_beta_fundador ? '<div class="assinatura-mobile-beneficio">Preço fundador exclusivo para empresas que participaram do beta.</div>' : '') +
           '<ul>' + recursos(plano) + '</ul>' +
           '<label class="assinatura-mobile-periodo">Período<select data-meses-plano="' + escapar(plano.id) + '"><option value="1">1 mês</option><option value="2">2 meses</option><option value="3">3 meses · 5% OFF</option><option value="6">6 meses · 10% OFF</option><option value="12">12 meses · 15% OFF</option></select></label>' +
+          '<small class="assinatura-mobile-fiscal-ajuda">Fiscal sem mensalidade adicional: ' + moeda((resumoAtual.modulo_fiscal?.preco_por_nota_centavos ?? 99) / 100) + ' por nota autorizada, usando saldo da carteira da empresa.</small>' +
           '<button type="button" class="btn-primario" data-assinar-plano="' + escapar(plano.id) + '">' +
             (atual ? 'Renovar este plano' : 'Escolher este plano') + '</button>' +
         '</article>';
@@ -169,8 +168,10 @@
     conteudo.innerHTML =
       '<div class="assinatura-mobile-resumo">' +
         '<span>Plano atual</span><strong>' + escapar((planoAtual && planoAtual.nome) || (empresa.plano && empresa.plano.nome) || 'Sem plano') + '</strong>' +
-        '<small>Vencimento: ' + escapar(data(empresa.data_vencimento || empresa.fim_trial)) + '</small>' +
+        '<small>Vencimento: ' + escapar(data(empresa.licenca_status === 'teste' ? empresa.fim_trial : empresa.data_vencimento)) + '</small>' +
+        '<small>Fiscal: ' + (resumoAtual.modulo_fiscal?.ativo ? 'disponível com saldo na carteira' : 'disponível após ativar o plano') + '</small>' +
       '</div>' +
+      avisoTrial +
       (cobranca ? '<div class="assinatura-mobile-aviso">Pagamento aguardando confirmação. Se você já pagou, esta tela será liberada automaticamente.</div>' : '') +
       listaPlanos +
       '<div class="assinatura-mobile-seguranca"><div><strong>Formas de pagamento</strong><span>Pix, cartão e opções disponíveis na sua conta Mercado Pago.</span></div><div><strong>Seus dados protegidos</strong><span>O pagamento acontece no Mercado Pago. O Sistema OS não recebe nem armazena os dados do seu cartão.</span></div><div><strong>Liberação automática</strong><span>Plano e dias são ativados somente após o servidor conferir assinatura, valor e moeda.</span></div></div>';
@@ -224,7 +225,6 @@
     if (!plano) return;
     var seletor = botao.closest('.assinatura-mobile-plano').querySelector('[data-meses-plano]');
     var oferta = calcularOferta(plano, seletor && seletor.value);
-    if (!window.confirm('Continuar com o plano ' + plano.nome + ' por ' + moeda(oferta.total) + ' (' + oferta.quantidade + ' mês(es)' + (oferta.desconto ? ', ' + oferta.desconto + '% de desconto' : '') + ')?')) return;
     var textoOriginal = botao.textContent;
     botao.disabled = true;
     botao.textContent = 'Preparando pagamento…';
@@ -233,6 +233,9 @@
       var precoAtual = Number(((resumoAtual.planos || []).find(function (p) { return p.id === atualId; }) || {}).preco_referencia || 0);
       var tipo = planoId === atualId ? 'renovacao'
         : atualId && Number(plano.preco_referencia) < precoAtual ? 'downgrade' : 'upgrade';
+      var cotacao = await chamar('cotar_checkout', { planoId: planoId, tipoAlteracao: tipo, quantidadeMeses: oferta.quantidade });
+      if (!window.confirm('Continuar com o plano ' + plano.nome + ' por ' + moeda(cotacao.oferta?.valorTotal) +
+        ' por ' + oferta.quantidade + ' mês(es)? Notas fiscais são cobradas à parte por uso.')) return;
       var resultado = await chamar('criar_checkout', { planoId: planoId, tipoAlteracao: tipo, quantidadeMeses: oferta.quantidade });
       await abrirLinkSeguro(resultado.link);
       toast('Pagamento aberto no navegador. A confirmação será automática.');
@@ -271,14 +274,14 @@
     if (!modal) return;
     bloqueioAtivo = !!forcar;
     contextoBloqueio = estado && estado.contexto ? estado.contexto : contextoBloqueio;
-    var trialEncerrado = bloqueioAtivo && String(contextoBloqueio && contextoBloqueio.plano_nome || '').toLowerCase() === 'trial';
+    var trialEncerrado = bloqueioAtivo && ['trial', 'beta'].indexOf(String(contextoBloqueio && contextoBloqueio.plano_nome || '').toLowerCase()) !== -1;
     modal.hidden = false;
     modal.classList.toggle('bloqueada', bloqueioAtivo);
     document.body.classList.add('assinatura-mobile-aberta');
     document.getElementById('btn-fechar-assinatura-mobile').hidden = bloqueioAtivo;
     document.getElementById('assinatura-mobile-titulo').textContent = trialEncerrado ? 'Seu período de teste chegou ao fim' : 'Minha assinatura';
     document.getElementById('assinatura-mobile-bloqueio').textContent = trialEncerrado
-      ? 'O acesso foi bloqueado ao completar 45 dias. Fale com o suporte para contratar uma assinatura.'
+      ? 'O período de teste terminou. O administrador pode escolher um plano abaixo; se precisar, fale com o suporte.'
       : 'Sua assinatura venceu. Faça a renovação para liberar o sistema.';
     document.getElementById('assinatura-mobile-bloqueio').hidden = !bloqueioAtivo;
     carregar(false).catch(function () {});
@@ -295,7 +298,7 @@
     if (document.getElementById('assinatura-mobile-modal')) return;
     var estilo = document.createElement('style');
     estilo.textContent = '.assinatura-mobile-aberta{overflow:hidden}.assinatura-mobile-modal{position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.86);padding:12px;display:flex;align-items:flex-end}.assinatura-mobile-modal[hidden]{display:none}.assinatura-mobile-caixa{width:100%;max-height:94vh;overflow:auto;border:1px solid var(--cor-borda-forte);border-radius:9px;background:var(--cor-card);color:var(--cor-texto);padding:18px}.assinatura-mobile-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.assinatura-mobile-topo h2{margin:0}.assinatura-mobile-topo p{margin:5px 0 0;color:var(--cor-texto-fraco)}.assinatura-mobile-fechar{border:0;background:transparent;color:inherit;font-size:28px}.assinatura-mobile-resumo,.assinatura-mobile-aviso{margin:16px 0;padding:14px;border:1px solid var(--cor-borda);border-radius:6px;background:var(--cor-card-alto);display:grid;gap:4px}.assinatura-mobile-resumo strong{font-size:22px}.assinatura-mobile-resumo small{color:var(--cor-texto-fraco)}.assinatura-mobile-aviso{border-color:var(--acento-aviso);background:var(--acento-aviso-fundo)}.assinatura-mobile-planos{display:grid;gap:10px}.assinatura-mobile-plano{padding:16px;border:1px solid var(--cor-borda);border-radius:7px;background:var(--cor-fundo)}.assinatura-mobile-plano.destaque{border-color:var(--cor-texto);box-shadow:0 0 0 1px var(--cor-texto)}.assinatura-mobile-plano h3{margin:0 0 5px}.assinatura-mobile-plano h3 span{font-size:11px;border-radius:999px;padding:3px 8px;background:var(--cor-texto);color:var(--cor-fundo)}.assinatura-mobile-plano p{margin:0;color:var(--cor-texto-fraco)}.assinatura-mobile-preco{display:block;margin:14px 0;font-size:30px;line-height:1;color:var(--cor-texto);font-variant-numeric:tabular-nums}.assinatura-mobile-preco small{font-size:12px;color:var(--cor-texto-fraco)}.assinatura-mobile-beneficio{margin:-4px 0 12px;padding:8px;border-left:3px solid var(--cor-texto);background:var(--cor-card-alto);font-size:12px}.assinatura-mobile-periodo{display:grid;gap:6px;margin:0 0 12px;font-size:12px;font-weight:700}.assinatura-mobile-periodo select{width:100%;min-height:44px;padding:8px;border:1px solid var(--cor-borda-forte);border-radius:6px;background:var(--cor-card);color:var(--cor-texto)}.assinatura-mobile-plano ul{list-style:none;padding:0;margin:0 0 14px;display:grid;gap:6px;font-size:13px}.assinatura-mobile-acoes{display:flex;gap:8px;margin-top:16px}.assinatura-mobile-acoes button{flex:1;min-height:48px}.assinatura-mobile-bloqueio{padding:10px;border:1px solid var(--acento-erro);border-radius:6px;background:var(--acento-erro-fundo);color:var(--acento-erro);margin-top:12px}';
-    estilo.textContent += '.assinatura-mobile-seguranca{margin-top:14px;padding:14px;border:1px solid var(--cor-borda);border-radius:7px;background:var(--cor-card-alto);display:grid;gap:12px}.assinatura-mobile-seguranca div{display:grid;gap:3px}.assinatura-mobile-seguranca strong{font-size:13px}.assinatura-mobile-seguranca span{font-size:12px;line-height:1.45;color:var(--cor-texto-fraco)}.assinatura-mobile-estado{margin:16px 0;padding:18px 14px;border:1px solid var(--cor-borda);border-radius:7px;background:var(--cor-card-alto);display:grid;justify-items:start;gap:7px}.assinatura-mobile-estado strong{font-size:17px}.assinatura-mobile-estado small{color:var(--cor-texto-fraco);line-height:1.45}.assinatura-mobile-estado button{width:100%;margin-top:8px}.assinatura-mobile-estado.erro{border-color:var(--acento-erro);background:var(--acento-erro-fundo)}.assinatura-mobile-estado.erro strong{color:var(--acento-erro)}.assinatura-mobile-spinner{width:22px;height:22px;border:2px solid var(--cor-borda-forte);border-top-color:var(--cor-texto);border-radius:50%;animation:assinatura-mobile-girar .8s linear infinite}@keyframes assinatura-mobile-girar{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.assinatura-mobile-spinner{animation:none;border-top-color:var(--cor-borda-forte);background:var(--cor-texto)}}';
+    estilo.textContent += '.assinatura-mobile-fiscal{display:flex;align-items:center;gap:10px;margin:0 0 4px;font-size:13px;font-weight:700}.assinatura-mobile-fiscal input{width:20px;height:20px;flex:none}.assinatura-mobile-fiscal-ajuda{display:block;color:var(--cor-texto-fraco);line-height:1.45;margin:0 0 12px}.assinatura-mobile-seguranca{margin-top:14px;padding:14px;border:1px solid var(--cor-borda);border-radius:7px;background:var(--cor-card-alto);display:grid;gap:12px}.assinatura-mobile-seguranca div{display:grid;gap:3px}.assinatura-mobile-seguranca strong{font-size:13px}.assinatura-mobile-seguranca span{font-size:12px;line-height:1.45;color:var(--cor-texto-fraco)}.assinatura-mobile-estado{margin:16px 0;padding:18px 14px;border:1px solid var(--cor-borda);border-radius:7px;background:var(--cor-card-alto);display:grid;justify-items:start;gap:7px}.assinatura-mobile-estado strong{font-size:17px}.assinatura-mobile-estado small{color:var(--cor-texto-fraco);line-height:1.45}.assinatura-mobile-estado button{width:100%;margin-top:8px}.assinatura-mobile-estado.erro{border-color:var(--acento-erro);background:var(--acento-erro-fundo)}.assinatura-mobile-estado.erro strong{color:var(--acento-erro)}.assinatura-mobile-spinner{width:22px;height:22px;border:2px solid var(--cor-borda-forte);border-top-color:var(--cor-texto);border-radius:50%;animation:assinatura-mobile-girar .8s linear infinite}@keyframes assinatura-mobile-girar{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.assinatura-mobile-spinner{animation:none;border-top-color:var(--cor-borda-forte);background:var(--cor-texto)}}';
     document.head.appendChild(estilo);
 
     var modal = document.createElement('div');
@@ -318,7 +321,7 @@
       if (window.SistemaOSChamados && window.SistemaOSChamados.abrirNovo) window.SistemaOSChamados.abrirNovo({
         origem: 'config_celular', usuario: usuarioPublico, nome: contexto.perfil_nome || usuarioPublico,
         motivo: 'trial_assinatura', assunto: 'Contratar assinatura após o período de teste',
-        mensagem: 'Meu período de teste de 45 dias terminou e desejo contratar uma assinatura do Sistema OS.'
+        mensagem: 'Meu período de teste terminou e desejo contratar uma assinatura do Sistema OS.'
       });
       else toast('Abra um chamado pela tela de entrada.', true);
     });

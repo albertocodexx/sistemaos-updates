@@ -2107,18 +2107,20 @@ function registerLegacyHandlers(deps) {
             };
             const msg        = mensagensWpp.montarPagamentoConfirmado(osParaMsg, config);
             const codigoPais = (config.codigoPaisWhatsapp || '55').replace(/\D/g, '') || '55';
-            const envioMsg   = await whatsapp.enviarMensagem(telefone, msg, codigoPais);
+            const envioMsg   = await whatsapp.enviarMensagemRoteada(telefone, msg, codigoPais);
   
             if (envioMsg.sucesso) {
               wppEnviado = true;
   
               // 3. Enviar PDF como documento separado, se gerado
-              if (caminhoComprovante) {
+              if (caminhoComprovante && envioMsg.canal !== 'api') {
                 const nomeArq = `Comprovante-Pagamento-OS-${numero}.pdf`;
                 const envioDoc = await whatsapp.enviarDocumento(telefone, caminhoComprovante, nomeArq, codigoPais);
                 if (!envioDoc.sucesso) {
                   console.warn('[MP→WhatsApp] PDF enviado parcialmente (documento falhou):', envioDoc.erro);
                 }
+              } else if (caminhoComprovante && envioMsg.canal === 'api') {
+                console.warn('[MP→WhatsApp] Texto enviado pela Meta; o comprovante PDF requer envio separado.');
               }
   
               // 4. Registrar log no banco

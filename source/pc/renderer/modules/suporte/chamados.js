@@ -131,12 +131,19 @@
     if ($('modalCentralChamados')) return;
     const modal = document.createElement('div');
     modal.id = 'modalCentralChamados';
-    modal.className = 'modal-fundo escondido';
+    modal.className = 'modal-fundo suporte-pagina escondido';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Central de chamados');
     modal.innerHTML = `
       <div class="modal-caixa suporte-chat-modal">
         <div class="modal-cabecalho suporte-chat-topo">
-          <div><h2>Suporte Sistema OS</h2><p class="campo-desc">Abra um chamado ou continue uma conversa anterior.</p></div>
-          <button type="button" class="botao-fechar" id="btnFecharCentralChamados" aria-label="Fechar">×</button>
+          <div><h2>Central de chamados</h2><p class="campo-desc">Acompanhe seus pedidos e converse com o suporte.</p></div>
+          <nav class="suporte-chat-navegacao" aria-label="Chamados">
+            <button type="button" class="botao botao-secundario" id="btnHistoricoChamados">Histórico</button>
+            <button type="button" class="botao botao-primario" id="btnNovoChamadoCentral">Novo chamado</button>
+          </nav>
+          <button type="button" class="botao-fechar" id="btnFecharCentralChamados" aria-label="Fechar central de chamados">×</button>
         </div>
         <form id="formNovoChamadoCentral" class="suporte-novo-chamado escondido" novalidate>
           <div class="suporte-novo-chamado-titulo"><strong>Como podemos ajudar?</strong><span>Escolha o motivo. Mostraremos somente o que for necessário.</span></div>
@@ -183,10 +190,8 @@
     document.body.appendChild(modal);
     root.SistemaOSAnexosChamado.montar($('formNovoChamadoCentral'), 'printsNovoChamado');
     root.SistemaOSAnexosChamado.montar($('formMensagemChamado'), 'printsRespostaChamado');
-    const navegacao = document.createElement('div'); navegacao.className='linha-acoes';
-    const historico=document.createElement('button');historico.type='button';historico.className='botao botao-secundario';historico.textContent='Histórico de chamados';historico.onclick=()=>abrir().catch(e=>notificar(e.message,'erro'));
-    const novo=document.createElement('button');novo.type='button';novo.className='botao botao-primario';novo.textContent='Novo chamado';novo.onclick=()=>mostrarNovoChamado(novoContexto || {origem:'config_pc'});
-    navegacao.append(historico,novo);modal.querySelector('.modal-cabecalho').after(navegacao);
+    $('btnHistoricoChamados').addEventListener('click', () => abrir().catch(e => notificar(e.message, 'erro')));
+    $('btnNovoChamadoCentral').addEventListener('click', () => mostrarNovoChamado(novoContexto || { origem: 'config_pc' }));
     const visitante=document.createElement('div');visitante.id='visitanteChamado';visitante.hidden=true;
     visitante.innerHTML='<label><input type="checkbox" id="semContaChamado"> Ainda não tenho conta</label><label>Seu nome<input id="nomeVisitanteChamado" maxlength="120"></label><p>Sem conta, acompanhe pelo histórico neste aparelho. Somente quem tem o acesso de acompanhamento e o suporte pode ler este chamado.</p>';
     $('formNovoChamadoCentral').prepend(visitante);
@@ -385,6 +390,7 @@
       const botao = document.createElement('button');
       botao.type = 'button';
       botao.className = 'suporte-chat-item' + (atual?.id === chamado.id ? ' ativo' : '');
+      botao.setAttribute('aria-current', atual?.id === chamado.id ? 'true' : 'false');
       const titulo = document.createElement('strong');
       titulo.textContent = chamado.protocolo || ('CH-' + texto(chamado.id).slice(0, 8).toUpperCase());
       const assunto = document.createElement('span');
@@ -452,6 +458,9 @@
     $('textoMensagemChamado').value = '';
     $('printsRespostaChamado').value = '';
     atual = chamado;
+    $('formMensagemChamado').classList.add('escondido');
+    $('textoMensagemChamado').disabled = true;
+    $('btnEnviarMensagemChamado').disabled = true;
     localStorage.setItem(CHAVE_ATUAL, chamado.id || '');
     $('statusCentralChamados').textContent = 'Carregando conversa…';
     try { await carregarConversa(chamado, false); }
@@ -485,6 +494,7 @@
       $('statusCentralChamados').textContent = 'Mensagem enviada.';
     } catch (erro) {
       $('statusCentralChamados').textContent = erro.message || String(erro);
+      await carregarConversa(atual, true).catch(() => {});
     } finally { botao.disabled = ['resolvido', 'fechado', 'cancelado'].includes(String(atual?.status)); }
   }
 
@@ -523,6 +533,7 @@
   async function abrir(contexto) {
     criarEstrutura();
     if (contexto) novoContexto = Object.assign({}, contexto);
+    ativarPagina();
     $('modalCentralChamados').classList.remove('escondido');
     ocultarNovoChamado();
     chamados=[];desenharLista();
@@ -531,12 +542,15 @@
     clearInterval(timer);
     timer = setInterval(() => {
       if (document.hidden || root.__SISTEMA_OS_MODO_SEGUNDO_PLANO__ === true) return;
-      if (atual && !$('modalCentralChamados').classList.contains('escondido')) carregarConversa(atual, true).catch(() => {});
+      if ($('modalCentralChamados').classList.contains('escondido')) return;
+      if (atual) carregarConversa(atual, true).catch(() => {});
+      else if ($('formNovoChamadoCentral').classList.contains('escondido')) carregarListaEAbrir('').catch(() => {});
     }, 12000);
   }
 
   async function abrirSuporte(chamado) {
     criarEstrutura();
+    ativarPagina();
     $('modalCentralChamados').classList.remove('escondido');
     chamados = [Object.assign({ _modo: 'suporte' }, chamado)];
     desenharLista();
@@ -550,6 +564,7 @@
 
   async function abrirNovo(contexto) {
     criarEstrutura();
+    ativarPagina();
     $('modalCentralChamados').classList.remove('escondido');
     mostrarNovoChamado(contexto || {});
   }
@@ -560,6 +575,15 @@
     timer = null;
     atual = null;
     $('modalCentralChamados')?.classList.add('escondido');
+    document.documentElement.classList.remove('suporte-pagina-aberta');
+    document.body.classList.remove('suporte-pagina-aberta');
+  }
+
+  function ativarPagina() {
+    // A central tem rolagem própria; Configurações não deve permanecer por baixo.
+    $('modalConfig')?.classList.add('escondido');
+    document.documentElement.classList.add('suporte-pagina-aberta');
+    document.body.classList.add('suporte-pagina-aberta');
   }
 
   root.SistemaOSChamados = Object.freeze({ registrar, abrir, abrirNovo, abrirSuporte });

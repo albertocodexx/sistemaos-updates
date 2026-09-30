@@ -10,7 +10,7 @@ const estilos = ler('renderer', 'style.css');
 const html = ler('renderer', 'index.html');
 const funcaoAdmin = ler('supabase', 'functions', 'admin-global', 'index.ts');
 const migracao = ler('supabase', 'migrations', '20260802000100_exclusao_usuario_resiliente.sql');
-const senhaIndividual = ler('supabase', 'migrations', '20260807000200_senha_exclusao_individual_admin.sql');
+const senhaIndividual = ler('supabase', 'migrations', '20260807000300_senha_exclusao_individual_admin.sql');
 
 assert.match(renderer, /definirMensagemUsuarios\(mensagem, 'erro'\)/);
 assert.match(renderer, /await carregarListaUsuarios\(\)/);
@@ -18,6 +18,10 @@ assert.match(html, /id="msgUsuarios"[^>]+aria-live="polite"/);
 assert.match(estilos, /\.toast \{[^}]*right: 112px;[^}]*z-index: 12000;/s);
 
 assert.match(funcaoAdmin, /usuarioJaAusente/);
+assert.match(funcaoAdmin, /database error loading user/);
+assert.match(funcaoAdmin, /listUsers\(\{ page: pagina, perPage: 1000 \}\)/);
+assert.match(funcaoAdmin, /listagemCompleta && !usuarioEncontrado/);
+assert.match(funcaoAdmin, /nenhum dado foi apagado/);
 assert.match(funcaoAdmin, /identidades_login'[\s\S]*\.delete\(\)/);
 assert.match(funcaoAdmin, /perfis'[\s\S]*\.delete\(\)/);
 assert.match(funcaoAdmin, /auditoriaErro/);

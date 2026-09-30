@@ -42,6 +42,9 @@
   var btnExportarPC = document.getElementById('btn-exportar-pc');
   var btnEmitirComprovante = document.getElementById('btn-emitir-comprovante');
   var btnCompartilharPdf = document.getElementById('btn-compartilhar-pdf');
+  var btnImprimirPdfA4 = document.getElementById('btn-imprimir-pdf-a4');
+  var seletorViasPdf = document.getElementById('seletor-vias-pdf');
+  var seletorViasPdfLabel = document.getElementById('seletor-vias-pdf-label');
   var feedbackAcao = document.getElementById('feedback-acao');
 
   // Trava síncrona contra clique duplo/toque longo em "Salvar no
@@ -74,6 +77,7 @@
   var btnIrDocumentos = document.getElementById('btn-ir-documentos');
   var btnIrConsulta = document.getElementById('btn-ir-consulta');
   var btnIrCobrancas = document.getElementById('btn-ir-cobrancas');
+  var btnIrFiscal = document.getElementById('btn-ir-fiscal');
   var btnIrQr = document.getElementById('btn-ir-qr');
   var btnIrEstatisticas = document.getElementById('btn-ir-estatisticas');
   var btnIrPrazos = document.getElementById('btn-ir-prazos');
@@ -90,6 +94,7 @@
   var painelDocumentos = document.getElementById('painel-documentos');
   var painelConsulta = document.getElementById('painel-consulta');
   var painelCobrancas = document.getElementById('painel-cobrancas');
+  var painelFiscal = document.getElementById('painel-fiscal');
   var painelQr = document.getElementById('painel-qr');
   var painelEstatisticas = document.getElementById('painel-estatisticas');
   var painelPrazos = document.getElementById('painel-prazos');
@@ -153,6 +158,7 @@
     documentos: { elemento: painelDocumentos, botaoNav: btnIrDocumentos },
     consulta: { elemento: painelConsulta, botaoNav: btnIrConsulta },
     cobrancas: { elemento: painelCobrancas, botaoNav: btnIrCobrancas },
+    fiscal: { elemento: painelFiscal, botaoNav: btnIrFiscal },
     qr: { elemento: painelQr, botaoNav: btnIrQr },
     estatisticas: { elemento: painelEstatisticas, botaoNav: btnIrEstatisticas },
     prazos: { elemento: painelPrazos, botaoNav: btnIrPrazos },
@@ -470,6 +476,12 @@
     );
   }
 
+  function htmlViaSelecionada() {
+    var html = htmlCompartilhamentoAtual();
+    if (documentoAtualTipo === 'entrega') return html;
+    return window.SistemaOSViasPdf.selecionar(html, seletorViasPdf && seletorViasPdf.value || 'ambas');
+  }
+
   function nomePdfPorTipo(tipo, dados) {
     dados = dados || {};
     var numero = String(dados.numeroOSAtribuido || dados.numeroVenda || dados.numeroCompra ||
@@ -564,7 +576,7 @@
         var numero = numeroDocumentoAtual();
         var meta = metadadosCompartilhamentoAtual();
         return window.SistemaOSCompartilhar.compartilharPdfHtml(
-          htmlCompartilhamentoAtual(),
+          htmlViaSelecionada(),
           meta.prefixoArquivo + '-' + numero + '.pdf',
           meta.titulo,
           mensagemCompartilhamentoAtual()
@@ -576,6 +588,26 @@
       }).then(function () {
         btnCompartilharPdf.disabled = false;
         btnCompartilharPdf.textContent = 'Compartilhar PDF';
+      });
+    });
+  }
+
+  if (btnImprimirPdfA4) {
+    btnImprimirPdfA4.addEventListener('click', function () {
+      if (!osAtual) return mostrarFeedback('Gere ou abra um documento antes de imprimir.', true);
+      btnImprimirPdfA4.disabled = true;
+      btnImprimirPdfA4.textContent = 'Preparando impressão…';
+      carregamentoModulos.then(async function () {
+        var html = htmlViaSelecionada();
+        var plugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Impressao;
+        if (!plugin || typeof plugin.imprimir !== 'function') throw new Error('Impressão nativa indisponível neste aparelho.');
+        await plugin.imprimir({ html: html, titulo: metadadosCompartilhamentoAtual().titulo + ' ' + numeroDocumentoAtual() });
+        mostrarFeedback('Documento enviado para a impressão.', false);
+      }).catch(function (erro) {
+        mostrarFeedback('Não foi possível imprimir: ' + (erro.message || erro), true);
+      }).then(function () {
+        btnImprimirPdfA4.disabled = false;
+        btnImprimirPdfA4.textContent = 'Imprimir PDF A4';
       });
     });
   }
@@ -1462,6 +1494,7 @@
       { botao: btnIrDocumentos, chave: 'documentos' },
       { botao: btnIrConsulta, chave: 'consulta' },
       { botao: btnIrCobrancas, chave: 'cobrancas' },
+      { botao: btnIrFiscal, chave: 'fiscal' },
       { botao: btnIrQr, chave: 'qr' },
       { botao: btnIrEstatisticas, chave: 'estatisticas' },
       { botao: btnIrPrazos, chave: 'prazos' }
@@ -1493,6 +1526,7 @@
     } else if (telaAnterior === 'cobrancas') {
       document.dispatchEvent(new CustomEvent('sistema-os:tela-cobrancas-fechada'));
     }
+    if (nome === 'fiscal') document.dispatchEvent(new CustomEvent('sistema-os:tela-fiscal-aberta'));
     if (nome !== 'qr' && window.SistemaOSQRCode && window.SistemaOSQRCode.leituraAtiva()) {
       window.SistemaOSQRCode.cancelarLeitura().catch(function () {});
     }
@@ -1716,6 +1750,10 @@
     });
   }
 
+  if (btnIrFiscal) {
+    btnIrFiscal.addEventListener('click', function () { mostrarTela('fiscal'); });
+  }
+
   if (btnIrQr) {
     btnIrQr.addEventListener('click', function () {
       mostrarTela('qr');
@@ -1808,6 +1846,13 @@
       // silenciosamente, por isso tocar em "Compartilhar" numa venda não
       // abria nada no Android.
       btnCompartilharPdf.hidden = false;
+    }
+    if (btnImprimirPdfA4) btnImprimirPdfA4.hidden = false;
+    if (seletorViasPdfLabel) seletorViasPdfLabel.hidden = documentoAtualTipo === 'entrega';
+    if (seletorViasPdf) {
+      seletorViasPdf.value = 'ambas';
+      seletorViasPdf.options[1].textContent = documentoAtualTipo === 'compra' ? 'Via do vendedor'
+        : documentoAtualTipo === 'venda' ? 'Via do comprador' : 'Via do cliente';
     }
     avisoAssinado.hidden = modoHistorico ? true : avisoAssinado.hidden;
     var assinaturaPodeFicarPendente = assinaturaEstaPendente(osAtual, documentoAtualTipo);

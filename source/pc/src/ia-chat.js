@@ -394,6 +394,55 @@ function _interpretarAcaoCobrancaLocal(pergunta, banco = db) {
   };
 }
 
+// Pedidos operacionais de OS devem continuar reconhecíveis após respostas
+// curtas como "isso" ou "e a OS 21". A resolução usa somente registros da
+// empresa aberta; nunca confia num número sugerido pelo modelo sem conferir
+// sua existência no banco. A alteração continua sendo apenas uma proposta.
+function _interpretarEntregaOSLocal(pergunta, historico, banco = db) {
+  const atual = _normalizarBuscaLocal(pergunta);
+  const anteriores = (Array.isArray(historico) ? historico : [])
+    .filter(item => item?.role === 'user' && typeof item.content === 'string')
+    .slice(-6).reverse();
+  const pedidoAnterior = anteriores.find(item => {
+    const texto = _normalizarBuscaLocal(item.content);
+    return /\b(marcar|colocar|mudar|alterar|definir)\b/.test(texto) && /\b(entregue|entregada|entrega)\b/.test(texto);
+  })?.content || '';
+  const atualPedeEntrega = /\b(marcar|colocar|mudar|alterar|definir)\b/.test(atual) &&
+    /\b(entregue|entregada|entrega)\b/.test(atual);
+  const continuacao = /^(isso|sim|confirmo|correto|essa|essa mesmo|e a os \d+|os \d+|a os \d+)$/.test(atual);
+  if (!atualPedeEntrega && !(continuacao && pedidoAnterior)) return null;
+  const pedido = atualPedeEntrega ? String(pergunta) : pedidoAnterior;
+  const numeroAtual = String(pergunta || '').match(/\b(?:os|ordem(?:\s+de\s+servi[cç]o)?)\s*[-#:]?\s*(\d{1,6})\b/i);
+  const numeroPedido = pedido.match(/\b(?:os|ordem(?:\s+de\s+servi[cç]o)?)\s*[-#:]?\s*(\d{1,6})\b/i);
+  const numero = _normalizarNumeroOS(numeroAtual?.[1] || numeroPedido?.[1]);
+  const ordens = banco.listarOrdens();
+  let candidatas = numero ? ordens.filter(os => os.numero === numero) : [];
+  if (!numero) {
+    const textoPedido = _normalizarBuscaLocal(pedido);
+    candidatas = ordens.filter(os => {
+      const modelo = _normalizarBuscaLocal(os.aparelho?.modelo);
+      return modelo.length >= 5 && textoPedido.includes(modelo);
+    });
+  }
+  if (candidatas.length !== 1) {
+    const detalhe = candidatas.length > 1
+      ? `Encontrei mais de uma OS desse aparelho (${candidatas.map(os => os.numero).join(', ')}).`
+      : numero ? `Não encontrei a ${numero} nesta empresa.` : 'Não identifiquei uma OS única para esse aparelho.';
+    return { sucesso: true, resposta: `${detalhe} Informe o número da OS para eu preparar a alteração.`, acaoProposta: null, origem: 'local' };
+  }
+  const os = candidatas[0];
+  if (os.status === 'Entregue') {
+    return { sucesso: true, resposta: `A ${os.numero} já consta como entregue. Nenhuma alteração foi feita.`, acaoProposta: null, origem: 'local' };
+  }
+  const pediuCobranca = /\b(cobranca|lembrete|cobrar)\b/.test(_normalizarBuscaLocal(pedido));
+  return {
+    sucesso: true,
+    resposta: `Encontrei a ${os.numero}${os.aparelho?.modelo ? ` (${os.aparelho.modelo})` : ''}. Preparei a mudança para **Entregue**; confira e confirme no cartão abaixo.${pediuCobranca ? ' O lembrete de cobrança ainda não será criado: informe o valor e a data completa (dia, mês e ano) para eu orientar o registro sem adivinhar.' : ''}`,
+    acaoProposta: { tipo: 'alterar_status_os', dados: { numero: os.numero, novoStatus: 'Entregue' } },
+    origem: 'local'
+  };
+}
+
 function _traduzirFalhaGroq(erro) {
   const detalhe = String(erro && erro.message ? erro.message : erro || '');
   const codigo = String(erro && erro.code || '');
@@ -404,13 +453,13 @@ function _traduzirFalhaGroq(erro) {
     return 'A conexão com a IA foi interrompida. Verifique a internet e tente novamente.';
   }
   if (/status 401|status 403/i.test(detalhe)) {
-    return 'A chave da IA foi recusada. Confira a integração Groq nas Configurações.';
+    return 'O serviço de IA recusou a solicitação. Entre em contato com o suporte do Sistema OS.';
   }
-  if (/status 429/i.test(detalhe)) {
+  if (/status 429|limite econ[oô]mico|limite.*assistente|rate.?limit|too many requests|cota.*atingid/i.test(detalhe)) {
     const espera = detalhe.match(/try again in\s+([^"}.]+)/i)?.[1]?.trim();
     return espera
-      ? `A cota da Groq foi atingida. Tente novamente em ${espera}. Consultas básicas do sistema continuam funcionando sem usar essa cota.`
-      : 'A cota da Groq foi atingida. Consultas básicas do sistema continuam funcionando localmente; para perguntas gerais, aguarde a liberação da conta Groq.';
+      ? `O limite de uso da IA foi atingido. Tente novamente em ${espera}. Algumas consultas e propostas de ação continuam disponíveis sem essa cota.`
+      : 'O limite de uso da IA foi atingido. Aguarde um pouco e tente novamente; algumas consultas e propostas de ação continuam disponíveis sem essa cota.';
   }
   if (/status 5\d\d/i.test(detalhe)) {
     return 'O serviço da IA está temporariamente indisponível. Tente novamente em alguns instantes.';
@@ -973,8 +1022,10 @@ async function responderPergunta(pergunta, historico, usuario, chamarIARemota = 
   }
   const acaoLocal = podeModulo(usuario, 'estoque', 'editar') ? _interpretarAcaoLocal(pergunta) : null;
   const acaoCobrancaLocal = podeModulo(usuario, 'financeiro', 'editar') ? _interpretarAcaoCobrancaLocal(pergunta) : null;
-  if (acaoCobrancaLocal || acaoLocal) {
-    return Object.assign(acaoCobrancaLocal || acaoLocal, {
+  const entregaLocal = podeAcaoIA(usuario, 'alterar_status_os')
+    ? _interpretarEntregaOSLocal(pergunta, historico) : null;
+  if (acaoCobrancaLocal || acaoLocal || entregaLocal) {
+    return Object.assign(acaoCobrancaLocal || acaoLocal || entregaLocal, {
       tempoRespostaMs: Date.now() - inicio
     });
   }
@@ -995,7 +1046,7 @@ async function responderPergunta(pergunta, historico, usuario, chamarIARemota = 
     };
   }
   if (!apiKey && typeof chamarIARemota !== 'function') {
-    return { sucesso: false, erro: `Assistente IA ainda não configurado. Escolha um provedor e salve a chave em Configurações → Integração IA.` };
+    return { sucesso: false, erro: 'Assistente IA indisponível. Entre em contato com o suporte do Sistema OS.' };
   }
 
   try {
@@ -1007,7 +1058,12 @@ async function responderPergunta(pergunta, historico, usuario, chamarIARemota = 
     let categorias = ['resumo'];
     let precisaManual = false;
     const usarPesquisaWeb = _perguntaPedePesquisaWeb(pergunta);
-    const roteamentoLocal = _classificarCategoriasLocalmente(pergunta);
+    const ultimaPergunta = Array.isArray(historico)
+      ? historico.slice().reverse().find(item => item?.role === 'user' && typeof item.content === 'string')?.content || ''
+      : '';
+    const perguntaComContexto = /^(isso|sim|confirmo|correto|essa|essa mesmo|e a os \d+|os \d+|a os \d+)$/
+      .test(_normalizarBuscaLocal(pergunta)) ? `${ultimaPergunta} ${pergunta}`.trim() : pergunta;
+    const roteamentoLocal = _classificarCategoriasLocalmente(perguntaComContexto);
     if (roteamentoLocal) {
       categorias = roteamentoLocal.categorias;
       precisaManual = roteamentoLocal.manual;
@@ -1081,10 +1137,14 @@ async function responderPergunta(pergunta, historico, usuario, chamarIARemota = 
     const executarChamada = async (mensagensDaVez) => {
       if (typeof chamarIARemota === 'function') {
         try {
-          // A configuração central por empresa tem prioridade, inclusive
-          // quando foi definida pelo suporte sem revelar a chave ao PC.
-          return await chamarIARemota(mensagensDaVez, opcoesIA);
+          // A credencial local não viaja na requisição remota: o servidor
+          // escolhe a chave global ou a chave própria permitida no seu cofre.
+          const { apiKey: _chaveLocal, ...opcoesRemotas } = opcoesIA;
+          return await chamarIARemota(mensagensDaVez, opcoesRemotas);
         } catch (erroRemoto) {
+          // Contas da nuvem respeitam exclusivamente a política e a cota do
+          // servidor. Uma chave antiga neste PC nunca contorna o bloqueio.
+          if (usuario?.origemAuth === 'supabase') throw erroRemoto;
           if (!apiKey) throw erroRemoto;
           // Instalações antigas continuam funcionando com o cofre local caso a
           // integração por empresa ainda não tenha sido configurada.
@@ -1303,6 +1363,7 @@ module.exports = {
   _montarContextoDados,
   _interpretarAcaoLocal,
   _interpretarAcaoCobrancaLocal,
+  _interpretarEntregaOSLocal,
   _statusCobranca,
   _prepararStatusCobranca,
   _executarAlterarStatusCobranca,

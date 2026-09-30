@@ -190,13 +190,37 @@
     return elemento;
   }
 
+  function limparFiltros() {
+    filtroAtual = 'todas';
+    tipoAtual = 'todos';
+    if (buscaEl) buscaEl.value = '';
+    [['cobrancas-mobile-tipos', 'data-tipo', 'todos'], ['cobrancas-mobile-filtros', 'data-status', 'todas']].forEach(function (grupo) {
+      var container = root.document.getElementById(grupo[0]);
+      if (!container) return;
+      Array.prototype.forEach.call(container.querySelectorAll('button[' + grupo[1] + ']'), function (item) {
+        var ativo = item.getAttribute(grupo[1]) === grupo[2];
+        item.classList.toggle('ativo', ativo);
+        if (grupo[1] === 'data-tipo') item.setAttribute('aria-selected', String(ativo));
+      });
+    });
+  }
+
   function renderizar() {
     if (!listaEl) return;
     atualizarResumo();
     var cobrancas = cobrancasFiltradas();
     listaEl.innerHTML = '';
     if (!cobrancas.length) {
-      listaEl.innerHTML = '<div class="cobranca-mobile-vazio">Nenhuma cobrança neste filtro. Toque em <strong>Nova cobrança</strong> para programar um lembrete.</div>';
+      var vazio = root.document.createElement('div');
+      vazio.className = 'cobranca-mobile-vazio';
+      vazio.textContent = cobrancasAtuais.length
+        ? cobrancasAtuais.length + ' cobrança(s) estão ocultas pela busca ou pelos filtros. '
+        : 'Nenhuma cobrança encontrada. Atualize a lista ou crie uma nova cobrança.';
+      if (cobrancasAtuais.length) vazio.appendChild(botao('Mostrar todas', 'btn-secundario', function () {
+        limparFiltros();
+        renderizar();
+      }));
+      listaEl.appendChild(vazio);
       return;
     }
     cobrancas.forEach(function (cobranca) {
@@ -533,8 +557,7 @@
   }
 
   async function testarNotificacao() {
-    var preferida = cobrancasAtuais.find(function (c) { return c.tipo === 'os' && /(?:^|-)0*20$/.test(texto(c.os && c.os.numero)); });
-    var cobranca = preferida || cobrancasAtuais.find(function (c) { return c.status === 'pendente' || c.status === 'atrasada'; });
+    var cobranca = cobrancasAtuais.find(function (c) { return c.status === 'pendente' || c.status === 'atrasada'; });
     if (!cobranca) return toast('Cadastre uma cobrança antes de testar a notificação.', 'aviso');
     if (!root.SistemaOSNotificacoes || !root.SistemaOSNotificacoes.notificarTesteCobranca) {
       return toast('Notificações locais indisponíveis neste aparelho.', 'erro');
@@ -543,13 +566,12 @@
     toast(resultado && resultado.agendada ? 'Notificação de teste enviada pelo aplicativo.' : 'Autorize as notificações do Sistema OS para concluir o teste.', resultado && resultado.agendada ? 'sucesso' : 'erro');
   }
 
-  function abrir(numeroOS, lembreteId) {
+  function abrir(numeroOS, lembreteId, tipoNotificacao) {
     var botaoNav = root.document && root.document.getElementById('btn-ir-cobrancas');
     if (botaoNav) botaoNav.click();
+    limparFiltros();
     if (numeroOS) {
-      if (buscaEl) buscaEl.value = rotuloOS(numeroOS);
-      filtroAtual = 'todas';
-      tipoAtual = 'todos';
+      if (buscaEl) buscaEl.value = tipoNotificacao === 'cobranca-venda' ? texto(numeroOS) : rotuloOS(numeroOS);
     }
     carregar().then(function () {
       renderizar();

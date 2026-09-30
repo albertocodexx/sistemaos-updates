@@ -9,15 +9,27 @@ const telefoneLimpo = (valor: unknown) => texto(valor).replace(/\D/g, '').slice(
 const uuidValido = (valor: unknown) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(texto(valor));
 const ehPlanoBasico = (plano: any) => texto(plano?.nome).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === 'basico';
 
+function betaVigente(empresa: any, instante = Date.now()) {
+  const expira = Date.parse(texto(empresa?.beta_fundador_expira_em));
+  return empresa?.beta_fundador === true && Number.isFinite(expira) && instante < expira;
+}
+
 function precoEmpresa(plano: any, betaFundador: boolean) {
   return betaFundador && ehPlanoBasico(plano) ? 49.90 : Number(plano?.preco_referencia || 0);
 }
 
-function ofertaPeriodo(precoMensal: number, quantidadeMeses: number) {
+function ofertaPeriodo(plano: any, empresa: any, quantidadeMeses: number, inicio: number) {
   const percentual = quantidadeMeses >= 12 ? 15 : quantidadeMeses >= 6 ? 10 : quantidadeMeses >= 3 ? 5 : 0;
-  const semDesconto = Number((precoMensal * quantidadeMeses).toFixed(2));
-  const total = Number((semDesconto * (1 - percentual / 100)).toFixed(2));
-  return { precoMensal, quantidadeMeses, percentualDesconto: percentual, valorSemDesconto: semDesconto, valorTotal: total };
+  let baseCentavos = 0;
+  for (let mes = 0; mes < quantidadeMeses; mes += 1) {
+    const elegivel = betaVigente(empresa, inicio + mes * Number(plano.duracao_dias || 30) * 86400000);
+    baseCentavos += Math.round(precoEmpresa(plano, elegivel) * 100);
+  }
+  const baseComDesconto = Math.round(baseCentavos * (1 - percentual / 100));
+  return { quantidadeMeses, percentualDesconto: percentual, valorBase: baseComDesconto / 100,
+    valorFiscal: 0, fiscalValorCentavos: 0,
+    valorSemDesconto: baseCentavos / 100,
+    valorTotal: baseComDesconto / 100 };
 }
 
 async function salvarSegredo(admin: any, integracao: any, segredoAberto: Record<string, unknown>) {
@@ -79,16 +91,19 @@ Deno.serve(async (req) => {
         plano_id: contexto.plano_id || null,
         licenca_status: contexto.licenca_status || null,
         data_vencimento: contexto.data_vencimento || null,
+        inicio_trial: contexto.inicio_trial || null,
         fim_trial: contexto.fim_trial || null,
         plano: contexto.plano_nome ? { id: contexto.plano_id || null, nome: contexto.plano_nome } : null
       } : null;
       let cobrancas: any[] = [];
       let alertas: any[] = [];
+      let contaFiscal: any = null;
       if (empresaId && !contexto.administrador_global) {
-        const [empresaConsulta, cobrancasConsulta, alertasConsulta] = await Promise.all([
-          admin.from('empresas').select('id,nome_fantasia,plano_id,licenca_status,data_vencimento,periodo_graca_ate,contato_cobranca_nome,contato_cobranca_email,contato_cobranca_whatsapp,avisos_cobranca_ativos,beta_fundador,plano:planos(id,nome)').eq('id', empresaId).single(),
-          admin.from('cobrancas_assinatura').select('id,plano_id,tipo_alteracao,valor,status,checkout_url,expira_em,pago_em,aplicado_em,created_at,plano:planos(nome)').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(10),
-          admin.from('alertas_assinatura').select('id,tipo,titulo,mensagem,lido_em,created_at').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(20)
+        const [empresaConsulta, cobrancasConsulta, alertasConsulta, contaFiscalConsulta] = await Promise.all([
+          admin.from('empresas').select('id,nome_fantasia,plano_id,licenca_status,inicio_trial,fim_trial,data_vencimento,periodo_graca_ate,contato_cobranca_nome,contato_cobranca_email,contato_cobranca_whatsapp,avisos_cobranca_ativos,beta_fundador,beta_fundador_expira_em,modulo_fiscal_ativo_ate,plano:planos(id,nome)').eq('id', empresaId).single(),
+          admin.from('cobrancas_assinatura').select('id,plano_id,tipo_alteracao,valor,status,checkout_url,expira_em,pago_em,aplicado_em,created_at,fiscal_incluso,fiscal_valor_centavos,plano:planos(nome)').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(10),
+          admin.from('alertas_assinatura').select('id,tipo,titulo,mensagem,lido_em,created_at').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(20),
+          admin.from('contas_fiscais').select('limite_gratuito_mensal,preco_excedente_centavos').eq('empresa_id', empresaId).maybeSingle()
         ]);
         // O catálogo e o pagamento não podem desaparecer porque uma tabela
         // complementar ainda está migrando ou ficou temporariamente lenta.
@@ -97,8 +112,14 @@ Deno.serve(async (req) => {
         if (!empresaConsulta.error && empresaConsulta.data) empresa = empresaConsulta.data;
         if (!cobrancasConsulta.error) cobrancas = cobrancasConsulta.data || [];
         if (!alertasConsulta.error) alertas = alertasConsulta.data || [];
+        if (!contaFiscalConsulta.error) contaFiscal = contaFiscalConsulta.data;
       }
-      const betaFundador = empresa?.beta_fundador === true;
+      const betaFundador = betaVigente(empresa);
+      const fiscalTrialAtivo = ['trial', 'beta'].includes(texto(empresa?.plano?.nome || contexto.plano_nome).toLowerCase()) &&
+        empresa?.licenca_status === 'teste' &&
+        Date.parse(texto(empresa?.fim_trial || contexto.fim_trial)) > Date.now();
+      const fiscalAtivo = fiscalTrialAtivo ||
+        (empresa?.licenca_status === 'ativa' && Date.parse(texto(empresa?.data_vencimento)) > Date.now());
       const planosPersonalizados = (planos || []).map((plano: any) => {
         const precoTabela = Number(plano.preco_referencia || 0);
         const preco = precoEmpresa(plano, betaFundador);
@@ -110,7 +131,13 @@ Deno.serve(async (req) => {
           descontos_periodo: { 3: 5, 6: 10, 12: 15 }
         };
       });
-      return resposta(200, { planos: planosPersonalizados, empresa, cobrancas, alertas });
+      return resposta(200, { planos: planosPersonalizados, empresa, cobrancas, alertas,
+        modulo_fiscal: { preco_mensal_centavos: 0, preco_por_nota_centavos: Number(contaFiscal?.preco_excedente_centavos ?? 99),
+          incluso_mensal: Number(contaFiscal?.limite_gratuito_mensal ?? 0),
+          ativo: fiscalAtivo,
+          trial: fiscalTrialAtivo,
+          ativo_ate: fiscalTrialAtivo ? (empresa?.fim_trial || contexto.fim_trial) : empresa?.data_vencimento || null,
+          beneficio_beta_ate: empresa?.beta_fundador_expira_em || null } });
     }
 
     const eAdminGeral = await administradorGeral(admin, autenticacao.user.id);
@@ -137,26 +164,38 @@ Deno.serve(async (req) => {
       return resposta(200, { empresa, mensagem: 'Contato de cobranca atualizado.' });
     }
 
-    if (acao === 'criar_checkout') {
+    if (acao === 'criar_checkout_fiscal' || acao === 'cotar_checkout_fiscal') {
+      return resposta(410, { erro: 'O fiscal nao tem mais mensalidade. Adicione saldo na carteira; cada nota autorizada sera cobrada por uso.' });
+    }
+
+    if (acao === 'criar_checkout' || acao === 'cotar_checkout') {
       if (!contexto.empresa_id || contexto.administrador_global) return resposta(403, { erro: 'Entre na empresa cliente para assinar.' });
       const pode = temPermissao(contexto, 'configuracoes', 'editar');
       if (!pode) return resposta(403, { erro: 'Somente o administrador da empresa pode alterar a assinatura.' });
+      const { data: empresa, error: empresaErro } = await admin.from('empresas')
+        .select('id,nome_fantasia,plano_id,licenca_status,data_vencimento,modulo_fiscal_ativo_ate,contato_cobranca_nome,contato_cobranca_email,beta_fundador,beta_fundador_expira_em')
+        .eq('id', contexto.empresa_id).single();
+      if (empresaErro) throw empresaErro;
       const planoId = texto(dados.planoId);
       const { data: plano, error: planoErro } = await admin.from('planos')
         .select('id,nome,descricao,preco_referencia,periodo,duracao_dias,ativo,excluido_em')
         .eq('id', planoId).eq('ativo', true).is('excluido_em', null).maybeSingle();
       if (planoErro) throw planoErro;
       if (!plano || Number(plano.preco_referencia) <= 0) return resposta(400, { erro: 'Plano pago invalido ou indisponivel.' });
-      const { data: empresa, error: empresaErro } = await admin.from('empresas')
-        .select('id,nome_fantasia,plano_id,licenca_status,contato_cobranca_nome,contato_cobranca_email,beta_fundador')
-        .eq('id', contexto.empresa_id).single();
-      if (empresaErro) throw empresaErro;
+      const agora = Date.now();
+      const vencimento = Date.parse(texto(empresa.data_vencimento));
       const quantidadeMeses = Math.max(1, Math.min(12, Number.isInteger(Number(dados.quantidadeMeses)) ? Number(dados.quantidadeMeses) : 1));
-      const oferta = ofertaPeriodo(precoEmpresa(plano, empresa.beta_fundador === true), quantidadeMeses);
+      const inicioCiclo = Number.isFinite(vencimento) ? Math.max(agora, vencimento) : agora;
+      const oferta = ofertaPeriodo(plano, empresa, quantidadeMeses, inicioCiclo);
       const valorTotal = oferta.valorTotal;
       const duracaoTotal = Number(plano.duracao_dias) * quantidadeMeses;
+      if (acao === 'cotar_checkout') return resposta(200, { oferta, moduloFiscal: false });
       const { data: pendente, error: pendenteErro } = await admin.from('cobrancas_assinatura')
         .select('id,checkout_url,expira_em,status').eq('empresa_id', empresa.id).eq('plano_id', plano.id)
+        .eq('tipo_alteracao', !empresa.plano_id ? 'primeira_assinatura'
+          : empresa.licenca_status === 'vencida' ? 'reativacao' : empresa.plano_id === plano.id ? 'renovacao'
+          : texto(dados.tipoAlteracao) === 'downgrade' ? 'downgrade' : 'upgrade')
+        .eq('fiscal_incluso', false).eq('fiscal_valor_centavos', 0)
         .eq('duracao_dias', duracaoTotal).eq('valor', valorTotal)
         .in('status', ['pendente', 'em_processamento']).gt('expira_em', new Date(Date.now() + 120000).toISOString())
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -185,6 +224,8 @@ Deno.serve(async (req) => {
         plano_id: plano.id,
         tipo_alteracao: tipoAlteracao,
         valor: valorTotal,
+        fiscal_incluso: false,
+        fiscal_valor_centavos: 0,
         duracao_dias: duracaoTotal,
         referencia_externa: referencia,
         status: 'pendente',
@@ -199,7 +240,7 @@ Deno.serve(async (req) => {
         items: [{
           id: plano.id,
           title: `Sistema OS - Plano ${plano.nome}`.slice(0, 250),
-          description: `${quantidadeMeses} mes(es)${oferta.percentualDesconto ? ` com ${oferta.percentualDesconto}% de desconto` : ''}`.slice(0, 250),
+          description: `${quantidadeMeses} mes(es)${oferta.percentualDesconto ? ` com ${oferta.percentualDesconto}% de desconto no plano` : ''}`.slice(0, 250),
           quantity: 1,
           currency_id: 'BRL',
           unit_price: valorTotal
@@ -209,7 +250,10 @@ Deno.serve(async (req) => {
         expires: true,
         expiration_date_to: expiraEm,
         statement_descriptor: 'SISTEMA OS',
-        metadata: { cobranca_id: cobrancaId, empresa_id: empresa.id, plano_id: plano.id, quantidade_meses: quantidadeMeses, desconto_percentual: oferta.percentualDesconto, beta_fundador: empresa.beta_fundador === true },
+        metadata: { cobranca_id: cobrancaId, empresa_id: empresa.id, plano_id: plano.id,
+          quantidade_meses: quantidadeMeses, desconto_percentual: oferta.percentualDesconto,
+          modulo_fiscal: false, fiscal_valor_centavos: 0,
+          beta_fundador: betaVigente(empresa) },
         ...(emailValido(email) ? { payer: { email, name: texto(empresa.contato_cobranca_nome || empresa.nome_fantasia).slice(0, 120) } } : {})
       };
       if (/^https:\/\//i.test(returnUrl)) {

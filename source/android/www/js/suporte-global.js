@@ -18,7 +18,8 @@
     return !!(estado && estado.contexto && estado.contexto.administrador_global === true);
   }
   function texto(valor) { return String(valor == null ? '' : valor); }
-  function estadoLicenca(valor) {
+  function estadoLicenca(valor, planoNome) {
+    if (texto(valor).toLowerCase() === 'teste' && texto(planoNome).toLowerCase() === 'beta') return 'Beta';
     return ({ ativa: 'Ativa', teste: 'Trial', vencendo: 'Vencendo', vencida: 'Vencida',
       periodo_graca: 'Período de graça', suspensa: 'Suspensa', cancelada: 'Cancelada', bloqueada: 'Bloqueada' })[texto(valor).toLowerCase()] || 'Sem status';
   }
@@ -35,10 +36,10 @@
     empresas.forEach(function (empresa) {
       var card = document.createElement('article');
       card.className = 'suporte-empresa-card';
-      var vencimento = empresa.data_vencimento || empresa.fim_trial;
+      var vencimento = empresa.licenca_status === 'teste' ? empresa.fim_trial : empresa.data_vencimento || empresa.fim_trial;
       card.innerHTML = '<strong></strong><p></p><small></small>';
       card.querySelector('strong').textContent = empresa.nome_fantasia || empresa.codigo || 'Empresa sem nome';
-      card.querySelector('p').textContent = 'Código: ' + (empresa.codigo || '—') + ' · ' + estadoLicenca(empresa.licenca_status);
+      card.querySelector('p').textContent = 'Código: ' + (empresa.codigo || '—') + ' · ' + estadoLicenca(empresa.licenca_status, empresa.plano && empresa.plano.nome);
       card.querySelector('small').textContent = vencimento ? 'Vencimento: ' + new Date(vencimento).toLocaleDateString('pt-BR') : 'Sem vencimento definido';
       lista.appendChild(card);
     });

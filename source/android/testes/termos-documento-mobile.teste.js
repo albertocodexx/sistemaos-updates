@@ -33,10 +33,10 @@ assert.match(app, /definirTermosDocumento\('os', dados\.termos\)/);
 assert.match(app, /definirTermosDocumento\('compra', dados\.termosCompra\)/);
 assert.match(app, /definirTermosDocumento\('venda', dados\.termosVenda\)/);
 assert.match(estoque, /termosVenda:\s*venda\.termosVenda \|\| ''/);
-assert.match(termos, /Em iPhones, a abertura envolve risco de dano à tela/);
-assert.match(termos, /Android com tampa traseira já trincada/);
-assert.match(termos, /ajuste no preço estimado será informado previamente ao cliente/);
-assert.match(termos, /danos decorrentes da fragilidade ou avaria preexistente/);
+assert.match(termos, /reparo e qualquer alteração de preço dependem de orçamento informado e aprovação prévia/i);
+assert.match(termos, /riscos específicos identificados na avaliação/i);
+assert.match(termos, /A falta de retirada não transfere automaticamente sua propriedade/i);
+assert.doesNotMatch(termos, /Em iPhones, a abertura envolve risco de dano à tela/i);
 assert.strictEqual(termosEmpacotados, termos, 'termos do APK empacotado devem ser idênticos aos fontes web');
 
 assert.match(app, /function normalizarGarantiaVenda\(valor\)/);

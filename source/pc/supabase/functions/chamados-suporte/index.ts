@@ -55,8 +55,8 @@ function emailValido(valor: string) {
   return !valor || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valor);
 }
 
-function podeAcessarAutenticado(chamado: Record<string, any>, autenticado: Record<string, any> | null) {
-  if (!autenticado || chamado.excluido_em || autenticado.contexto?.administrador_global) return false;
+function podeAcessarAutenticado(chamado: Record<string, any>, autenticado: Record<string, any> | null, somenteLeitura = false) {
+  if (!autenticado || (chamado.excluido_em && !somenteLeitura) || autenticado.contexto?.administrador_global) return false;
   if (autenticado.contexto?.empresa_id !== chamado.empresa_id) return false;
   return chamado.aberto_por === autenticado.usuario.id || ehAdministradorEmpresa(autenticado.contexto);
 }
@@ -119,13 +119,13 @@ async function chamadoPorToken(admin: Cliente, token: string) {
   // criados antes da migracao, sem gerar novos segredos em texto puro.
   const filtroToken = `token_hash.eq.${tokenHash},public_token.eq.${token}`;
   const { data, error } = await admin.from('chamados_suporte')
-    .select('*').or(filtroToken).is('excluido_em', null).maybeSingle();
+    .select('*').or(filtroToken).maybeSingle();
   if (error) throw error;
   return data;
 }
 
 async function adicionarMensagem(admin: Cliente, chamado: Record<string, any>, dados: Record<string, any>) {
-  if (['resolvido', 'fechado', 'cancelado'].includes(chamado.status) && !dados.permitirEncerrado) {
+  if ((chamado.excluido_em || ['resolvido', 'fechado', 'cancelado'].includes(chamado.status)) && !dados.permitirEncerrado) {
     throw new Error('Este chamado já foi encerrado e não aceita novas mensagens.');
   }
   const mensagem = texto(dados.mensagem);
@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
       if (!autenticado || !atual?.empresa_id || atual?.administrador_global) return responder(401, { erro: 'Entre novamente para acompanhar os chamados.' });
       let consulta = admin.from('chamados_suporte')
         .select('id,assunto,origem,status,prioridade,motivo,motivo_outro,criado_em,atualizado_em,ultima_mensagem_em,primeira_resposta_em,encerrado_em,resolucao,avaliacao')
-        .eq('empresa_id', atual.empresa_id).is('excluido_em', null);
+        .eq('empresa_id', atual.empresa_id);
       if (!ehAdministradorEmpresa(atual)) consulta = consulta.eq('aberto_por', autenticado.usuario.id);
       const { data, error } = await consulta.order('ultima_mensagem_em', { ascending: false }).limit(100);
       if (error) throw error;
@@ -315,9 +315,9 @@ Deno.serve(async (req) => {
       const token = uuidValido(dados.token);
       const { data: chamado, error } = await admin.from('chamados_suporte').select('*').eq('id', chamadoId).maybeSingle();
       if (error) throw error;
-      if (!chamado || chamado.excluido_em) return responder(404, { erro: 'Chamado não encontrado.' });
+      if (!chamado) return responder(404, { erro: 'Chamado não encontrado.' });
       const chamadoToken = token ? await chamadoPorToken(admin, token) : null;
-      if (!suporte && !podeAcessarAutenticado(chamado, autenticado) && chamadoToken?.id !== chamado.id) return responder(403, { erro: 'Você não pode acompanhar este chamado.' });
+      if (!suporte && !podeAcessarAutenticado(chamado, autenticado, true) && chamadoToken?.id !== chamado.id) return responder(403, { erro: 'Você não pode acompanhar este chamado.' });
       return responder(200, { chamado: { ...semSegredos(chamado), protocolo: protocolo(chamado.id) }, mensagens: await mensagensDoChamado(admin, chamado.id) });
     }
 
@@ -376,7 +376,7 @@ Deno.serve(async (req) => {
       const { data: chamado, error } = await admin.from('chamados_suporte').select('id,empresa_id,aberto_por,token_hash,excluido_em').eq('id', chamadoId).maybeSingle();
       if (error) throw error;
       const chamadoToken = token ? await chamadoPorToken(admin, token) : null;
-      if (!chamado || chamado.excluido_em || (!suporte && !podeAcessarAutenticado(chamado, autenticado) && chamadoToken?.id !== chamado.id)) return responder(403, { erro: 'Acesso negado.' });
+      if (!chamado || (!suporte && !podeAcessarAutenticado(chamado, autenticado, true) && chamadoToken?.id !== chamado.id)) return responder(403, { erro: 'Acesso negado.' });
       const campo = suporte ? 'visualizado_suporte_em' : 'visualizado_cliente_em';
       const autorOposto = suporte ? 'cliente' : 'suporte';
       const { error: marcarErro } = await admin.from('chamado_mensagens').update({ [campo]: new Date().toISOString() })
@@ -471,11 +471,11 @@ Deno.serve(async (req) => {
         metadados: { assunto: chamado.assunto, status: chamado.status, mensagens: mensagens || 0 }
       });
       if (auditoriaErro) throw auditoriaErro;
-      // Retencao segura: a acao remove o item das filas, mas conserva o
-      // historico e a auditoria para que um chamado nao seja perdido.
+      // Retencao segura: retira da fila do suporte, mas conserva o historico do cliente como fechado e somente leitura.
       const { error: excluirErro } = await admin.from('chamados_suporte').update({
         excluido_em: new Date().toISOString(), excluido_por: autenticado?.usuario.id,
-        status: 'fechado', atualizado_em: new Date().toISOString()
+        status: 'fechado', encerrado_em: new Date().toISOString(),
+        resolucao: 'Chamado arquivado pelo suporte.', atualizado_em: new Date().toISOString()
       }).eq('id', chamadoId);
       if (excluirErro) throw excluirErro;
       return responder(200, { sucesso: true });

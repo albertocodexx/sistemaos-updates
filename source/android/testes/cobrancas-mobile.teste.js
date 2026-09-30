@@ -8,6 +8,7 @@ const raiz = path.resolve(__dirname, '..');
 const cobrancas = require(path.join(raiz, 'www', 'js', 'cobrancas-tela.js'));
 const html = fs.readFileSync(path.join(raiz, 'www', 'index.html'), 'utf8');
 const notificacoes = fs.readFileSync(path.join(raiz, 'www', 'js', 'notificacoes.js'), 'utf8');
+const telaCobrancas = fs.readFileSync(path.join(raiz, 'www', 'js', 'cobrancas-tela.js'), 'utf8');
 
 assert.match(html, /id="btn-ir-cobrancas"/);
 assert.match(html, /id="painel-cobrancas"/);
@@ -17,6 +18,10 @@ assert.match(html, /Pendente[\s\S]*Atrasada[\s\S]*Paga[\s\S]*Desativada/);
 assert.match(notificacoes, /tela: 'cobrancas'/);
 assert.match(notificacoes, /notificarTesteCobranca/);
 assert.match(notificacoes, /Após esta cobrança resta/);
+assert.match(notificacoes, /\.abrir\(extra\.numeroOS, extra\.lembreteId \|\| '', extra\.tipo \|\| ''\)/);
+assert.match(telaCobrancas, /tipoNotificacao === 'cobranca-venda' \? texto\(numeroOS\) : rotuloOS\(numeroOS\)/);
+assert.match(telaCobrancas, /Mostrar todas/);
+assert.doesNotMatch(telaCobrancas, /var preferida = cobrancasAtuais\.find/, 'Teste de notificação não deve favorecer OS fixa');
 
 const futuro = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 assert.strictEqual(cobrancas.statusCobranca({ data: futuro, status: 'pendente' }), 'pendente');

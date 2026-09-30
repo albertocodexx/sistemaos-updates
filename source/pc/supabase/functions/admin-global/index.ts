@@ -193,11 +193,12 @@ Deno.serve(async (req) => {
       const { data: cadastroSuporte, error: suporteErro } = await admin.from('administradores_globais')
         .select('papel,ativo').eq('usuario_id', sessao.user.id).maybeSingle();
       if (suporteErro) throw suporteErro;
+      if (cadastroSuporte?.ativo !== true) return resposta(403, { erro: 'A conta de suporte está inativa.' });
       papelSuporte = texto(cadastroSuporte?.papel || 'suporte');
     }
     const somenteAdministradorGeral = new Set([
       'salvar_plano', 'excluir_plano', 'definir_senha_exclusao', 'decidir_exclusao', 'definir_papel_suporte',
-      'configurar_fiscal_empresa',
+      'configurar_fiscal_empresa', 'obter_conta_fiscal', 'ajustar_conta_fiscal',
       'obter_integracao_ia_global', 'configurar_integracao_ia_global', 'desconectar_integracao_ia_global',
       'definir_personalizacao_ia_global', 'definir_personalizacao_ia_empresa',
       'obter_integracao_ia_empresa', 'configurar_integracao_ia_empresa', 'desconectar_integracao_ia_empresa'
@@ -258,9 +259,12 @@ Deno.serve(async (req) => {
       const nome = texto(dados.nome);
       const usuario = texto(dados.usuario).toLowerCase();
       const senha = String(dados.senha || '');
-      // O Trial comercial possui duracao unica. Nao aceite valores enviados
-      // pelo cliente, pois o prazo precisa ser igual no PC, Android e banco.
-      const diasTrial = 45;
+      // Somente o suporte escolhe o tipo. O servidor define prazo e cota;
+      // dias enviados pelo cliente nunca ampliam o teste.
+      const tipoTeste = texto(dados.planoTeste).toLowerCase() || 'trial';
+      if (!['trial', 'beta'].includes(tipoTeste)) return resposta(400, { erro: 'Tipo de teste inválido.' });
+      const diasTrial = tipoTeste === 'beta' ? 45 : 30;
+      const nomePlanoTeste = tipoTeste === 'beta' ? 'Beta' : 'Trial';
       const semTelefone = dados.semTelefone === true;
       const telefonePrincipal = semTelefone ? '' : normalizarTelefone(dados.telefonePrincipal);
       const telefoneCobranca = normalizarTelefone(dados.telefoneCobranca);
@@ -296,6 +300,11 @@ Deno.serve(async (req) => {
         const liberaEm = new Date(new Date(exclusaoRecente.excluida_em).getTime() + 3 * 86400000);
         return resposta(409, { erro: `Esse código foi excluído recentemente e fica reservado por segurança até ${liberaEm.toLocaleString('pt-BR')}.` });
       }
+      const { data: planoTeste, error: planoTesteErro } = await admin.from('planos')
+        .select('id,limites').ilike('nome', nomePlanoTeste).eq('ativo', true).maybeSingle();
+      if (planoTesteErro || !planoTeste) return resposta(503, { erro: `O plano ${nomePlanoTeste} ainda não está disponível no banco.` });
+      const detalhesTeste = await detalhesPlano(admin, planoTeste.id);
+      const limitesTeste: Record<string, unknown> = detalhesTeste?.limites || {};
       // O e-mail é apenas um identificador técnico interno. O sufixo único
       // impede que um usuário apagado no Auth bloqueie a recriação legítima
       // da empresa após o prazo; o login público continua empresa+usuário.
@@ -307,24 +316,25 @@ Deno.serve(async (req) => {
       if (authErro || !authCriado.user) return resposta(400, { erro: 'Não foi possível criar o acesso inicial.' });
       const inicio = new Date();
       const fim = new Date(inicio.getTime() + diasTrial * 86400000);
-      const { data: planoTrial } = await admin.from('planos')
-        .select('id,limites').ilike('nome', 'Trial').eq('ativo', true).maybeSingle();
-      const trialDetalhes = planoTrial ? await detalhesPlano(admin, planoTrial.id) : null;
-      const limitesTrial: Record<string, unknown> = trialDetalhes?.limites || {};
+      const fimBeneficioBeta = new Date(inicio);
+      fimBeneficioBeta.setUTCFullYear(fimBeneficioBeta.getUTCFullYear() + 1);
       const { data: empresa, error: empresaErro } = await admin.from('empresas').insert({
         codigo, nome_fantasia: nome, ativo: true, licenca_status: 'teste',
         telefone_principal: telefonePrincipal || null,
         empresa_sem_telefone: semTelefone,
         contato_cobranca_whatsapp: telefoneCobranca || null,
         avisos_cobranca_ativos: Boolean(telefoneCobranca),
-        plano_id: planoTrial?.id || null,
+        plano_id: planoTeste.id,
         inicio_trial: inicio.toISOString(), fim_trial: fim.toISOString(),
+        data_vencimento: fim.toISOString(), proximo_vencimento_em: fim.toISOString(),
+        beta_fundador: tipoTeste === 'beta',
+        beta_fundador_expira_em: tipoTeste === 'beta' ? fimBeneficioBeta.toISOString() : null,
         periodo_graca_ate: null,
-        limite_usuarios: numeroInteiro(limitesTrial.usuarios),
-        limite_dispositivos: numeroInteiro(limitesTrial.dispositivos),
-        limite_storage: numeroInteiro(limitesTrial.storage_bytes),
+        limite_usuarios: numeroInteiro(limitesTeste.usuarios),
+        limite_dispositivos: numeroInteiro(limitesTeste.dispositivos),
+        limite_storage: numeroInteiro(limitesTeste.storage_bytes),
         recursos_habilitados: {
-          ...(trialDetalhes?.recursos || {}),
+          ...(detalhesTeste?.recursos || {}),
           fiscal_habilitado: true,
           troca_rapida_contas: true
         }
@@ -338,12 +348,13 @@ Deno.serve(async (req) => {
         admin.from('perfis').insert({ id: authCriado.user.id, empresa_id: empresa.id, nome: texto(dados.nomeAdministrador) || 'Administrador', cargo: 'Administrador', permissoes, ativo: true }),
         admin.from('identidades_login').insert({ empresa_id: empresa.id, usuario_id: authCriado.user.id, usuario, email_tecnico: emailTecnico }),
         admin.from('configuracoes_empresa').upsert({ empresa_id: empresa.id, feature_flags: { supabaseAtivo: true, storageProvider: 'supabase-storage' } }),
-        admin.from('eventos_licenca').insert({ empresa_id: empresa.id, tipo: 'trial_criado', dados: { dias: diasTrial, planoId: planoTrial?.id || null }, autor_id: sessao.user.id }),
+        admin.from('contas_fiscais').insert({ empresa_id: empresa.id, limite_gratuito_mensal: 0, preco_excedente_centavos: 99 }),
+        admin.from('eventos_licenca').insert({ empresa_id: empresa.id, tipo: tipoTeste === 'beta' ? 'beta_criado' : 'trial_criado', dados: { dias: diasTrial, planoId: planoTeste.id }, autor_id: sessao.user.id }),
         admin.from('auditoria_comercial').insert({
           empresa_id: empresa.id, autor_id: sessao.user.id, acao: 'empresa_criada',
           entidade: 'empresa', entidade_id: empresa.id,
           metadados: {
-            codigo, diasTrial, planoId: planoTrial?.id || null,
+            codigo, diasTrial, planoId: planoTeste.id, tipoTeste,
             semTelefone, possuiContatoCobranca: Boolean(telefoneCobranca)
           }
         })
@@ -537,6 +548,17 @@ Deno.serve(async (req) => {
     if (acao === 'salvar_plano') {
       const planoId = texto(dados.id);
       const nome = texto(dados.nome);
+      if (['trial', 'beta'].includes(nome.toLowerCase())) {
+        return resposta(409, { erro: 'Trial (30 dias) e Beta (45 dias) são planos de teste fixos.' });
+      }
+      if (planoId) {
+        const { data: protegido, error: protegidoErro } = await admin.from('planos')
+          .select('nome').eq('id', planoId).maybeSingle();
+        if (protegidoErro) throw protegidoErro;
+        if (['trial', 'beta'].includes(texto(protegido?.nome).toLowerCase())) {
+          return resposta(409, { erro: 'Trial (30 dias) e Beta (45 dias) não podem ser alterados.' });
+        }
+      }
       const periodo = texto(dados.periodo || 'mensal');
       const periodosValidos = ['mensal', 'trimestral', 'semestral', 'anual', 'vitalicio'];
       const preco = Number(dados.precoReferencia || 0);
@@ -588,7 +610,7 @@ Deno.serve(async (req) => {
         .select('id,nome').eq('id', planoId).maybeSingle();
       if (planoErro) throw planoErro;
       if (!plano) return resposta(404, { erro: 'Plano não encontrado.' });
-      if (plano.nome.toLowerCase() === 'trial') return resposta(409, { erro: 'O plano Trial é necessário para novas empresas e não pode ser excluído.' });
+      if (['trial', 'beta'].includes(plano.nome.toLowerCase())) return resposta(409, { erro: 'Os planos Trial e Beta preservam períodos de teste e não podem ser excluídos.' });
       const { count: empresasVinculadas, error: contarErro } = await admin.from('empresas')
         .select('id', { count: 'exact', head: true }).eq('plano_id', planoId).eq('ativo', true);
       if (contarErro) throw contarErro;
@@ -973,7 +995,36 @@ Deno.serve(async (req) => {
       const { error: excluirErro } = await admin.auth.admin.deleteUser(usuarioId);
       if (excluirErro) {
         const mensagem = texto(excluirErro.message).toLowerCase();
-        const usuarioJaAusente = /user.*not.*found|not.*found|already.*deleted/.test(mensagem);
+        let usuarioJaAusente = /user.*not.*found|not.*found|already.*deleted/.test(mensagem);
+        // O Auth às vezes devolve "Database error loading user" para um
+        // perfil legado cujo registro Auth já não existe. Só limpamos o
+        // cadastro órfão após confirmar a ausência por uma listagem completa;
+        // se a conta ainda existir, mantemos o usuário bloqueado e seus dados.
+        if (!usuarioJaAusente && /database error loading user/.test(mensagem)) {
+          let pagina = 1;
+          let listagemCompleta = false;
+          let usuarioEncontrado = false;
+          while (pagina <= 100) {
+            const { data: lote, error: listagemErro } = await admin.auth.admin.listUsers({ page: pagina, perPage: 1000 });
+            if (listagemErro) break;
+            const usuariosLote = lote?.users || [];
+            if (usuariosLote.some((item) => item.id === usuarioId)) {
+              usuarioEncontrado = true;
+              break;
+            }
+            if (usuariosLote.length < 1000) {
+              listagemCompleta = true;
+              break;
+            }
+            pagina += 1;
+          }
+          usuarioJaAusente = listagemCompleta && !usuarioEncontrado;
+          if (!usuarioJaAusente) {
+            return resposta(409, {
+              erro: 'A conta de autenticação deste usuário ainda existe, mas o serviço não conseguiu carregá-la para exclusão. O acesso bloqueado foi preservado; nenhum dado foi apagado. Verifique a integridade do Auth e das referências antes de tentar novamente.'
+            });
+          }
+        }
         if (!usuarioJaAusente) throw excluirErro;
 
         // Perfis legados podem sobreviver a uma conta Auth removida em
@@ -1046,6 +1097,51 @@ Deno.serve(async (req) => {
         metadados: { ativa }
       });
       return resposta(200, { sucesso: true, ativa });
+    }
+
+    if (acao === 'obter_conta_fiscal' || acao === 'ajustar_conta_fiscal') {
+      const empresaId = texto(dados.empresaId);
+      if (!/^[0-9a-f-]{36}$/i.test(empresaId)) return resposta(400, { erro: 'Empresa invalida.' });
+      const { data: empresa, error: empresaErro } = await admin.from('empresas')
+        .select('id,nome_fantasia').eq('id', empresaId).maybeSingle();
+      if (empresaErro) throw empresaErro;
+      if (!empresa) return resposta(404, { erro: 'Empresa nao encontrada.' });
+      if (acao === 'obter_conta_fiscal') {
+        const [contaConsulta, movimentosConsulta] = await Promise.all([
+          admin.from('contas_fiscais')
+            .select('limite_gratuito_mensal,preco_excedente_centavos,saldo_centavos,debito_pendente_centavos')
+            .eq('empresa_id', empresaId).maybeSingle(),
+          admin.from('movimentos_fiscais').select('tipo,valor_centavos,motivo,criado_em')
+            .eq('empresa_id', empresaId).order('criado_em', { ascending: false }).limit(30)
+        ]);
+        if (contaConsulta.error) throw contaConsulta.error;
+        if (movimentosConsulta.error) throw movimentosConsulta.error;
+        return resposta(200, { conta: contaConsulta.data || { limite_gratuito_mensal: 0, preco_excedente_centavos: 99,
+          saldo_centavos: 0, debito_pendente_centavos: 0 }, movimentos: movimentosConsulta.data || [] });
+      }
+      const limite = Number(dados.limite);
+      const preco = Number(dados.precoCentavos);
+      const ajuste = Number(dados.ajusteCentavos || 0);
+      const motivo = texto(dados.motivo).slice(0, 300);
+      const operacaoId = texto(dados.operacaoId);
+      if (!Number.isInteger(limite) || limite < 0 || limite > 1000000 ||
+          !Number.isInteger(preco) || preco < 0 || preco > 10000000 ||
+          !Number.isSafeInteger(ajuste) || Math.abs(ajuste) > 100000000 ||
+          (ajuste !== 0 && (motivo.length < 8 || !/^[0-9a-f-]{36}$/i.test(operacaoId)))) {
+        return resposta(400, { erro: 'Limite, preco ou ajuste invalido. Justifique qualquer alteracao de saldo.' });
+      }
+      const { data: conta, error } = await admin.rpc('ajustar_conta_fiscal', {
+        p_empresa_id: empresaId, p_limite: limite, p_preco_centavos: preco,
+        p_ajuste_centavos: ajuste, p_referencia: ajuste ? operacaoId : null, p_motivo: ajuste ? motivo : null
+      });
+      if (error) throw error;
+      const { error: auditoriaErro } = await admin.from('auditoria_comercial').insert({
+        empresa_id: empresaId, autor_id: sessao.user.id, acao: 'conta_fiscal_ajustada_suporte',
+        entidade: 'empresa', entidade_id: empresaId,
+        metadados: { limite, preco_centavos: preco, ajuste_centavos: ajuste, motivo }
+      });
+      if (auditoriaErro) console.error('[admin-global] Falha na auditoria fiscal', auditoriaErro.message);
+      return resposta(200, { conta });
     }
 
     if (acao === 'solicitar_exclusao') {

@@ -984,16 +984,22 @@ function preencherModelosIA(select, provedor, modeloAtual = '') {
 }
 
 function atualizarFluxoIAConfig(config = configAtual || {}, integracao = integracaoIAEmpresaCache) {
+  const secao = $('configIntegracaoIAEmpresa');
   const provedorEl = $('iaChatProviderConfig');
   const modeloEl = $('iaChatModelConfig');
   const chaveEl = $('iaChatApiKeyConfig');
   if (!provedorEl || !modeloEl || !chaveEl) return;
   const provedor = provedorEl.value in PROVEDORES_IA_CONFIG ? provedorEl.value : 'groq';
   const definicao = PROVEDORES_IA_CONFIG[provedor];
-  const contaNuvem = usuarioAtual?.origemAuth === 'supabase' && !usuarioAtual?.administradorGlobal;
   const personalizacaoPermitida = integracaoIAContextoCache?.configuracao_global?.personalizacao_empresas_ativa === true &&
     integracaoIAContextoCache?.configuracao_global?.personalizacao_empresa_permitida === true;
-  const podeEditar = !contaNuvem || (usuarioAtual?.admin === true && personalizacaoPermitida);
+  const podeEditar = usuarioAtual?.admin === true && personalizacaoPermitida;
+  if (secao) {
+    secao.hidden = !podeEditar;
+    secao.setAttribute('aria-hidden', podeEditar ? 'false' : 'true');
+    if (!podeEditar) chaveEl.value = '';
+    document.querySelector('#modalConfig .config-organizador')?._aplicarBusca?.();
+  }
   const remotoMesmoProvedor = integracao?.status === 'conectada' && integracao?.metadados?.provedor === provedor;
   const possuiLocal = config?.[definicao.flagLocal] === true;
   $('labelChaveIAConfig').textContent = `3. Chave da API ${definicao.nome}`;
@@ -1008,7 +1014,7 @@ function atualizarFluxoIAConfig(config = configAtual || {}, integracao = integra
   modeloEl.disabled = !podeEditar;
   chaveEl.disabled = !podeEditar;
   $('btnTestarGroqChat').disabled = !podeEditar;
-  if (contaNuvem && !podeEditar) {
+  if (!podeEditar) {
     const usaGlobal = integracaoIAContextoCache?.origem_efetiva === 'global';
     $('ajudaChaveIAConfig').textContent = usuarioAtual?.admin !== true
       ? 'A configuração da IA é administrada para toda a empresa pelo Administrador.'
@@ -1021,6 +1027,9 @@ function atualizarFluxoIAConfig(config = configAtual || {}, integracao = integra
 
 async function carregarIntegracaoIAEmpresa(config = configAtual || {}) {
   if (!window.api?.supabaseintegracaoia || usuarioAtual?.administradorGlobal) return null;
+  integracaoIAContextoCache = null;
+  integracaoIAEmpresaCache = null;
+  atualizarFluxoIAConfig(config, null);
   const resposta = await window.api.supabaseintegracaoia('status', {});
   if (!resposta?.sucesso) return null;
   integracaoIAContextoCache = resposta;
@@ -1442,6 +1451,8 @@ $('btnConfig').addEventListener('click', async () => {
   if (statusTesteGroqChatEl) statusTesteGroqChatEl.textContent = '';
   if ($('iaChatProviderConfig')) $('iaChatProviderConfig').value = c.iaChatProvider || 'groq';
   preencherModelosIA($('iaChatModelConfig'), $('iaChatProviderConfig')?.value || 'groq', c.iaChatModel || '');
+  integracaoIAContextoCache = null;
+  integracaoIAEmpresaCache = null;
   atualizarFluxoIAConfig(c, null);
   carregarIntegracaoIAEmpresa(c).catch(() => {});
   const gmapsEl = document.getElementById('googleMapsLinkConfig');
@@ -1733,7 +1744,9 @@ $('btnSalvarConfig').addEventListener('click', async () => {
   const chaveIANova = chaveIASave?.value?.trim() || '';
   const definicaoIASave = PROVEDORES_IA_CONFIG[nova.iaChatProvider];
   const iaUsaContaNuvem = usuarioAtual?.origemAuth === 'supabase' && !usuarioAtual?.administradorGlobal;
-  if (chaveIANova && !iaUsaContaNuvem) nova[definicaoIASave.campoLocal] = chaveIANova;
+  if (chaveIANova && !iaUsaContaNuvem && $('configIntegracaoIAEmpresa')?.hidden === false) {
+    nova[definicaoIASave.campoLocal] = chaveIANova;
+  }
   // v25.3: Link de avaliação do Google (mensagem de entrega)
   const linkGoogleSave = document.getElementById('linkGoogleAvaliacaoConfig');
   if (linkGoogleSave) nova.linkGoogleAvaliacao = linkGoogleSave.value.trim();
@@ -5469,7 +5482,7 @@ function mostrarSistema(exibirBoasVindas = false) {
 
   if (usuarioAtual?.acessoSomenteCobranca) {
     setTimeout(() => {
-      if (String(usuarioAtual?.planoNome || '').trim().toLowerCase() === 'trial') {
+      if (['trial', 'beta'].includes(String(usuarioAtual?.planoNome || '').trim().toLowerCase())) {
         window.SistemaOSAssinaturasUI?.abrirBloqueioTrial?.(usuarioAtual);
       } else {
         $('btnConfig')?.click();
@@ -5948,7 +5961,8 @@ function preencherCargosUsuarioEmpresaGlobal(usuario = null) {
     : (usuario?.cargo || 'Atendente');
 }
 
-function formatarStatusLicenca(status) {
+function formatarStatusLicenca(status, planoNome) {
+  if (String(status || '').toLowerCase() === 'teste' && String(planoNome || '').toLowerCase() === 'beta') return 'Beta';
   const nomes = {
     ativa: 'Ativa', teste: 'Trial', vencendo: 'Vencendo', vencida: 'Vencida',
     periodo_graca: 'Período de graça', suspensa: 'Suspensa', cancelada: 'Cancelada', bloqueada: 'Bloqueada'
@@ -5957,7 +5971,7 @@ function formatarStatusLicenca(status) {
 }
 
 function dataVencimentoEmpresa(empresa) {
-  const valor = empresa?.data_vencimento || empresa?.fim_trial;
+  const valor = empresa?.licenca_status === 'teste' ? empresa?.fim_trial : empresa?.data_vencimento || empresa?.fim_trial;
   const data = valor ? new Date(valor) : null;
   return data && !Number.isNaN(data.getTime()) ? data : null;
 }
@@ -5970,11 +5984,13 @@ function calcularMetricasSuporteGlobal(empresas, chamados) {
     const data = dataVencimentoEmpresa(empresa);
     return data && data >= hoje && data <= emSeteDias;
   }).length;
-  const trials = (empresas || []).filter((empresa) => String(empresa.licenca_status || '').toLowerCase() === 'teste').length;
+  const trials = (empresas || []).filter((empresa) => String(empresa.licenca_status || '').toLowerCase() === 'teste' && String(empresa.plano?.nome || '').toLowerCase() === 'trial').length;
+  const betas = (empresas || []).filter((empresa) => String(empresa.licenca_status || '').toLowerCase() === 'teste' && String(empresa.plano?.nome || '').toLowerCase() === 'beta').length;
   const chamadosAbertos = (chamados || []).filter((chamado) => ['aberto', 'em_atendimento'].includes(String(chamado.status || 'aberto'))).length;
   return [
     { valor: (empresas || []).length, rotulo: 'Empresas' },
     { valor: trials, rotulo: 'Em trial' },
+    { valor: betas, rotulo: 'Em beta' },
     { valor: vencendo, rotulo: 'Vencem em 7 dias', classe: vencendo ? 'alerta' : '' },
     { valor: bloqueados, rotulo: 'Bloqueadas', classe: bloqueados ? 'perigo' : '' },
     { valor: chamadosAbertos, rotulo: 'Chamados abertos', classe: chamadosAbertos ? 'alerta' : '' }
@@ -6022,12 +6038,20 @@ function criarBotaoSuporte(texto, classe, acao) {
   botao.type = 'button';
   botao.className = 'botao ' + classe + ' botao-pequeno';
   botao.textContent = texto;
-  botao.addEventListener('click', () => Promise.resolve().then(acao).catch((erro) => {
-    const mensagem = erro?.erro || erro?.mensagem || erro?.message || erro?.details || erro?.hint;
-    toast(typeof mensagem === 'string' && mensagem.trim()
-      ? mensagem.trim()
-      : 'Não foi possível concluir a operação. Tente novamente.', 'erro');
-  }));
+  botao.addEventListener('click', async () => {
+    if (botao.disabled) return;
+    botao.disabled = true;
+    try {
+      await acao();
+    } catch (erro) {
+      const mensagem = erro?.erro || erro?.mensagem || erro?.message || erro?.details || erro?.hint;
+      toast(typeof mensagem === 'string' && mensagem.trim()
+        ? mensagem.trim()
+        : 'Não foi possível concluir a operação. Tente novamente.', 'erro');
+    } finally {
+      botao.disabled = false;
+    }
+  });
   return botao;
 }
 
@@ -6196,7 +6220,7 @@ function renderizarEmpresasGlobais(empresas) {
     codigo.className = 'suporte-empresa-codigo';
     codigo.textContent = 'Código: ' + (empresa.codigo || '—');
     identificacao.append(titulo, codigo);
-    const vencimento = empresa.data_vencimento || empresa.fim_trial;
+    const vencimento = empresa.licenca_status === 'teste' ? empresa.fim_trial : empresa.data_vencimento || empresa.fim_trial;
     const vencimentoMs = vencimento ? new Date(vencimento).getTime() : NaN;
     // O painel precisa refletir a data real mesmo antes do próximo job do
     // Supabase atualizar a coluna licenca_status. Isso evita exibir "ativa"
@@ -6210,7 +6234,7 @@ function renderizarEmpresasGlobais(empresas) {
         : statusPersistido);
     const badge = document.createElement('span');
     badge.className = 'suporte-badge-status ' + (statusAtual || 'sem-status');
-    badge.textContent = formatarStatusLicenca(statusAtual);
+    badge.textContent = formatarStatusLicenca(statusAtual, empresa.plano?.nome);
     topo.append(identificacao, badge);
     const detalhe = document.createElement('div');
     detalhe.className = 'suporte-empresa-detalhes';
@@ -6266,6 +6290,11 @@ function renderizarEmpresasGlobais(empresas) {
           fiscalAtivo ? 'botao-perigo' : 'botao-secundario',
           () => configurarFiscalEmpresaGlobal(empresa, !fiscalAtivo)
         ));
+        acoes.appendChild(criarBotaoSuporte('Cota e saldo NF', 'botao-secundario', () => ajustarContaFiscalEmpresaGlobal(empresa)));
+        acoes.appendChild(criarBotaoSuporte('Cadastro fiscal', 'botao-secundario', () => {
+          if (typeof window.abrirCadastroFiscalSuporte !== 'function') throw new Error('Cadastro fiscal indisponível. Reabra a central de suporte.');
+          return window.abrirCadastroFiscalSuporte(empresa);
+        }));
       }
     }
     if (!empresaInternaSuporte) {
@@ -6547,13 +6576,16 @@ function renderizarPlanosGlobais(planos, mostrar) {
       (plano.limites?.usuarios || '—') + ' usuário(s)',
       (plano.recursos || []).filter((item) => item.habilitado !== false).length + ' função(ões)'
     ].join(' · ');
-    const editar = document.createElement('button');
-    editar.type = 'button';
-    editar.className = 'botao botao-secundario botao-pequeno';
-    editar.style.marginTop = '10px';
-    editar.textContent = 'Editar plano';
-    editar.addEventListener('click', () => salvarPlanoGlobal(plano).catch((erro) => toast(erro.message || String(erro), 'erro')));
-    item.append(titulo, detalhe, editar);
+    item.append(titulo, detalhe);
+    if (!['trial', 'beta'].includes(String(plano.nome || '').toLowerCase())) {
+      const editar = document.createElement('button');
+      editar.type = 'button';
+      editar.className = 'botao botao-secundario botao-pequeno';
+      editar.style.marginTop = '10px';
+      editar.textContent = 'Editar plano';
+      editar.addEventListener('click', () => salvarPlanoGlobal(plano).catch((erro) => toast(erro.message || String(erro), 'erro')));
+      item.appendChild(editar);
+    }
     lista.appendChild(item);
   });
 }
@@ -6864,7 +6896,8 @@ function abrirFormularioNovaEmpresaGlobal() {
             <div class="campo"><label for="novaEmpresaAdminNome">Nome do administrador <span class="obrigatorio">*</span></label><input id="novaEmpresaAdminNome" type="text" maxlength="80" value="Administrador" autocomplete="name" /></div>
             <div class="campo"><label for="novaEmpresaAdminUsuario">Usuário <span class="obrigatorio">*</span></label><input id="novaEmpresaAdminUsuario" type="text" maxlength="30" value="admin" autocapitalize="none" autocomplete="username" /></div>
             <div class="campo"><label for="novaEmpresaAdminSenha">Senha inicial <span class="obrigatorio">*</span></label><input id="novaEmpresaAdminSenha" type="password" minlength="8" autocomplete="new-password" placeholder="Mínimo de 8 caracteres" /></div>
-            <div class="campo"><label for="novaEmpresaDiasTrial">Período de teste</label><div class="suporte-campo-sufixo"><input id="novaEmpresaDiasTrial" type="number" value="45" readonly aria-readonly="true" /><span>dias</span></div><p class="campo-desc">Plano Trial completo com prazo fixo.</p></div>
+            <div class="campo"><label for="novaEmpresaPlanoTeste">Plano de teste</label><select id="novaEmpresaPlanoTeste"><option value="trial">Trial — 30 dias</option><option value="beta">Beta — 45 dias</option></select><p id="novaEmpresaResumoTeste" class="campo-desc">Trial completo, 30 dias; notas fiscais usam saldo por emissão autorizada.</p></div>
+            <div class="campo"><label for="novaEmpresaDiasTrial">Prazo do plano</label><div class="suporte-campo-sufixo"><input id="novaEmpresaDiasTrial" type="number" value="30" readonly aria-readonly="true" /><span>dias</span></div></div>
           </div>
         </section>
         <p id="novaEmpresaErro" class="mensagem-erro suporte-form-erro" hidden></p>
@@ -6882,6 +6915,13 @@ function abrirFormularioNovaEmpresaGlobal() {
     const telefoneCobranca = campo('novaEmpresaTelefoneCobranca');
     const usarPrincipal = campo('novaEmpresaUsarTelefoneCobranca');
     const erro = campo('novaEmpresaErro');
+    const sincronizarPlanoTeste = () => {
+      const beta = campo('novaEmpresaPlanoTeste').value === 'beta';
+      campo('novaEmpresaDiasTrial').value = beta ? '45' : '30';
+      campo('novaEmpresaResumoTeste').textContent = beta
+        ? 'Beta completo, 45 dias; notas fiscais usam saldo por emissão autorizada.'
+        : 'Trial completo, 30 dias; notas fiscais usam saldo por emissão autorizada.';
+    };
     let resolvido = false;
     const finalizar = (valor) => {
       if (resolvido) return;
@@ -6905,6 +6945,7 @@ function abrirFormularioNovaEmpresaGlobal() {
     semTelefone.addEventListener('change', sincronizarContatos);
     usarPrincipal.addEventListener('change', sincronizarContatos);
     telefone.addEventListener('input', sincronizarContatos);
+    campo('novaEmpresaPlanoTeste').addEventListener('change', sincronizarPlanoTeste);
     caixa.addEventListener('submit', (evento) => {
       evento.preventDefault();
       erro.hidden = true;
@@ -6917,6 +6958,7 @@ function abrirFormularioNovaEmpresaGlobal() {
         nomeAdministrador: campo('novaEmpresaAdminNome').value.trim().replace(/\s+/g, ' '),
         usuario: campo('novaEmpresaAdminUsuario').value.trim().toLowerCase(),
         senha: campo('novaEmpresaAdminSenha').value,
+        planoTeste: campo('novaEmpresaPlanoTeste').value,
         diasTrial: Number(campo('novaEmpresaDiasTrial').value)
       };
       if (dados.nome.length < 2) return mostrarErro('Informe o nome da empresa.', campo('novaEmpresaNome'));
@@ -6926,7 +6968,7 @@ function abrirFormularioNovaEmpresaGlobal() {
       if (!dados.nomeAdministrador) return mostrarErro('Informe o nome do administrador.', campo('novaEmpresaAdminNome'));
       if (!/^[a-z0-9._-]{3,30}$/.test(dados.usuario)) return mostrarErro('O usuário deve ter de 3 a 30 caracteres: letras, números, ponto, hífen ou sublinhado.', campo('novaEmpresaAdminUsuario'));
       if (dados.senha.length < 8) return mostrarErro('A senha inicial deve ter pelo menos 8 caracteres.', campo('novaEmpresaAdminSenha'));
-      if (dados.diasTrial !== 45) return mostrarErro('O período Trial deve ter 45 dias.', campo('novaEmpresaDiasTrial'));
+      if (dados.diasTrial !== (dados.planoTeste === 'beta' ? 45 : 30)) return mostrarErro('O prazo do plano de teste está inválido.', campo('novaEmpresaPlanoTeste'));
       finalizar(dados);
     });
     const aoTeclar = (evento) => { if (evento.key === 'Escape') { evento.preventDefault(); finalizar(null); } };
@@ -6935,6 +6977,7 @@ function abrirFormularioNovaEmpresaGlobal() {
     caixa.querySelector('.suporte-cancelar-modal').addEventListener('click', () => finalizar(null));
     overlay.addEventListener('mousedown', (evento) => { if (evento.target === overlay) finalizar(null); });
     sincronizarContatos();
+    sincronizarPlanoTeste();
     campo('novaEmpresaNome').focus();
   });
 }
@@ -7223,6 +7266,89 @@ async function configurarFiscalEmpresaGlobal(empresa, ativa) {
   if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível alterar a função fiscal.');
   toast('Função fiscal ' + (ativa ? 'liberada' : 'ocultada') + ' para a empresa.', 'sucesso');
   await atualizarPainelGlobalSistema();
+}
+
+const operacoesFiscaisPendentes = new Map();
+async function ajustarContaFiscalEmpresaGlobal(empresa) {
+  if (!suporteEhAdministradorGeral()) throw new Error('Somente o Administrador Geral pode alterar a conta fiscal.');
+  const consulta = await window.api.supabaseadministracaoglobal?.('obter_conta_fiscal', { empresaId: empresa.id });
+  if (!consulta?.sucesso) throw new Error(consulta?.erro || 'Não foi possível consultar a cota fiscal.');
+  const conta = consulta.conta || {};
+  const dinheiroFiscal = (centavos) => (Number(centavos || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const dialogo = document.createElement('dialog');
+  dialogo.setAttribute('aria-label', 'Carteira fiscal da empresa');
+  dialogo.style.cssText = 'width:min(640px,calc(100vw - 28px));max-height:85vh;overflow:auto;border:1px solid var(--borda);border-radius:12px;background:var(--bg-card);color:var(--texto);padding:24px';
+  dialogo.innerHTML = '<form method="dialog" style="display:grid;gap:14px">' +
+    '<div style="display:flex;align-items:start;justify-content:space-between;gap:12px"><div><h2 style="margin:0">Carteira fiscal</h2><p id="carteiraFiscalEmpresaNome" class="campo-desc"></p></div><button type="submit" class="botao botao-fantasma" aria-label="Fechar carteira">Fechar</button></div>' +
+    '<div class="assinatura-resumo"><strong id="carteiraFiscalSaldo"></strong><span id="carteiraFiscalDebito"></span></div>' +
+    '<div class="grade-2"><label class="campo">Cortesia mensal excepcional<input id="carteiraFiscalLimite" type="number" min="0" max="1000000" step="1"></label><label class="campo">Preço por nota autorizada (R$)<input id="carteiraFiscalPreco" inputmode="decimal"></label></div>' +
+    '<label class="campo">Ajuste do saldo (R$)<input id="carteiraFiscalAjuste" inputmode="decimal" placeholder="Ex.: 10,00 para adicionar ou -10,00 para remover"><small class="campo-desc">Deixe vazio para não alterar. Ajustes não substituem pagamentos do Mercado Pago.</small></label>' +
+    '<label class="campo">Motivo do ajuste<input id="carteiraFiscalMotivo" maxlength="300" placeholder="Obrigatório ao adicionar ou remover saldo"></label>' +
+    '<button type="button" id="carteiraFiscalSalvar" class="botao botao-primario">Confirmar alteração</button>' +
+    '<p id="carteiraFiscalErro" role="alert" style="color:var(--acento-erro)"></p>' +
+    '<section><h3>Movimentações recentes</h3><div id="carteiraFiscalMovimentos" style="display:grid;gap:7px"></div></section></form>';
+  document.body.appendChild(dialogo);
+  const campo = (id) => dialogo.querySelector('#' + id);
+  campo('carteiraFiscalEmpresaNome').textContent = empresa.nome_fantasia || empresa.codigo || '';
+  campo('carteiraFiscalSaldo').textContent = 'Saldo disponível: ' + dinheiroFiscal(conta.saldo_centavos);
+  campo('carteiraFiscalDebito').textContent = Number(conta.debito_pendente_centavos || 0) > 0
+    ? 'Débito pendente: ' + dinheiroFiscal(conta.debito_pendente_centavos) : 'Sem débito pendente';
+  campo('carteiraFiscalLimite').value = String(conta.limite_gratuito_mensal ?? 0);
+  campo('carteiraFiscalPreco').value = (Number(conta.preco_excedente_centavos ?? 99) / 100).toFixed(2).replace('.', ',');
+  const movimentos = campo('carteiraFiscalMovimentos');
+  for (const movimento of consulta.movimentos || []) {
+    const linha = document.createElement('div');
+    linha.style.cssText = 'padding:9px;border:1px solid var(--borda);border-radius:7px;overflow-wrap:anywhere';
+    const data = new Date(movimento.criado_em);
+    linha.textContent = `${Number.isNaN(data.getTime()) ? '' : data.toLocaleString('pt-BR') + ' · '}${movimento.tipo || 'Movimento'} · ${dinheiroFiscal(movimento.valor_centavos)}${movimento.motivo ? ' · ' + movimento.motivo : ''}`;
+    movimentos.appendChild(linha);
+  }
+  if (!movimentos.children.length) movimentos.textContent = 'Nenhuma movimentação registrada.';
+  dialogo.addEventListener('close', () => dialogo.remove(), { once: true });
+  dialogo.showModal();
+  let confirmacaoPendente = '';
+  dialogo.addEventListener('input', () => {
+    confirmacaoPendente = '';
+    campo('carteiraFiscalSalvar').textContent = 'Confirmar alteração';
+    campo('carteiraFiscalErro').textContent = '';
+  });
+  campo('carteiraFiscalSalvar').addEventListener('click', async () => {
+    const limite = Number(campo('carteiraFiscalLimite').value);
+    const preco = String(campo('carteiraFiscalPreco').value).trim().replace(',', '.');
+    const ajuste = String(campo('carteiraFiscalAjuste').value).trim().replace(',', '.');
+    const precoCentavos = Math.round(Number(preco) * 100);
+    const ajusteCentavos = ajuste ? Math.round(Number(ajuste) * 100) : 0;
+    const motivo = String(campo('carteiraFiscalMotivo').value || '').trim();
+    const erro = campo('carteiraFiscalErro');
+    erro.textContent = '';
+    if (!Number.isInteger(limite) || limite < 0 || limite > 1000000 || !/^\d+(?:\.\d{1,2})?$/.test(preco) ||
+        (ajuste && !/^-?\d+(?:\.\d{1,2})?$/.test(ajuste)) || !Number.isSafeInteger(precoCentavos) ||
+        !Number.isSafeInteger(ajusteCentavos) || (ajusteCentavos && motivo.length < 8)) {
+      erro.textContent = 'Confira a cota e os valores. Para ajustar saldo, informe um motivo com ao menos 8 caracteres.';
+      return;
+    }
+    const assinaturaOperacao = JSON.stringify([empresa.id, limite, precoCentavos, ajusteCentavos, motivo]);
+    if (confirmacaoPendente !== assinaturaOperacao) {
+      confirmacaoPendente = assinaturaOperacao;
+      erro.textContent = `Revise: ${limite} operações/mês, excedente ${dinheiroFiscal(precoCentavos)} e ajuste ${dinheiroFiscal(ajusteCentavos)}. Clique novamente para confirmar.`;
+      campo('carteiraFiscalSalvar').textContent = 'Confirmar definitivamente';
+      return;
+    }
+    const operacaoId = ajusteCentavos === 0 ? null : (operacoesFiscaisPendentes.get(assinaturaOperacao) || crypto.randomUUID());
+    if (operacaoId) operacoesFiscaisPendentes.set(assinaturaOperacao, operacaoId);
+    const botao = campo('carteiraFiscalSalvar');
+    botao.disabled = true;
+    try {
+      const resposta = await window.api.supabaseadministracaoglobal?.('ajustar_conta_fiscal', {
+        empresaId: empresa.id, limite, precoCentavos, ajusteCentavos, motivo, operacaoId
+      });
+      if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível atualizar a carteira fiscal.');
+      if (operacaoId) operacoesFiscaisPendentes.delete(assinaturaOperacao);
+      dialogo.close();
+      toast('Carteira fiscal atualizada para a empresa.', 'sucesso');
+    } catch (falha) { erro.textContent = falha.message || String(falha); }
+    finally { botao.disabled = false; }
+  });
 }
 
 async function solicitarExclusaoEmpresaGlobal(empresa) {
@@ -14920,7 +15046,7 @@ window.reenviarWappEntregue = async function(numero) {
         // aviso antigo verificava apenas o cofre local e, por isso, dizia que
         // a IA não estava configurada mesmo quando o chat remoto já estava
         // ativo para toda a empresa.
-        if (!possuiChave && window.api?.supabaseintegracaoia &&
+        if (window.api?.supabaseintegracaoia &&
             usuarioAtual?.origemAuth === 'supabase' && !usuarioAtual?.administradorGlobal) {
           const remoto = await window.api.supabaseintegracaoia('status', {});
           if (remoto?.sucesso) {
@@ -14934,7 +15060,7 @@ window.reenviarWappEntregue = async function(numero) {
           }
         }
         if (!possuiChave && (usuarioAtual?.origemAuth !== 'supabase' || statusRemotoConsultado)) {
-          adicionarMensagem(`${ICONE_ALERTA} A IA ainda não está configurada. Vá em Configurações → Integração IA — Assistente de Chat para ativar o assistente.`, 'erro');
+          adicionarMensagem(`${ICONE_ALERTA} O assistente de IA não está disponível agora. Entre em contato com o suporte do Sistema OS.`, 'erro');
         }
       } catch (e) { /* não bloqueia o chat por falha ao checar configuração */ }
     }

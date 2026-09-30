@@ -1988,7 +1988,9 @@ function registrarIPC(ipcMain) {
       // mais roda (ver ESTADOS_AUTOMACAO_ATIVOS).
 
       // Envia PDF da OS como documento, se disponível
-      let resultadoPdf = { sucesso: true };
+      let resultadoPdf = { sucesso: false, erro: caminhoPdf
+        ? 'O PDF da OS não foi enviado por este canal.'
+        : 'PDF da OS indisponível.' };
       if (resultado.sucesso && resultado.canal !== 'api' && caminhoPdf && fs.existsSync(caminhoPdf)) {
         try {
           if (!estaConectado()) throw new Error('WhatsApp desconectou durante o envio');
@@ -2000,6 +2002,7 @@ function registrarIPC(ipcMain) {
             fileName: `${normalizarNumeroDocumentoOS(os.numero)}.pdf`,
             caption: `Ordem de Serviço #${os.numero} — Pronto para retirada`
           });
+          resultadoPdf = { sucesso: true };
           console.log(`[WhatsApp] PDF OS ${os.numero} (cobrança) enviado para ${numero}`);
         } catch (ePdf) {
           console.warn('[WhatsApp] Não foi possível enviar PDF da cobrança:', ePdf.message);
@@ -2050,7 +2053,9 @@ function registrarIPC(ipcMain) {
       const resultado = await enviarMensagemRoteada(telefone, msg, codigoPais);
 
       // Envia PDF do comprovante de pagamento como documento, se disponível
-      let resultadoPdf = { sucesso: true };
+      let resultadoPdf = { sucesso: false, erro: caminhoPdf
+        ? 'O comprovante não foi enviado por este canal.'
+        : 'Comprovante indisponível.' };
       if (resultado.sucesso && resultado.canal !== 'api' && caminhoPdf && fs.existsSync(caminhoPdf)) {
         try {
           if (!estaConectado()) throw new Error('WhatsApp desconectou durante o envio');
@@ -2062,6 +2067,7 @@ function registrarIPC(ipcMain) {
             fileName: `Comprovante-Pagamento-OS-${os.numero}.pdf`,
             caption: `Comprovante de Pagamento — ${normalizarNumeroDocumentoOS(os.numero)}`
           });
+          resultadoPdf = { sucesso: true };
           console.log(`[WhatsApp] Comprovante de pagamento OS ${os.numero} enviado para ${numero}`);
         } catch (ePdf) {
           console.warn('[WhatsApp] Não foi possível enviar comprovante PDF:', ePdf.message);
@@ -2433,7 +2439,7 @@ function rotulosValidosFormaPagamento() {
 }
 
 module.exports = {
-  init, enviarMensagem, enviarDocumento,
+  init, enviarMensagem, enviarMensagemRoteada, enviarDocumento, estaConectado,
   definirGeradorPreferenciaMercadoPago, definirRoteadorApiOficial,
   classificarFormaPagamentoManualPorRegras: _classificarFormaPagamentoManual,
   classificarEscolhaPagamentoEntradaPorRegras: _classificarEscolhaPagamentoEntrada,

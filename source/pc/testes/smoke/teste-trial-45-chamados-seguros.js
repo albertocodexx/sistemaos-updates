@@ -7,6 +7,8 @@ const path = require('path');
 const raiz = path.resolve(__dirname, '..', '..');
 const ler = (...partes) => fs.readFileSync(path.join(raiz, ...partes), 'utf8');
 const migration = ler('supabase', 'migrations', '20260906000100_trial_45_dias_chamados_seguros.sql');
+const trialNovo = ler('supabase', 'migrations', '20260926000200_trial_fiscal_30_dias.sql');
+const betaSeparado = ler('supabase', 'migrations', '20260926000300_beta_45_trial_30.sql');
 const admin = ler('supabase', 'functions', 'admin-global', 'index.ts');
 const chamados = ler('supabase', 'functions', 'chamados-suporte', 'index.ts');
 const acessoEdge = ler('supabase', 'functions', '_shared', 'access.ts');
@@ -26,12 +28,21 @@ assert.match(migration, /registrar_limite_chamado_publico/);
 assert.match(migration, /aberto_por = auth\.uid\(\)/);
 assert.match(migration, /excluido_em is null/);
 
-assert.match(admin, /const diasTrial = 45/);
+assert.match(trialNovo, /duracao_dias = 30/);
+assert.match(trialNovo, /new\.limite_gratuito_mensal := 30/);
+assert.match(trialNovo, /e\.fim_trial > now\(\)/);
+assert.match(betaSeparado, /select 'Beta'/);
+assert.match(betaSeparado, /duracao_dias = 45/);
+assert.match(betaSeparado, /lower\(p\.nome\) in \('trial', 'beta'\)/);
+assert.match(admin, /tipoTeste === 'beta' \? 45 : 30/);
+assert.match(admin, /limite_gratuito_mensal: 0/);
+assert.match(admin, /beta_fundador: tipoTeste === 'beta'/);
+assert.match(admin, /data_vencimento: fim\.toISOString\(\)/);
 assert.match(admin, /periodo_graca_ate: null/);
 assert.match(admin, /fiscal_habilitado: true/);
 assert.match(runtime, /contexto\.data_vencimento \|\| contexto\.fim_trial/);
 assert.match(principal, /abrirBloqueioTrial/);
-assert.match(principal, /value="45" readonly/);
+assert.match(principal, /<option value="trial">Trial — 30 dias<\/option><option value="beta">Beta — 45 dias<\/option>/);
 assert.match(assinatura, /Seu período de teste chegou ao fim/);
 assert.match(assinatura, /Falar com o suporte/);
 assert.match(assinatura, /motivo: 'trial_assinatura'/);
@@ -63,4 +74,4 @@ assert.match(acessoEdge, /CARGOS_ADMINISTRATIVOS\.has\(textoNormalizado\(context
 assert.doesNotMatch(acessoEdge, /Boolean\(.*configuracoes/,
   'Visualizar configurações não pode autorizar leitura dos chamados dos colegas.');
 
-console.log('OK: Trial de 45 dias e chamados estruturados possuem bloqueio, privacidade e retencao segura.');
+console.log('OK: Beta antigo de 45 dias separado do Trial novo de 30 dias; chamados mantêm bloqueio e privacidade.');

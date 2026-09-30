@@ -169,9 +169,56 @@ Deno.serve(async (req) => {
     }
 
     const referencia = texto(pagamento.external_reference);
+    if (referencia.startsWith('FISCAL-')) {
+      const { data: recarga, error: recargaErro } = await admin.from('recargas_fiscais')
+        .select('id,empresa_id,valor_centavos,valor_estornado_centavos,status,aplicado_em,estornado_em,pagamento_provedor_id')
+        .eq('referencia_externa', referencia).maybeSingle();
+      if (recargaErro) throw recargaErro;
+      if (!recarga) return resposta(200, { recebido: true, referencia_desconhecida: true });
+      const valorCentavos = Math.round(Number(pagamento.transaction_amount || 0) * 100);
+      if (texto(pagamento.currency_id) !== 'BRL' || valorCentavos !== recarga.valor_centavos) {
+        console.error('[mercado-pago-saas-webhook] recarga fiscal divergente', recarga.id);
+        return resposta(200, { recebido: true, divergencia: true });
+      }
+      if (recarga.pagamento_provedor_id && recarga.pagamento_provedor_id !== texto(pagamento.id)) {
+        return resposta(200, { recebido: true, ignorado: true });
+      }
+      const statusRecarga = mapearStatusMercadoPago(pagamento.status);
+      const estornadoInformado = Math.round(Number(pagamento.transaction_amount_refunded || 0) * 100);
+      const totalEstornado = statusRecarga === 'estornada' && estornadoInformado === 0
+        ? recarga.valor_centavos : estornadoInformado;
+      if (!Number.isSafeInteger(totalEstornado) || totalEstornado < 0 || totalEstornado > recarga.valor_centavos) {
+        return resposta(200, { recebido: true, estorno_divergente: true });
+      }
+      if (recarga.estornado_em) return resposta(200, { recebido: true, ja_estornada: true });
+      if (recarga.aplicado_em && statusRecarga !== 'estornada' && totalEstornado <= recarga.valor_estornado_centavos) {
+        return resposta(200, { recebido: true, ja_aplicada: true });
+      }
+      const { data: recargaAtualizada, error: atualizacaoErro } = await admin.from('recargas_fiscais').update({
+        status: statusRecarga === 'estornada' ? 'estornada' : statusRecarga === 'aprovada' ? 'aprovada' : statusRecarga,
+        pagamento_provedor_id: texto(pagamento.id)
+      }).eq('id', recarga.id).is('estornado_em', null).select('id').maybeSingle();
+      if (atualizacaoErro) throw atualizacaoErro;
+      if (!recargaAtualizada) return resposta(200, { recebido: true, ja_estornada: true });
+      if (statusRecarga === 'aprovada' && !recarga.aplicado_em) {
+        const { error } = await admin.rpc('aplicar_recarga_fiscal', {
+          p_recarga_id: recarga.id, p_pagamento_id: texto(pagamento.id)
+        });
+        if (error) throw error;
+      }
+      if (totalEstornado > recarga.valor_estornado_centavos) {
+        const { error } = await admin.rpc('estornar_recarga_fiscal', {
+          p_recarga_id: recarga.id, p_pagamento_id: texto(pagamento.id),
+          p_total_estornado_centavos: totalEstornado
+        });
+        if (error) throw error;
+      }
+      return resposta(200, { recebido: true, tipo: 'recarga_fiscal', status: totalEstornado > 0 && totalEstornado < recarga.valor_centavos
+        ? 'estorno_parcial' : statusRecarga });
+    }
     if (!referencia.startsWith('SAAS-')) return resposta(200, { recebido: true, ignorado: true });
     const { data: cobranca, error: cobrancaErro } = await admin.from('cobrancas_assinatura')
-      .select('id,empresa_id,plano_id,valor,moeda,status,aplicado_em,pagamento_provedor_id')
+      .select('id,empresa_id,plano_id,tipo_alteracao,fiscal_incluso,valor,moeda,status,aplicado_em,pagamento_provedor_id')
       .eq('referencia_externa', referencia).maybeSingle();
     if (cobrancaErro) throw cobrancaErro;
     if (!cobranca) return resposta(200, { recebido: true, referencia_desconhecida: true });
@@ -218,7 +265,8 @@ Deno.serve(async (req) => {
 
     let aplicacao = null;
     if (status === 'aprovada' && !cobranca.aplicado_em) {
-      const { data, error } = await admin.rpc('aplicar_pagamento_assinatura', {
+      const { data, error } = await admin.rpc(cobranca.tipo_alteracao === 'ativacao_fiscal'
+        ? 'aplicar_pagamento_modulo_fiscal' : 'aplicar_pagamento_assinatura', {
         p_cobranca_id: cobranca.id,
         p_pagamento_provedor_id: texto(pagamento.id),
         p_pago_em: pagoEm,
@@ -239,6 +287,20 @@ Deno.serve(async (req) => {
         mensagem: 'O pagamento da assinatura foi estornado. Entre em contato com o suporte.',
         chave_unica: `estorno:${cobranca.id}`
       }, { onConflict: 'chave_unica' });
+      if (cobranca.fiscal_incluso) {
+        // Um estorno do pagamento que concedeu o adicional nao pode deixar a
+        // franquia fiscal ativa, exceto se outra cobranca posterior a renovou.
+        const { data: posterior, error: posteriorErro } = await admin.from('cobrancas_assinatura')
+          .select('id').eq('empresa_id', cobranca.empresa_id).eq('fiscal_incluso', true)
+          .eq('status', 'aprovada').not('aplicado_em', 'is', null)
+          .gt('aplicado_em', cobranca.aplicado_em).limit(1).maybeSingle();
+        if (posteriorErro) throw posteriorErro;
+        if (!posterior) {
+          const { error: suspensaoErro } = await admin.from('empresas')
+            .update({ modulo_fiscal_ativo_ate: new Date().toISOString() }).eq('id', cobranca.empresa_id);
+          if (suspensaoErro) throw suspensaoErro;
+        }
+      }
     }
 
     return resposta(200, { recebido: true, status, aplicacao });

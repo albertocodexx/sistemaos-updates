@@ -21,19 +21,22 @@ assert.match(chamados, /trial_assinatura/);
 assert.match(chamados, /Outro motivo/);
 assert.match(chamados, /Os campos mudam conforme o motivo/);
 assert.match(assinatura, /Seu período de teste chegou ao fim/);
-assert.match(assinatura, /45 dias/);
+assert.match(assinatura, /O período de teste terminou/);
 assert.match(assinatura, /SistemaOSChamados\.abrirNovo/);
 assert.match(assinatura, /motivo: 'trial_assinatura'/);
 assert.match(empresa, /fimTrial <= instanteAtual/);
-assert.match(empresa, /período de teste de 45 dias chegou ao fim/);
+assert.match(empresa, /período de teste chegou ao fim/);
 
 const base = { usuario_id: 'u1', usuario_ativo: true, empresa_ativa: true, plano_nome: 'Trial' };
 const agora = Date.now();
 assert.strictEqual(EmpresaService.validarContexto({ ...base, licenca_status: 'teste', fim_trial: new Date(agora + 60000).toISOString() }, 'u1', agora).estado, 'autenticado');
 assert.strictEqual(EmpresaService.validarContexto({ ...base, licenca_status: 'teste', fim_trial: new Date(agora - 1).toISOString() }, 'u1', agora).estado, 'cobranca');
 assert.strictEqual(EmpresaService.validarContexto({ ...base, licenca_status: 'periodo_graca' }, 'u1', agora).estado, 'cobranca');
+assert.strictEqual(EmpresaService.validarContexto({ ...base, plano_nome: 'Beta', licenca_status: 'teste', fim_trial: new Date(agora + 60000).toISOString() }, 'u1', agora).estado, 'autenticado');
+assert.strictEqual(EmpresaService.validarContexto({ ...base, plano_nome: 'Beta', licenca_status: 'teste', fim_trial: new Date(agora - 1).toISOString() }, 'u1', agora).estado, 'cobranca');
+assert.strictEqual(EmpresaService.validarContexto({ ...base, plano_nome: 'Beta', licenca_status: 'periodo_graca' }, 'u1', agora).estado, 'cobranca');
 assert.strictEqual(EmpresaService.validarContexto({ ...base, licenca_status: 'vencida' }, 'u1', agora).estado, 'cobranca');
 assert.strictEqual(EmpresaService.validarContexto({ ...base, licenca_status: 'ativa', empresa_ativa: false }, 'u1', agora).estado, 'empresa_bloqueada');
 assert.strictEqual(EmpresaService.validarContexto({ ...base, licenca_status: 'ativa', usuario_ativo: false }, 'u1', agora).estado, 'usuario_bloqueado');
 
-console.log('OK: Android bloqueia o Trial vencido e abre chamado estruturado e autenticado.');
+console.log('OK: Android bloqueia Beta e Trial vencidos e abre chamado estruturado e autenticado.');

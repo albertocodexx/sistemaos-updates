@@ -274,12 +274,12 @@
     var status = String(contexto.licenca_status || '').toLowerCase();
     var instanteAtual = agora == null ? Date.now() : Number(agora);
     var fimTrial = contexto.fim_trial ? new Date(contexto.fim_trial).getTime() : NaN;
-    // O cache offline nunca pode prolongar o Trial alem dos 45 dias definidos
+    // O cache offline nunca pode prolongar o Trial alem da data definida
     // no servidor. Ao chegar no vencimento, somente assinatura e suporte ficam
     // acessiveis, mesmo antes do proximo job de licenciamento.
     if ((status === 'teste' && Number.isFinite(fimTrial) && fimTrial <= instanteAtual)
-        || (status === 'periodo_graca' && String(contexto.plano_nome || '').toLowerCase() === 'trial')) {
-      return { estado: 'cobranca', mensagem: 'Seu período de teste de 45 dias chegou ao fim.' };
+        || (status === 'periodo_graca' && ['trial', 'beta'].indexOf(String(contexto.plano_nome || '').toLowerCase()) !== -1)) {
+      return { estado: 'cobranca', mensagem: 'Seu período de teste chegou ao fim.' };
     }
     var permitidos = ['ativa', 'teste', 'vencendo', 'periodo_graca'];
     if (status === 'vencida') {

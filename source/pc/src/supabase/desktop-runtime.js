@@ -2169,7 +2169,9 @@ class DesktopSupabaseRuntime {
   }
 
   async fiscalDocumentos(acao, dados = {}) {
-    if (!this.client || !this.contexto || this.contexto.administrador_global) {
+    const acoesSuporte = new Set(['resumo', 'listar', 'salvar_configuracao']);
+    if (!this.client || !this.contexto ||
+        (this.contexto.administrador_global && !acoesSuporte.has(String(acao || '')))) {
       return { sucesso: false, erro: 'Entre em uma empresa para usar a nota fiscal.' };
     }
     try {
@@ -2240,6 +2242,34 @@ class DesktopSupabaseRuntime {
         ? { sucesso: true, canal: 'api', idMensagem: String(envio.mensagem_id || ''), statusEnvio: 'enviado' }
         : { sucesso: false, canal: 'api', erro: envio?.erro || 'Não foi possível enviar pelo WhatsApp automático.' }
     };
+  }
+
+  async processarFilaWhatsAppPc(enviar) {
+    if (typeof enviar !== 'function' || !this.client || !this.contexto || this.contexto.administrador_global) {
+      return { processadas: 0 };
+    }
+    const fila = await this.integracaoWhatsAppApi('listar_pendentes_pc', {});
+    if (!fila?.sucesso) return { processadas: 0, erro: fila?.erro || '' };
+    let processadas = 0;
+    for (const item of (Array.isArray(fila.pendentes) ? fila.pendentes : [])) {
+      let resultado;
+      let incerto = false;
+      try {
+        resultado = await enviar(String(item.telefone || ''), String(item.mensagem || ''));
+      } catch (erro) {
+        incerto = true;
+        resultado = { sucesso: false, erro: erro?.message || String(erro) };
+      }
+      await this.integracaoWhatsAppApi('concluir_pendente_pc', {
+        id: item.id,
+        sucesso: resultado?.sucesso === true,
+        incerto,
+        mensagemId: String(resultado?.idMensagem || ''),
+        erro: String(resultado?.erro || '')
+      });
+      processadas += 1;
+    }
+    return { processadas };
   }
 
   async _enviarSolicitacaoAssinaturaAgora(pacote) {
@@ -2436,6 +2466,7 @@ class DesktopSupabaseRuntime {
       configurado: !!(cfg.url && cfg.anonKey),
       operacional: !!this.client,
       autenticado: !!this.usuario,
+      administradorGlobal: this.contexto?.administrador_global === true,
       empresaId: this.contexto?.empresa_id || '',
       empresaNome: this.contexto?.empresa_nome || '',
       planoNome: this.contexto?.plano_nome || '',

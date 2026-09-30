@@ -42,9 +42,10 @@ assert.match(renderer, /Personalizado somente neste documento/);
 assert.match(renderer, /termosVenda:\s*\$\('estTermosVenda'\)\.value\.trim\(\)/);
 assert.match(renderer, /termosCompra:\s*\(\$\('cpTermosCompra'\)/);
 assert.match(renderer, /termos:\s*\$\('garTermos'\)\.value\.trim\(\)/);
-assert.match(termos, /Em iPhones, a abertura envolve risco de dano à tela/);
-assert.match(termos, /ajuste no preço estimado será informado previamente ao cliente/);
-assert.match(termos, /Android com tampa traseira já trincada/);
-assert.match(termos, /danos decorrentes da fragilidade ou avaria preexistente/);
+assert.match(termos, /reparo e qualquer alteração de preço dependem de orçamento informado e aprovação prévia/i);
+assert.match(termos, /riscos específicos identificados na avaliação/i);
+assert.match(termos, /A falta de retirada não transfere automaticamente sua propriedade/i);
+assert.doesNotMatch(termos, /Em iPhones, a abertura envolve risco de dano à tela/i,
+  'riscos por modelo devem ser informados apenas quando pertinentes ao aparelho');
 
 console.log('OK: formulários organizados e termos padrão editáveis somente por documento.');

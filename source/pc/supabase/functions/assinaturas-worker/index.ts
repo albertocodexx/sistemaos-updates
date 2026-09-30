@@ -24,12 +24,167 @@ const segredoValido = (req: Request) => {
   return serviceRole.length >= 24 && compararSeguro(`Bearer ${serviceRole}`, authorization);
 };
 
+const base64Bytes = (valor: string) => {
+  const bruto = atob(valor);
+  return Uint8Array.from(bruto, (caractere) => caractere.charCodeAt(0));
+};
+
+async function decifrarSegredoEmpresa(ivBase64: string, cifraBase64: string) {
+  const material = texto(Deno.env.get('INTEGRATION_ENCRYPTION_KEY'));
+  const bytes = base64Bytes(material);
+  if (bytes.byteLength !== 32) throw new Error('cofre_indisponivel');
+  const chave = await crypto.subtle.importKey('raw', bytes, 'AES-GCM', false, ['decrypt']);
+  const aberto = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: base64Bytes(ivBase64) },
+    chave, base64Bytes(cifraBase64));
+  return new TextDecoder().decode(aberto);
+}
+
+async function carregarIntegracaoEmpresa(admin: any, empresaId: string, tipo: string) {
+  const { data: integracao, error } = await admin.from('integracoes_empresa')
+    .select('id,status,metadados').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle();
+  if (error) throw error;
+  if (!integracao || integracao.status !== 'conectada') return null;
+  const { data: segredo, error: segredoErro } = await admin.from('integracoes_segredos')
+    .select('iv_base64,segredo_cifrado_base64').eq('integracao_id', integracao.id).maybeSingle();
+  if (segredoErro) throw segredoErro;
+  if (!segredo) return null;
+  return { integracao, segredo: await decifrarSegredoEmpresa(segredo.iv_base64, segredo.segredo_cifrado_base64) };
+}
+
+async function reconciliarMercadoPagoOS(admin: any) {
+  const { data: cobrancas, error } = await admin.from('cobrancas_os_mp')
+    .select('id,empresa_id,ordem_id,referencia_externa,valor_centavos,moeda,status,pagamento_provedor_id')
+    .in('status', ['pendente', 'em_processamento', 'aprovada'])
+    .order('updated_at', { ascending: true }).limit(25);
+  if (error) throw error;
+  const cache = new Map<string, any>();
+  let aplicadas = 0;
+  let falhas = 0;
+  for (const cobranca of cobrancas || []) {
+    try {
+      let conta = cache.get(cobranca.empresa_id);
+      if (conta === undefined) {
+        conta = await carregarIntegracaoEmpresa(admin, cobranca.empresa_id, 'mercado_pago');
+        cache.set(cobranca.empresa_id, conta);
+      }
+      if (!conta) continue;
+      const token = texto(conta.segredo);
+      let pagamento: any = null;
+      if (/^\d+$/.test(texto(cobranca.pagamento_provedor_id))) {
+        const consulta = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(cobranca.pagamento_provedor_id)}`,
+          { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) });
+        if (consulta.ok) pagamento = await consulta.json().catch(() => null);
+      } else {
+        const consulta = await fetch(`https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(cobranca.referencia_externa)}&sort=date_created&criteria=desc&limit=10`,
+          { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) });
+        if (consulta.ok) {
+          const retorno = await consulta.json().catch(() => ({}));
+          pagamento = (Array.isArray(retorno.results) ? retorno.results : []).find((item: any) =>
+            texto(item.external_reference) === cobranca.referencia_externa);
+        }
+      }
+      await admin.from('cobrancas_os_mp').update({ updated_at: new Date().toISOString() }).eq('id', cobranca.id);
+      if (!pagamento?.id) continue;
+      const metadata = pagamento.metadata && typeof pagamento.metadata === 'object' ? pagamento.metadata : {};
+      const valorCentavos = Math.round(Number(pagamento.transaction_amount || 0) * 100);
+      const ambienteValido = token.startsWith('TEST-') ? pagamento.live_mode === false : pagamento.live_mode === true;
+      if (!ambienteValido || texto(pagamento.external_reference) !== cobranca.referencia_externa ||
+          texto(metadata.empresa_id) !== cobranca.empresa_id || texto(metadata.cobranca_id) !== cobranca.id ||
+          texto(metadata.ordem_id) !== cobranca.ordem_id || texto(pagamento.currency_id) !== cobranca.moeda ||
+          valorCentavos !== Number(cobranca.valor_centavos)) continue;
+      const statusBruto = texto(pagamento.status).toLowerCase();
+      let status = statusBruto === 'approved' ? 'aprovada'
+        : ['refunded', 'charged_back'].includes(statusBruto) ? 'estornada'
+          : statusBruto === 'rejected' ? 'rejeitada'
+            : statusBruto === 'cancelled' ? 'cancelada' : 'em_processamento';
+      const estornado = Math.max(0, Math.min(valorCentavos,
+        Math.round(Number(pagamento.transaction_amount_refunded || 0) * 100)));
+      if (estornado >= valorCentavos) status = 'estornada';
+      const { data: resultado, error: aplicarErro } = await admin.rpc('aplicar_status_cobranca_os_mp', {
+        p_cobranca_id: cobranca.id, p_pagamento_id: texto(pagamento.id), p_status: status,
+        p_valor_centavos: valorCentavos,
+        p_pago_em: pagamento.date_approved || pagamento.date_created || new Date().toISOString(),
+        p_dados_provedor: { status: statusBruto, status_detail: texto(pagamento.status_detail).slice(0, 120),
+          payment_type_id: texto(pagamento.payment_type_id), payment_method_id: texto(pagamento.payment_method_id),
+          valor_estornado_centavos: estornado,
+          valor_liquido_centavos: status === 'aprovada' ? valorCentavos - estornado : 0,
+          reconciliado: true }
+      });
+      if (aplicarErro) throw aplicarErro;
+      if (resultado?.aplicada) aplicadas += 1;
+    } catch (_) {
+      falhas += 1;
+    }
+  }
+  return { consultadas: (cobrancas || []).length, aplicadas, falhas };
+}
+
+async function processarWhatsAppEmpresas(admin: any) {
+  const agora = new Date().toISOString();
+  const { data: fila, error } = await admin.from('fila_whatsapp')
+    .select('id,empresa_id,destinatario,mensagem_fallback,tentativas,max_tentativas')
+    .eq('origem', 'os').in('status', ['pendente', 'falhou']).lte('agendada_para', agora)
+    .or(`proxima_tentativa_em.is.null,proxima_tentativa_em.lte.${agora}`)
+    .order('created_at', { ascending: true }).limit(25);
+  if (error) throw error;
+  const cache = new Map<string, any>();
+  let enviadas = 0;
+  let falhas = 0;
+  let aguardandoPc = 0;
+  for (const item of fila || []) {
+    let conta = cache.get(item.empresa_id);
+    if (conta === undefined) {
+      try { conta = await carregarIntegracaoEmpresa(admin, item.empresa_id, 'whatsapp'); }
+      catch (_) { conta = null; }
+      cache.set(item.empresa_id, conta);
+    }
+    if (!conta || conta.integracao?.metadados?.provedor !== 'meta_cloud_api') {
+      aguardandoPc += 1;
+      continue;
+    }
+    const tentativas = Number(item.tentativas || 0) + 1;
+    const claim = await admin.from('fila_whatsapp').update({ status: 'processando', tentativas })
+      .eq('id', item.id).in('status', ['pendente', 'falhou']).select('id').maybeSingle();
+    if (claim.error || !claim.data) continue;
+    try {
+      const credencial = JSON.parse(conta.segredo);
+      const metadados = conta.integracao.metadados || {};
+      const versao = /^v\d+\.\d+$/.test(texto(metadados.graph_version)) ? texto(metadados.graph_version) : 'v23.0';
+      const envio = await fetch(`https://graph.facebook.com/${versao}/${encodeURIComponent(texto(metadados.phone_number_id))}/messages`, {
+        method: 'POST', headers: { Authorization: `Bearer ${texto(credencial.access_token)}`, 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(20000),
+        body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual',
+          to: texto(item.destinatario), type: 'text', text: { preview_url: false, body: texto(item.mensagem_fallback).slice(0, 4096) } })
+      });
+      const retorno = await envio.json().catch(() => ({}));
+      if (envio.ok && retorno?.messages?.[0]?.id) {
+        enviadas += 1;
+        await admin.from('fila_whatsapp').update({ status: 'enviada', processada_em: new Date().toISOString(),
+          id_mensagem_provedor: texto(retorno.messages[0].id), ultimo_erro: null, proxima_tentativa_em: null }).eq('id', item.id);
+      } else {
+        falhas += 1;
+        await admin.from('fila_whatsapp').update({
+          status: tentativas >= Number(item.max_tentativas) ? 'cancelada' : 'falhou',
+          ultimo_erro: texto(retorno?.error?.message || `HTTP ${envio.status}`).slice(0, 500),
+          proxima_tentativa_em: new Date(Date.now() + Math.min(360, 2 ** Math.min(tentativas, 8)) * 60000).toISOString()
+        }).eq('id', item.id);
+      }
+    } catch (_) {
+      falhas += 1;
+      await admin.from('fila_whatsapp').update({ status: 'cancelada', proxima_tentativa_em: null,
+        ultimo_erro: 'O provedor nao confirmou o envio. Confira o historico antes de reenviar.' })
+        .eq('id', item.id).eq('status', 'processando');
+    }
+  }
+  return { selecionadas: (fila || []).length, enviadas, falhas, aguardando_pc: aguardandoPc };
+}
+
 async function reconciliarMercadoPago(admin: any) {
   const { integracao, segredo } = await carregarIntegracaoPlataforma(admin, 'mercado_pago');
   const token = texto(segredo?.access_token);
   if (!integracao || !token) return { consultadas: 0, aplicadas: 0, indisponivel: true };
   const { data: cobrancas, error } = await admin.from('cobrancas_assinatura')
-    .select('id,referencia_externa,valor,moeda,status,aplicado_em')
+    .select('id,referencia_externa,tipo_alteracao,valor,moeda,status,aplicado_em')
     .is('aplicado_em', null)
     .in('status', ['pendente', 'em_processamento', 'aprovada', 'rejeitada', 'cancelada', 'expirada'])
     .order('updated_at', { ascending: true }).limit(25);
@@ -78,7 +233,8 @@ async function reconciliarMercadoPago(admin: any) {
     if (atualizacaoErro) throw atualizacaoErro;
     if (!atualizada) continue;
     if (status === 'aprovada' && !cobranca.aplicado_em) {
-      const { error: aplicarErro } = await admin.rpc('aplicar_pagamento_assinatura', {
+      const { error: aplicarErro } = await admin.rpc(cobranca.tipo_alteracao === 'ativacao_fiscal'
+        ? 'aplicar_pagamento_modulo_fiscal' : 'aplicar_pagamento_assinatura', {
         p_cobranca_id: cobranca.id,
         p_pagamento_provedor_id: texto(pagamento.id),
         p_pago_em: pagamento.date_approved || new Date().toISOString(),
@@ -108,6 +264,86 @@ async function reconciliarMercadoPago(admin: any) {
   return { consultadas: (cobrancas || []).length, aplicadas, falhas, indisponivel: false };
 }
 
+async function reconciliarRecargasFiscais(admin: any) {
+  const { integracao, segredo } = await carregarIntegracaoPlataforma(admin, 'mercado_pago');
+  const token = texto(segredo?.access_token);
+  if (!integracao || !token) return { consultadas: 0, creditadas: 0, estornadas: 0, indisponivel: true };
+  const { data: recargas, error } = await admin.from('recargas_fiscais')
+    .select('id,referencia_externa,valor_centavos,valor_estornado_centavos,aplicado_em,pagamento_provedor_id')
+    .is('estornado_em', null)
+    .order('ultima_verificacao_em', { ascending: true, nullsFirst: true }).limit(5);
+  if (error) {
+    console.error('[assinaturas-worker] Recargas fiscais indisponiveis; assinaturas e mensagens continuam.');
+    return { consultadas: 0, creditadas: 0, estornadas: 0, falhas: 1, indisponivel: true };
+  }
+  let creditadas = 0;
+  let estornadas = 0;
+  let falhas = 0;
+  for (const recarga of recargas || []) {
+    // A rodada gira entre recargas pendentes e aplicadas: uma notificação de
+    // estorno também precisa ser conciliada sem depender de PC ou celular.
+    try {
+      const { error: giroErro } = await admin.from('recargas_fiscais')
+        .update({ ultima_verificacao_em: new Date().toISOString() }).eq('id', recarga.id);
+      if (giroErro) throw giroErro;
+      let pagamentoId = texto(recarga.pagamento_provedor_id);
+      if (!pagamentoId) {
+        const busca = await fetch(
+          `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(recarga.referencia_externa)}&sort=date_created&criteria=desc&limit=100`,
+          { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000) }
+        );
+        if (!busca.ok) throw new Error('Consulta de recarga recusada pelo Mercado Pago.');
+        const resultados = await busca.json().catch(() => ({}));
+        const correspondentes = (Array.isArray(resultados.results) ? resultados.results : [])
+          .filter((item: any) => texto(item.external_reference) === recarga.referencia_externa && /^\d+$/.test(texto(item.id)));
+        pagamentoId = texto(correspondentes.find((item: any) =>
+          ['approved', 'refunded', 'charged_back'].includes(texto(item.status)))?.id);
+      }
+      if (!/^\d+$/.test(pagamentoId)) continue;
+      const consulta = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(pagamentoId)}`, {
+        headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000)
+      });
+      if (!consulta.ok) throw new Error('Pagamento da recarga nao pode ser consultado.');
+      const pagamento = await consulta.json().catch(() => ({}));
+      const valorCentavos = Math.round(Number(pagamento.transaction_amount || 0) * 100);
+      if (texto(pagamento.id) !== pagamentoId || texto(pagamento.external_reference) !== recarga.referencia_externa ||
+          pagamento.live_mode === false || texto(pagamento.currency_id) !== 'BRL' ||
+          valorCentavos !== recarga.valor_centavos) continue;
+      const status = mapearStatusMercadoPago(pagamento.status);
+      if (!['aprovada', 'estornada'].includes(status)) continue;
+      const estornadoInformado = Math.round(Number(pagamento.transaction_amount_refunded || 0) * 100);
+      const totalEstornado = status === 'estornada' && estornadoInformado === 0
+        ? recarga.valor_centavos : estornadoInformado;
+      if (!Number.isSafeInteger(totalEstornado) || totalEstornado < 0 || totalEstornado > recarga.valor_centavos ||
+          (recarga.pagamento_provedor_id && recarga.pagamento_provedor_id !== pagamentoId)) continue;
+      const { data: atualizada, error: atualizarErro } = await admin.from('recargas_fiscais').update({
+        status, pagamento_provedor_id: pagamentoId
+      }).eq('id', recarga.id).is('estornado_em', null).select('id').maybeSingle();
+      if (atualizarErro) throw atualizarErro;
+      if (!atualizada) continue;
+      if (status === 'aprovada' && !recarga.aplicado_em) {
+        const { data: credito, error: aplicarErro } = await admin.rpc('aplicar_recarga_fiscal', {
+          p_recarga_id: recarga.id, p_pagamento_id: pagamentoId
+        });
+        if (aplicarErro) throw aplicarErro;
+        if (credito?.aplicado) creditadas += 1;
+      }
+      if (totalEstornado > recarga.valor_estornado_centavos) {
+        const { data: estorno, error: estornoErro } = await admin.rpc('estornar_recarga_fiscal', {
+          p_recarga_id: recarga.id, p_pagamento_id: pagamentoId,
+          p_total_estornado_centavos: totalEstornado
+        });
+        if (estornoErro) throw estornoErro;
+        if (estorno?.estornado) estornadas += 1;
+      }
+    } catch (_) {
+      falhas += 1;
+      console.error('[assinaturas-worker] Conciliacao fiscal adiada; a recarga sera consultada novamente.');
+    }
+  }
+  return { consultadas: (recargas || []).length, creditadas, estornadas, falhas, indisponivel: false };
+}
+
 const valoresTemplate = (parametros: Record<string, unknown>, alias: string) => {
   if (Array.isArray(parametros.template_body)) return parametros.template_body.map((item) => texto(item));
   if (alias === 'pagamento_confirmado') {
@@ -123,7 +359,8 @@ async function processarWhatsApp(admin: any) {
     status: 'cancelada',
     ultimo_erro: 'Envio interrompido sem confirmação. Confira o histórico do WhatsApp antes de reenviar.',
     proxima_tentativa_em: null
-  }).eq('status', 'processando').lt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
+  }).eq('status', 'processando').neq('origem', 'os')
+    .lt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
   const { integracao, segredo } = await carregarIntegracaoPlataforma(admin, 'whatsapp');
   const hibrido = integracao?.provedor === 'hibrido_baileys_meta';
   if (!['meta_cloud_api', 'hibrido_baileys_meta'].includes(integracao?.provedor)) {
@@ -142,6 +379,7 @@ async function processarWhatsApp(admin: any) {
   let consultaFila = admin.from('fila_whatsapp')
     .select('id,destinatario,template_nome,template_idioma,parametros,tentativas,max_tentativas')
     .in('status', ['pendente', 'falhou']).lte('agendada_para', agora)
+    .neq('origem', 'os')
     .or(`proxima_tentativa_em.is.null,proxima_tentativa_em.lte.${agora}`)
     .order('created_at', { ascending: true }).limit(25);
   if (hibrido) consultaFila = consultaFila.lte('created_at', new Date(Date.now() - 120000).toISOString());
@@ -224,8 +462,13 @@ Deno.serve(async (req) => {
     const { data: alertas, error: alertaErro } = await admin.rpc('gerar_alertas_assinatura');
     if (alertaErro) throw alertaErro;
     const mercadoPago = await reconciliarMercadoPago(admin);
+    const mercadoPagoOs = await reconciliarMercadoPagoOS(admin);
+    const recargasFiscais = await reconciliarRecargasFiscais(admin);
+    const whatsappEmpresas = await processarWhatsAppEmpresas(admin);
     const whatsapp = await processarWhatsApp(admin);
-    return resposta(200, { sucesso: true, alertas_gerados: Number(alertas || 0), mercado_pago: mercadoPago, whatsapp });
+    return resposta(200, { sucesso: true, alertas_gerados: Number(alertas || 0), mercado_pago: mercadoPago,
+      mercado_pago_os: mercadoPagoOs, recargas_fiscais: recargasFiscais,
+      whatsapp_empresas: whatsappEmpresas, whatsapp });
   } catch (erro) {
     console.error('[assinaturas-worker]', erro);
     return resposta(500, { erro: 'Nao foi possivel executar o processamento agendado agora.' });

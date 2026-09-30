@@ -16,8 +16,17 @@
   function calcularOferta(plano, meses) {
     const quantidade = Math.max(1, Math.min(12, Number(meses) || 1));
     const desconto = quantidade >= 12 ? 15 : quantidade >= 6 ? 10 : quantidade >= 3 ? 5 : 0;
-    const semDesconto = Number(plano?.preco_referencia || 0) * quantidade;
-    return { quantidade, desconto, semDesconto, total: semDesconto * (1 - desconto / 100) };
+    const empresa = resumo?.empresa || {};
+    const inicio = Math.max(Date.now(), Date.parse(empresa.data_vencimento) || 0);
+    const fimBeta = Date.parse(empresa.beta_fundador_expira_em) || 0;
+    let base = 0;
+    for (let mes = 0; mes < quantidade; mes += 1) {
+      const beta = empresa.beta_fundador === true && inicio + mes * Number(plano?.duracao_dias || 30) * 86400000 < fimBeta;
+      base += Math.round(Number(beta && plano?.oferta_beta_fundador ? plano.preco_referencia : plano?.preco_tabela ?? plano?.preco_referencia ?? 0) * 100);
+    }
+    const baseComDesconto = Math.round(base * (1 - desconto / 100));
+    return { quantidade, desconto, semDesconto: base / 100,
+      base: baseComDesconto / 100, fiscal: 0, total: baseComDesconto / 100 };
   }
 
   function escaparHtml(valor) {
@@ -43,8 +52,8 @@
     estilo.textContent = `
       .assinatura-aviso{margin:12px 28px 0;padding:13px 16px;border:1px solid #f59e0b;border-radius:12px;background:color-mix(in srgb,#f59e0b 14%,var(--bg-card));display:flex;align-items:center;justify-content:space-between;gap:14px;color:var(--texto)}
       .assinatura-aviso[hidden]{display:none}.assinatura-aviso strong{display:block}.assinatura-aviso span{font-size:13px;color:var(--texto-sec)}
-      .assinatura-planos{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:14px}.assinatura-plano{border:1.5px solid var(--borda);border-radius:12px;background:var(--bg-card);padding:15px;text-align:left;color:var(--texto);cursor:pointer}.assinatura-plano:hover,.assinatura-plano.selecionado{border-color:var(--cor-principal);box-shadow:0 0 0 2px color-mix(in srgb,var(--cor-principal) 22%,transparent)}
-      .assinatura-plano h3{margin:0 0 6px}.assinatura-plano .preco{font-size:21px;font-weight:800;color:var(--cor-principal)}.assinatura-plano ul{padding-left:18px;margin:10px 0 0;color:var(--texto-sec);font-size:12px}.assinatura-plano .tipo{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--texto-sec)}
+      .assinatura-planos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}.assinatura-plano{min-width:0;border:1.5px solid var(--borda);border-radius:12px;background:var(--bg-card);padding:18px;text-align:left;color:var(--texto);cursor:pointer;overflow-wrap:anywhere}.assinatura-plano:hover,.assinatura-plano.selecionado{border-color:var(--cor-principal);box-shadow:0 0 0 2px color-mix(in srgb,var(--cor-principal) 22%,transparent)}
+      .assinatura-plano-selos{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;min-height:18px;margin-bottom:8px}.assinatura-plano h3{margin:0 0 8px;font-size:20px}.assinatura-plano .preco{font-size:25px;font-weight:800;color:var(--cor-principal);line-height:1.2}.assinatura-plano .preco-detalhe{display:block;margin-top:4px;color:var(--texto-sec);font-size:13px}.assinatura-plano p{margin:12px 0 0;line-height:1.45}.assinatura-plano ul{padding-left:19px;margin:12px 0 0;color:var(--texto-sec);font-size:13px;line-height:1.5}.assinatura-plano .tipo{display:inline-block;font-size:11px;font-weight:700;line-height:1.35;text-transform:uppercase;color:var(--texto-sec)}
       .assinatura-resumo{padding:13px;border:1px solid var(--borda);border-radius:10px;background:var(--bg);display:grid;gap:4px}.assinatura-pagamento-status{min-height:22px;font-size:13px;color:var(--texto-sec)}
       .assinatura-seguranca{margin-top:16px;padding:14px;border:1px solid var(--borda);border-radius:10px;background:var(--bg);display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.assinatura-seguranca div{display:grid;gap:4px}.assinatura-seguranca strong{font-size:13px}.assinatura-seguranca span{font-size:12px;color:var(--texto-sec);line-height:1.45}
       .trial-encerrado-fundo{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px;background:var(--bg);color:var(--texto)}
@@ -54,7 +63,7 @@
       .trial-encerrado-identidade{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:22px 0}.trial-encerrado-identidade div{padding:13px;border:1px solid var(--borda);border-radius:10px;background:var(--bg)}
       .trial-encerrado-identidade span,.trial-encerrado-identidade strong{display:block}.trial-encerrado-identidade span{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--texto-sec);margin-bottom:4px}
       .trial-encerrado-acoes{display:flex;gap:10px}.trial-encerrado-acoes .botao{flex:1}.trial-encerrado-seguranca{display:block;margin-top:16px;color:var(--texto-sec);line-height:1.45}
-      @media(max-width:700px){.assinatura-seguranca{grid-template-columns:1fr}}@media(max-width:600px){.trial-encerrado-card{padding:24px}.trial-encerrado-identidade{grid-template-columns:1fr}.trial-encerrado-acoes{flex-direction:column}}
+      @media(max-width:700px){.assinatura-planos,.assinatura-seguranca{grid-template-columns:minmax(0,1fr)}}@media(max-width:600px){.trial-encerrado-card{padding:24px}.trial-encerrado-identidade{grid-template-columns:1fr}.trial-encerrado-acoes{flex-direction:column}}
     `;
     document.head.appendChild(estilo);
 
@@ -75,6 +84,7 @@
         <div style="margin-top:18px"><strong>Continuar com o mesmo plano ou escolher outro?</strong><p class="campo-desc">A renovação soma os novos dias ao período que você ainda tem.</p></div>
         <div id="listaPlanosAssinatura" class="assinatura-planos"></div>
         <div class="campo" id="campoMesesAssinatura" style="margin-top:16px;max-width:320px" hidden><label for="quantidadeMesesAssinatura">Período que deseja pagar</label><select id="quantidadeMesesAssinatura"><option value="1">1 mês</option><option value="2">2 meses</option><option value="3">3 meses · 5% de desconto</option><option value="6">6 meses · 10% de desconto</option><option value="12">12 meses · 15% de desconto</option></select><p class="campo-desc">Os meses são somados ao prazo restante após a confirmação.</p></div>
+        <div class="assinatura-resumo" style="margin-top:14px"><strong>Notas fiscais por uso</strong><small id="descricaoFiscalAssinatura">Sem mensalidade adicional. Cada nota autorizada é descontada da carteira fiscal; consulte o preço por nota antes de adicionar saldo.</small></div>
         <div class="assinatura-seguranca"><div><strong>Formas de pagamento</strong><span>Pix, cartão e demais opções liberadas pela conta Mercado Pago no checkout.</span></div><div><strong>Pagamento protegido</strong><span>A cobrança abre no ambiente oficial do Mercado Pago; o Sistema OS não recebe nem guarda dados do cartão.</span></div><div><strong>Ativação automática</strong><span>O servidor valida assinatura, valor e moeda do pagamento antes de liberar o plano e somar os dias.</span></div></div>
         <div id="statusPagamentoAssinatura" class="assinatura-pagamento-status" role="status" aria-live="polite"></div>
       </div>
@@ -89,12 +99,13 @@
     bloqueioTrial.innerHTML = `<section class="trial-encerrado-card" role="dialog" aria-modal="true" aria-labelledby="trialEncerradoTitulo">
       <div class="trial-encerrado-marca" aria-hidden="true">OS</div>
       <h1 id="trialEncerradoTitulo">Seu período de teste chegou ao fim</h1>
-      <p>O acesso às funções do Sistema OS foi bloqueado ao completar 45 dias. Para obter uma assinatura e continuar usando o sistema, entre em contato com um administrador.</p>
+      <p>O acesso às funções do Sistema OS foi bloqueado ao terminar o período de teste. O administrador da empresa pode escolher uma assinatura; a equipe pode falar com o suporte.</p>
       <div class="trial-encerrado-identidade">
         <div><span>Empresa</span><strong id="trialEncerradoEmpresa">—</strong></div>
         <div><span>Usuário</span><strong id="trialEncerradoUsuario">—</strong></div>
       </div>
       <div class="trial-encerrado-acoes">
+        <button type="button" id="btnPlanosTrialEncerrado" class="botao botao-primario" hidden>Escolher assinatura</button>
         <button type="button" id="btnSuporteTrialEncerrado" class="botao botao-primario">Falar com o suporte</button>
         <button type="button" id="btnTrocarContaTrialEncerrado" class="botao botao-fantasma">Trocar usuário</button>
       </div>
@@ -125,9 +136,12 @@
         nome: usuario.nome || usuario.usuario || '',
         motivo: 'trial_assinatura',
         assunto: 'Contratar assinatura após o período de teste',
-        mensagem: 'Meu período de teste de 45 dias terminou e desejo contratar uma assinatura do Sistema OS.'
+        mensagem: 'Meu período de teste terminou e desejo contratar uma assinatura do Sistema OS.'
       });
     });
+    $('btnPlanosTrialEncerrado').addEventListener('click', () => abrir().catch((erro) => {
+      window.toast?.(erro?.message || 'Não foi possível abrir os planos.', 'erro');
+    }));
     $('btnTrocarContaTrialEncerrado').addEventListener('click', () => {
       $('bloqueioTrialEncerrado').hidden = true;
       usuarioBloqueadoTrial = null;
@@ -160,9 +174,11 @@
     const empresa = resumo?.empresa;
     if (!empresa) return;
     const atual = planoAtual();
-    const dias = diasRestantes(empresa.data_vencimento);
+    const vencimento = empresa.licenca_status === 'teste' ? empresa.fim_trial : empresa.data_vencimento;
+    const dias = diasRestantes(vencimento);
     const oferta = planoEscolhido ? calcularOferta(planoEscolhido, quantidadeMeses) : null;
-    $('resumoAssinaturaAtual').innerHTML = `<strong>Plano atual: ${escaparHtml(atual?.nome || empresa.plano?.nome || 'Não definido')}</strong><span>Vencimento: ${escaparHtml(dataBr(empresa.data_vencimento))}</span><span>Situação: ${dias == null ? 'consulte o suporte' : dias < 0 ? 'vencida' : dias === 0 ? 'vence hoje' : `${dias} dia(s) restante(s)`}</span>${oferta ? `<span>Total selecionado: <strong>${escaparHtml(moeda(oferta.total))}</strong> por ${oferta.quantidade} mês(es)${oferta.desconto ? ` · ${oferta.desconto}% de desconto` : ''}</span>` : ''}`;
+    $('resumoAssinaturaAtual').innerHTML = `<strong>Plano atual: ${escaparHtml(atual?.nome || empresa.plano?.nome || 'Não definido')}</strong><span>Vencimento: ${escaparHtml(dataBr(vencimento))}</span><span>Situação: ${dias == null ? 'consulte o suporte' : dias < 0 ? 'vencida' : dias === 0 ? 'vence hoje' : `${dias} dia(s) restante(s)`}</span><span>Fiscal: ${resumo?.modulo_fiscal?.ativo ? 'disponível com saldo na carteira' : 'indisponível até ativar o plano'}</span>${oferta ? `<span>Total selecionado: <strong>${escaparHtml(moeda(oferta.total))}</strong> por ${oferta.quantidade} mês(es)${oferta.desconto ? ` · ${oferta.desconto}% no plano` : ''}</span>` : ''}`;
+    $('descricaoFiscalAssinatura').textContent = `Sem mensalidade fiscal. ${moeda((resumo?.modulo_fiscal?.preco_por_nota_centavos ?? 99) / 100)} por nota autorizada, debitados da carteira da empresa. Emissão real depende da configuração fiscal do emitente.`;
     $('campoMesesAssinatura').hidden = !planoEscolhido;
     const lista = $('listaPlanosAssinatura');
     lista.innerHTML = '';
@@ -174,8 +190,9 @@
       const tipo = plano.id === atual?.id ? 'Continuar neste plano' : diferenca > 0 ? 'Melhorar plano' : 'Plano mais econômico';
       const seloBeta = plano.oferta_beta_fundador ? '<span class="tipo">Preço fundador do beta</span>' : '';
       const precoTabela = plano.oferta_beta_fundador && Number(plano.preco_tabela) > Number(plano.preco_referencia)
-        ? `<small><s>${escaparHtml(moeda(plano.preco_tabela))}</s> / mês</small>` : `<small>${escaparHtml(plano.duracao_dias)} dias</small>`;
-      botao.innerHTML = `<span class="tipo">${escaparHtml(tipo)}</span>${seloBeta}<h3>${escaparHtml(plano.nome)}</h3><div class="preco">${escaparHtml(moeda(plano.preco_referencia))}</div>${precoTabela}<p>${escaparHtml(plano.descricao || '')}</p><ul>${recursosPlano(plano).map((recurso) => `<li>${escaparHtml(recurso.nome || recurso.chave || '')}</li>`).join('')}</ul>`;
+        ? `<small class="preco-detalhe"><s>${escaparHtml(moeda(plano.preco_tabela))}</s> / mês · ${escaparHtml(plano.duracao_dias)} dias</small>`
+        : `<small class="preco-detalhe">${escaparHtml(plano.duracao_dias)} dias</small>`;
+      botao.innerHTML = `<div class="assinatura-plano-selos"><span class="tipo">${escaparHtml(tipo)}</span>${seloBeta}</div><h3>${escaparHtml(plano.nome)}</h3><div class="preco">${escaparHtml(moeda(plano.preco_referencia))}</div>${precoTabela}<p>${escaparHtml(plano.descricao || '')}</p><ul>${recursosPlano(plano).map((recurso) => `<li>${escaparHtml(recurso.nome || recurso.chave || '')}</li>`).join('')}</ul>`;
       botao.addEventListener('click', () => { planoEscolhido = plano; desenhar(); $('btnPagarAssinatura').disabled = false; });
       lista.appendChild(botao);
     });
@@ -185,11 +202,15 @@
     const aviso = $('avisoAssinaturaSaaS');
     const empresa = resumo?.empresa;
     if (!aviso || !empresa) return;
-    const dias = diasRestantes(empresa.data_vencimento);
+    const teste = empresa.licenca_status === 'teste';
+    const vencimento = teste ? empresa.fim_trial : empresa.data_vencimento;
+    const dias = diasRestantes(vencimento);
     aviso.hidden = dias == null || dias > 7;
     if (aviso.hidden) return;
-    $('avisoAssinaturaTitulo').textContent = dias < 0 ? 'Sua assinatura venceu' : dias === 0 ? 'Sua assinatura vence hoje' : `Sua assinatura vence em ${dias} dia(s)`;
-    $('avisoAssinaturaTexto').textContent = ` Vencimento: ${dataBr(empresa.data_vencimento)}. Renove o plano atual ou escolha outro.`;
+    $('avisoAssinaturaTitulo').textContent = teste
+      ? (dias < 0 ? 'Seu teste terminou' : dias === 0 ? 'Seu teste termina hoje' : `Seu teste termina em ${dias} dia(s)`)
+      : (dias < 0 ? 'Sua assinatura venceu' : dias === 0 ? 'Sua assinatura vence hoje' : `Sua assinatura vence em ${dias} dia(s)`);
+    $('avisoAssinaturaTexto').textContent = ` Vencimento: ${dataBr(vencimento)}. ${teste ? 'Escolha um plano para continuar.' : 'Renove o plano atual ou escolha outro.'}`;
   }
 
   function registrarNotificacaoUnica(chave, titulo, descricao) {
@@ -259,6 +280,7 @@
 
   async function abrir() {
     garantirEstrutura();
+    $('modalAssinaturaSaaS').style.zIndex = usuarioBloqueadoTrial ? '10001' : '';
     quantidadeMeses = 1;
     if ($('quantidadeMesesAssinatura')) $('quantidadeMesesAssinatura').value = '1';
     $('statusPagamentoAssinatura').textContent = 'Carregando sua assinatura…';
@@ -276,6 +298,7 @@
 
   function fechar() {
     $('modalAssinaturaSaaS')?.classList.add('escondido');
+    if ($('modalAssinaturaSaaS')) $('modalAssinaturaSaaS').style.zIndex = '';
     if (monitorPagamento) clearInterval(monitorPagamento);
     monitorPagamento = null;
   }
@@ -285,6 +308,9 @@
     usuarioBloqueadoTrial = Object.assign({}, usuario || {});
     $('trialEncerradoEmpresa').textContent = usuarioBloqueadoTrial.empresaNome || 'Empresa vinculada';
     $('trialEncerradoUsuario').textContent = usuarioBloqueadoTrial.usuario || usuarioBloqueadoTrial.nome || 'Usuário autenticado';
+    const permissoesConfig = usuarioBloqueadoTrial.permissoes?.configuracoes;
+    $('btnPlanosTrialEncerrado').hidden = usuarioBloqueadoTrial.perfil !== 'admin' &&
+      usuarioBloqueadoTrial.administrador !== true && permissoesConfig !== true && permissoesConfig?.editar !== true;
     $('bloqueioTrialEncerrado').hidden = false;
   }
 
@@ -296,6 +322,14 @@
     const atual = planoAtual();
     const tipoAlteracao = planoEscolhido.id === atual?.id ? 'renovacao'
       : Number(planoEscolhido.preco_referencia) < Number(atual?.preco_referencia || 0) ? 'downgrade' : 'upgrade';
+    const cotacao = await window.api.supabaseassinaturassaas('cotar_checkout', { planoId: planoEscolhido.id, tipoAlteracao, quantidadeMeses });
+    if (!cotacao?.sucesso) {
+      $('statusPagamentoAssinatura').textContent = cotacao?.erro || 'Não foi possível calcular a assinatura.';
+      botao.disabled = false;
+      return;
+    }
+    const confirmado = await window.confirmModal(`Confirmar ${moeda(cotacao.oferta?.valorTotal)} por ${quantidadeMeses} mês(es)? Notas fiscais são cobradas separadamente por uso, com saldo na carteira.`, { titulo: 'Confirmar assinatura' });
+    if (!confirmado) { botao.disabled = false; $('statusPagamentoAssinatura').textContent = ''; return; }
     const resposta = await window.api.supabaseassinaturassaas('criar_checkout', { planoId: planoEscolhido.id, tipoAlteracao, quantidadeMeses });
     if (!resposta?.sucesso || !resposta.link) {
       $('statusPagamentoAssinatura').textContent = resposta?.erro || 'Não foi possível preparar o pagamento.';

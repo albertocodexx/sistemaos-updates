@@ -81,6 +81,7 @@ let urlRecuperacaoPendente = encontrarUrlRecuperacao(process.argv);
 let urlAberturaOSPendente = encontrarUrlAberturaOS(process.argv);
 let servicosEmSegundoPlanoEmAndamento = null;
 let servicosEmSegundoPlanoProntos = false;
+let timerFilaWhatsAppEmpresa = null;
 
 function mostrarJanelaPrincipal() {
   if (!janelaPrincipal || janelaPrincipal.isDestroyed()) {
@@ -437,6 +438,17 @@ function iniciarServicosEmSegundoPlano() {
         supabaseDesktop.criarPreferenciaMercadoPago(dados)
       ));
       whatsapp.definirRoteadorApiOficial?.((dados) => supabaseDesktop.rotearWhatsAppOficial(dados));
+      const processarFilaWhatsAppEmpresa = async () => {
+        if (!whatsapp.estaConectado?.()) return;
+        await supabaseDesktop.processarFilaWhatsAppPc?.((telefone, mensagem) => (
+          whatsapp.enviarMensagem(telefone, mensagem)
+        ));
+      };
+      await processarFilaWhatsAppEmpresa().catch(() => {});
+      if (!timerFilaWhatsAppEmpresa) {
+        timerFilaWhatsAppEmpresa = setInterval(() => processarFilaWhatsAppEmpresa().catch(() => {}), 60_000);
+        timerFilaWhatsAppEmpresa.unref?.();
+      }
     } catch (err) {
       console.error('[Startup] Supabase Desktop indisponível:', err.message);
     }

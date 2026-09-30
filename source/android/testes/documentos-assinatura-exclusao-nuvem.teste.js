@@ -12,7 +12,7 @@ const tela = ler('www/index.html');
 const fluxo = ler('www/js/documentos-recebidos.js');
 const historico = ler('www/js/historico.js');
 const migracao = fs.readFileSync(
-  path.resolve(raiz, '..', 'sistemaos-pc', 'supabase', 'migrations', '20260905000100_reforcar_permissoes_assinatura_remota.sql'),
+  path.resolve(raiz, '..', 'sistemaos-pc', 'supabase', 'migrations', '20260905000200_reforcar_permissoes_assinatura_remota.sql'),
   'utf8'
 );
 

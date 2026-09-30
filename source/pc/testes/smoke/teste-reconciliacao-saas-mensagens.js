@@ -16,6 +16,7 @@ function bancoMemoria(tabelas, rpc) {
     const q = {
       select() { return q; }, update(v) { alteracao = v; return q; },
       eq(k, v) { filtros.push(r => r[k] === v); return q; },
+      neq(k, v) { filtros.push(r => r[k] !== v); return q; },
       is(k, v) { filtros.push(r => (r[k] ?? null) === v); return q; },
       in(k, v) { filtros.push(r => v.includes(r[k])); return q; },
       lt(k, v) { filtros.push(r => r[k] < v); return q; },

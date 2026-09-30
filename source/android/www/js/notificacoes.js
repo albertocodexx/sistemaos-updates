@@ -561,7 +561,7 @@
       if (!extra.numeroOS) return;
       var abrir = function () {
         if (extra.tela === 'cobrancas' && root.SistemaOSCobrancas && typeof root.SistemaOSCobrancas.abrir === 'function') {
-          root.SistemaOSCobrancas.abrir(extra.numeroOS, extra.lembreteId || '');
+          root.SistemaOSCobrancas.abrir(extra.numeroOS, extra.lembreteId || '', extra.tipo || '');
           return;
         }
         if (root.SistemaOSConsulta && typeof root.SistemaOSConsulta.abrirOS === 'function') {
