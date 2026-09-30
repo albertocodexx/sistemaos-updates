@@ -3808,15 +3808,16 @@ function obterEstatisticasOS(filtro) {
 // ═══════════════════════════════════════════════════════════════
 function exportarBackupCompleto(caminhoDestino) {
   const database = loadDB();
-  // v8: inclui também autorizações de desbloqueio.
+  // v9: inclui contador de clientes e integridade criptográfica do conteúdo.
   const db6 = _initPagamentos(_initCobrancas(database));
   const configBackup = Object.assign({}, db6.config);
   for (const campo of [...CAMPOS_CONFIG_SECRETOS, 'senhaExclusao']) delete configBackup[campo];
   const pacote = {
     tipo: 'backup-sistema-os',
-    versaoBackup: 8,
+    versaoBackup: 9,
     geradoEm: new Date().toISOString(),
     proximoNumero: db6.proximoNumero,
+    proximoClienteId: db6.proximoClienteId || 10000,
     proximoEstoqueId: db6.proximoEstoqueId,
     proximoPecaId: db6.proximoPecaId || 1,
     proximoCodigoInterno: db6.proximoCodigoInterno || 1,
@@ -3848,6 +3849,10 @@ function exportarBackupCompleto(caminhoDestino) {
     garantias: db6.garantias || [],
     desbloqueios: db6.desbloqueios || []
   };
+  pacote.integridade = {
+    algoritmo: 'sha256',
+    hash: crypto.createHash('sha256').update(JSON.stringify(pacote)).digest('hex')
+  };
   fs.writeFileSync(caminhoDestino, JSON.stringify(pacote, null, 2), 'utf-8');
   return {
     caminho: caminhoDestino,
@@ -3866,12 +3871,29 @@ function importarBackup(caminhoOrigem) {
   let pacote;
   try { pacote = JSON.parse(raw); } catch { throw new Error('Arquivo inválido ou corrompido.'); }
   if (!pacote || typeof pacote !== 'object') throw new Error('Estrutura de backup inválida.');
+  if (pacote.integridade) {
+    const integridade = pacote.integridade;
+    if (integridade.algoritmo !== 'sha256' || !/^[a-f0-9]{64}$/i.test(String(integridade.hash || ''))) {
+      throw new Error('Assinatura de integridade do backup inválida.');
+    }
+    const verificavel = { ...pacote };
+    delete verificavel.integridade;
+    const calculado = crypto.createHash('sha256').update(JSON.stringify(verificavel)).digest('hex');
+    const esperado = Buffer.from(String(integridade.hash).toLowerCase(), 'hex');
+    const atual = Buffer.from(calculado, 'hex');
+    if (esperado.length !== atual.length || !crypto.timingSafeEqual(esperado, atual)) {
+      throw new Error('O backup foi alterado ou está corrompido.');
+    }
+  }
 
   // CRIT-6: Sanitiza registros importados para evitar injeção de dados
   let ordensImportadas = Array.isArray(pacote.ordens) ? pacote.ordens.map(os => sanitizarValor(os)) : [];
   let estoqueImportado = Array.isArray(pacote.estoque) ? pacote.estoque.map(e => sanitizarValor(e)) : [];
 
   const database = loadDB();
+  if (pacote.proximoClienteId) {
+    database.proximoClienteId = Math.max(database.proximoClienteId || 10000, Number(pacote.proximoClienteId) || 10000);
+  }
   const numerosExistentes = new Set(database.ordens.map(o => o.numero));
   const idsEstoqueExistentes = new Set(database.estoque.map(e => e.id));
 
@@ -4117,6 +4139,28 @@ function importarBackup(caminhoOrigem) {
   if (pacote.proximoDesbloqueioId) {
     database.proximoDesbloqueioId = Math.max(database.proximoDesbloqueioId || 1, pacote.proximoDesbloqueioId);
   }
+
+  // Coleções de auditoria também fazem parte de uma restauração completa.
+  // O identificador estável (ou uma impressão do registro legado) impede que
+  // importar o mesmo backup duas vezes duplique o histórico.
+  const mesclarLog = (nome, itens) => {
+    if (!Array.isArray(itens) || !itens.length) return;
+    const atuais = Array.isArray(database[nome]) ? database[nome] : [];
+    const chave = item => String(item?.id || crypto.createHash('sha256').update(JSON.stringify(item || {})).digest('hex'));
+    const existentes = new Set(atuais.map(chave));
+    for (const item of itens) {
+      const limpa = sanitizarValor(item);
+      const id = chave(limpa);
+      if (!existentes.has(id)) {
+        atuais.push(limpa);
+        existentes.add(id);
+      }
+    }
+    database[nome] = atuais;
+  };
+  mesclarLog('historicoExclusoes', pacote.historicoExclusoes);
+  mesclarLog('logEstoque', pacote.logEstoque);
+  mesclarLog('logPecas', pacote.logPecas);
 
   saveDB(database);
   return { totalOrdens: ordensImportadas.length, importadas, duplicadasIgnoradas, importadasEstoque };
@@ -5773,6 +5817,7 @@ module.exports.buscarHistoricoCliente = clientesRepository.buscarHistoricoClient
 module.exports.listarClientes = clientesRepository.listarClientes;
 module.exports.buscarClientes = clientesRepository.buscarClientes;
 module.exports.obterPerfilCliente = clientesRepository.obterPerfilCliente;
+module.exports.exportarDadosCompletosCliente = clientesRepository.exportarDadosCompletosCliente;
 module.exports.atualizarDadosCliente = clientesRepository.atualizarDadosCliente;
 module.exports.excluirCliente = clientesRepository.excluirCliente;
 

@@ -3060,3 +3060,26 @@ body.qr-camera-ativa #leitor-qr-camera,body.qr-camera-ativa #leitor-qr-camera *{
 .fiscal-mobile-acoes{display:flex;flex-wrap:wrap;gap:8px;margin-top:5px}
 .fiscal-mobile-acoes button{min-height:42px}
 @media(max-width:420px) { .fiscal-mobile-cabecalho { flex-wrap:wrap; } }
+
+/* Assistente: modal compacto, monocromático e independente da marca da empresa. */
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.ia-mobile-atalho{position:fixed;right:16px;bottom:max(18px,env(safe-area-inset-bottom));z-index:10950;width:58px;height:58px;border:1px solid var(--cor-borda-forte);border-radius:18px;background:var(--cor-texto);color:var(--cor-fundo);box-shadow:var(--sombra-elevada);display:grid;place-items:center;padding:0}
+.ia-mobile-atalho[hidden]{display:none!important}
+.ia-mobile-atalho svg{width:30px;height:30px;fill:currentColor}
+.ia-mobile-atalho:focus-visible,.ia-mobile-dialogo button:focus-visible,.ia-mobile-dialogo textarea:focus-visible{outline:3px solid var(--acento-primario);outline-offset:2px}
+.ia-mobile-dialogo{position:fixed;inset:0;z-index:20000;padding:max(12px,env(safe-area-inset-top)) 10px max(10px,env(safe-area-inset-bottom));background:rgba(0,0,0,.78);backdrop-filter:blur(8px);display:grid;place-items:end center}
+.ia-mobile-dialogo[hidden]{display:none!important}
+.ia-mobile-caixa{width:min(720px,100%);height:min(86dvh,780px);min-height:420px;border:1px solid var(--cor-borda-forte);border-radius:20px;background:var(--cor-fundo-elevado);box-shadow:var(--sombra-elevada);display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;overflow:hidden}
+.ia-mobile-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:17px;border-bottom:1px solid var(--cor-borda);background:var(--cor-card)}
+.ia-mobile-topo span{font-size:10px;font-weight:800;letter-spacing:.13em;color:var(--cor-texto-fraco)}
+.ia-mobile-topo h2{margin:3px 0 2px;font-size:20px}.ia-mobile-topo p{margin:0;color:var(--cor-texto-fraco);font-size:13px}
+.ia-mobile-topo-acoes{display:flex;gap:8px}.ia-mobile-topo-acoes button{width:42px;height:42px;border:1px solid var(--cor-borda);border-radius:11px;background:var(--cor-fundo);color:var(--cor-texto);font:700 24px/1 var(--fonte)}
+.ia-mobile-mensagens{overflow:auto;padding:16px;display:flex;flex-direction:column;gap:11px;overscroll-behavior:contain}
+.ia-mobile-msg{max-width:90%;padding:12px 13px;border:1px solid var(--cor-borda);border-radius:14px;line-height:1.48;overflow-wrap:anywhere;white-space:pre-wrap}
+.ia-mobile-msg p{margin:0}.ia-mobile-msg p+p{margin-top:8px}.ia-mobile-msg-usuario{align-self:flex-end;background:var(--cor-texto);color:var(--cor-fundo);border-bottom-right-radius:4px}.ia-mobile-msg-assistente{align-self:flex-start;background:var(--cor-card);border-bottom-left-radius:4px}
+.ia-mobile-status{min-height:20px;margin:0;padding:0 16px 8px;color:var(--cor-texto-fraco);font-size:12px}
+.ia-mobile-formulario{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;padding:12px;border-top:1px solid var(--cor-borda);background:var(--cor-card)}
+.ia-mobile-formulario textarea{width:100%;min-height:52px;max-height:120px;resize:none;padding:12px;border:1px solid var(--cor-borda-forte);border-radius:12px;background:var(--cor-fundo);color:var(--cor-texto);font:inherit}.ia-mobile-formulario button{min-width:94px}
+body.ia-mobile-aberta{overflow:hidden}
+@media(max-width:480px){.ia-mobile-dialogo{padding:0}.ia-mobile-caixa{height:100dvh;border:0;border-radius:0}.ia-mobile-msg{max-width:94%}.ia-mobile-formulario{grid-template-columns:1fr}.ia-mobile-formulario button{width:100%}}
+@media(prefers-reduced-motion:reduce){.ia-mobile-atalho,.ia-mobile-dialogo *{transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}

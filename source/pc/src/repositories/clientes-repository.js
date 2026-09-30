@@ -213,6 +213,80 @@ function createClientesRepository({ loadDB, saveDB }) {
     return lista.find(c => c.chave === chave) || null;
   }
 
+  // Exportação portátil do prontuário completo do cliente. A seleção parte
+  // sempre da mesma chave usada pela aba Clientes e cruza somente registros
+  // daquele cliente/OS; isso evita que nomes parecidos tragam dados de outra
+  // pessoa. O processo principal decide onde gravar e copia os PDFs locais.
+  function exportarDadosCompletosCliente(chave) {
+    const perfil = obterPerfilCliente(chave);
+    if (!perfil) throw new Error('Cliente não encontrado.');
+    const database = loadDB();
+    const corresponde = (nome, cpf, clienteId) => _clienteChave(nome, cpf, clienteId) === chave;
+
+    const ordens = (database.ordens || []).filter(item => {
+      const cliente = item.cliente || {};
+      return corresponde(cliente.nome, cliente.cpf, cliente.clienteId);
+    });
+    const numerosOS = new Set(ordens.map(item => String(item.numero || '').trim()).filter(Boolean));
+    const vendas = (database.estoque || []).filter(item => item.status === 'Vendido' &&
+      corresponde(item.compradorNome, item.compradorCpf, item.compradorClienteId));
+    const compras = (database.compras || []).filter(item => {
+      const vendedor = item.vendedor || {};
+      return corresponde(vendedor.nome, vendedor.cpf, vendedor.clienteId);
+    });
+    const desbloqueios = (database.desbloqueios || []).filter(item => {
+      const cliente = item.cliente || {};
+      return corresponde(cliente.nome, cliente.cpf, cliente.clienteId);
+    });
+    const orcamentos = (database.orcamentos || []).filter(item => {
+      const cliente = item.cliente || {};
+      return corresponde(cliente.nome, cliente.cpf, cliente.clienteId);
+    });
+    const entregas = (database.entregas || []).filter(item => numerosOS.has(String(item.numeroOS || '').trim()));
+    const entregasPendentes = (database.entregasPendentes || []).filter(item => numerosOS.has(String(item.numeroOS || '').trim()));
+    const garantias = (database.garantias || []).filter(item => numerosOS.has(String(item.numeroOS || '').trim()));
+    const pagamentos = (database.pagamentos || []).filter(item =>
+      numerosOS.has(String(item.osNumero || item.numeroOS || '').trim()) ||
+      ordens.some(ordem => ordem.pagamentoId && ordem.pagamentoId === item.id));
+    const idsPagamento = new Set(pagamentos.map(item => item.id).filter(Boolean));
+    const reembolsos = (database.reembolsos || []).filter(item => idsPagamento.has(item.pagamentoId));
+    const cobrancas = (database.cobrancas || []).filter(item =>
+      numerosOS.has(String(item.osNumero || item.numeroOS || '').trim()));
+    const telefone = String(perfil.telefone || '').replace(/\D/g, '');
+    const telefoneNacional = telefone.startsWith('55') ? telefone.slice(2) : telefone;
+    const mensagensWhatsApp = (database.logMensagensWapp || []).filter(item => {
+      if (numerosOS.has(String(item.osNumero || '').trim())) return true;
+      if (!telefoneNacional) return false;
+      const atual = String(item.telefone || '').replace(/\D/g, '');
+      return atual === telefoneNacional || atual === `55${telefoneNacional}`;
+    });
+    const logIA = (database.logIA || []).filter(item => numerosOS.has(String(item.osNumero || '').trim()));
+
+    const dados = {
+      tipo: 'dados-completos-cliente-sistema-os',
+      versao: 1,
+      geradoEm: new Date().toISOString(),
+      cliente: perfil,
+      ordens,
+      orcamentos,
+      vendas,
+      compras,
+      entregas,
+      entregasPendentes,
+      garantias,
+      desbloqueios,
+      pagamentos,
+      reembolsos,
+      cobrancas,
+      mensagensWhatsApp,
+      logIA
+    };
+    dados.totais = Object.fromEntries(Object.entries(dados)
+      .filter(([, valor]) => Array.isArray(valor))
+      .map(([nome, valor]) => [nome, valor.length]));
+    return dados;
+  }
+
   // ─── v46.2.8 — Editar dados de cliente (nome/telefone/CPF) ────────────────
   // "Cliente" é um agregado calculado on-the-fly por agregarClientes() a
   // partir de três coleções (ordens[].cliente, estoque[] comprador*, e
@@ -388,6 +462,7 @@ function createClientesRepository({ loadDB, saveDB }) {
     listarClientes,
     buscarClientes,
     obterPerfilCliente,
+    exportarDadosCompletosCliente,
     atualizarDadosCliente,
     excluirCliente
   };

@@ -813,6 +813,7 @@
         <div id="perfilClienteConteudo" style="max-height:65vh;overflow-y:auto;"></div>
         <div class="modal-rodape">
           <button class="botao botao-secundario" data-fechar="modalPerfilCliente">Fechar</button>
+          <button class="botao botao-secundario" id="btnExportarCliente" data-permissao="clientes" onclick="exportarPerfilClienteCompleto()"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg> Exportar tudo</button>
           <button class="botao botao-perigo" id="btnExcluirCliente" data-permissao="clientes" onclick="excluirPerfilCliente()">Excluir cliente</button>
           <button class="botao botao-secundario" id="btnEditarCliente" data-permissao="os" onclick="editarPerfilCliente()"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Editar dados</button>
           <button class="botao botao-primario" id="btnNovaOSCliente" data-permissao="os" onclick="novaOSParaCliente()"><svg class="icone-nav" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icone-ferramenta"/></svg> Nova OS para este cliente</button>

@@ -72,6 +72,7 @@ function criarApiPublica({ invocar, assinar, removerAssinatura }) {
   supabaseassinaturassaas:  (acao, dados) => invocar('supabase:assinaturasSaas', acao, dados),
   supabasefiscaldocumentos: (acao, dados) => invocar('supabase:fiscalDocumentos', acao, dados),
   fiscalabrirdanfse: (notaId) => invocar('fiscal:abrirDanfse', notaId),
+  fiscalcompartilhardanfse: (notaId, telefone) => invocar('fiscal:compartilharDanfse', notaId, telefone),
   supabaseintegracaowhatsappapi: (acao, dados) => invocar('supabase:integracaoWhatsAppApi', acao, dados),
   supabaseintegracaoia: (acao, dados) => invocar('supabase:integracaoIA', acao, dados),
   sistemaabrirlinkseguro: (url) => invocar('sistema:abrirLinkSeguro', url),
@@ -234,6 +235,7 @@ function criarApiPublica({ invocar, assinar, removerAssinatura }) {
   clienteslistar:   ()     => invocar('clientes:listar'),
   clientesbuscar:   (t)    => invocar('clientes:buscar', t),
   clientesperfil:   (ch)   => invocar('clientes:perfil', ch),
+  clientesexportarcompleto: (ch, usuario) => invocar('clientes:exportarCompleto', ch, usuario),
   clientesatualizardados: (ch, dados, usuario) => invocar('clientes:atualizarDados', ch, dados, usuario),
   clientesexcluir: (ch, usuario) => invocar('clientes:excluir', ch, usuario),
   // v20: Financeiro, cruzamento, WhatsApp

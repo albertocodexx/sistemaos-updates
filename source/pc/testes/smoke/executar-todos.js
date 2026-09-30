@@ -89,6 +89,7 @@ const testes = [
   'teste-fluxo-comprovante-entrega.js',
   'teste-backup-atomico-fila.js',
   'teste-backup-identidade-nuvem.js',
+  'teste-exportacao-cliente-backup-completo.js',
   'teste-configuracao-compartilhada-mobile.js',
   'teste-isolamento-multiempresa-erros.js',
   'teste-comercial-supabase.js',

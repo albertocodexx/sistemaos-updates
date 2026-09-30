@@ -4,6 +4,7 @@ allowBuilds:
   electron-winstaller: true
   protobufjs: true
 overrides:
+  axios: 1.20.0
   builder-util-runtime: 9.7.0
   js-yaml: 4.3.2
   sharp: 0.35.4

@@ -2467,6 +2467,11 @@ class DesktopSupabaseRuntime {
       operacional: !!this.client,
       autenticado: !!this.usuario,
       administradorGlobal: this.contexto?.administrador_global === true,
+      administradorEmpresa: this.contexto?.administrador_global !== true &&
+        this.contexto?.acesso_somente_cobranca !== true &&
+        ['administrador', 'admin', 'proprietário', 'proprietario'].includes(
+          String(this.contexto?.cargo || '').toLowerCase().trim()
+        ),
       empresaId: this.contexto?.empresa_id || '',
       empresaNome: this.contexto?.empresa_nome || '',
       planoNome: this.contexto?.plano_nome || '',

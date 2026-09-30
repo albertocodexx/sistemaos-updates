@@ -2286,6 +2286,23 @@ window.excluirPerfilCliente = async function() {
   toast(`Cliente excluído e ${resultado.registrosAtualizados} registro(s) anonimizado(s).`, 'sucesso');
 };
 
+window.exportarPerfilClienteCompleto = async function() {
+  const cliente = window._clientePerfilAtual;
+  if (!cliente) return;
+  const botao = $('btnExportarCliente');
+  if (botao) botao.disabled = true;
+  try {
+    const resultado = await window.api.clientesexportarcompleto(cliente.chave, usuarioAtual?.id);
+    if (resultado?.cancelado) return;
+    if (!resultado?.sucesso) throw new Error(resultado?.erro || 'Não foi possível exportar o cliente.');
+    toast(`Dados completos exportados com ${resultado.arquivos || 0} arquivo(s), hashes de integridade e histórico relacionado.`, 'sucesso');
+  } catch (erro) {
+    toast(erro?.message || String(erro), 'erro');
+  } finally {
+    if (botao) botao.disabled = false;
+  }
+};
+
 window.abrirPerfilCliente = function(chave) {
   const c = _clientesCache.find(x => x.chave === chave);
   if (!c) return;

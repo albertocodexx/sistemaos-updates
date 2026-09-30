@@ -38,6 +38,8 @@ assert.match(config, /\[functions\.fiscal-documentos-provedor\][\s\S]*verify_jwt
 assert.match(tela, /Abrir DANFSe/);
 assert.match(tela, /DANFSe sendo preparado/);
 assert.match(tela, /fiscalabrirdanfse/);
+assert.match(tela, /data-compartilhar-danfse/);
+assert.match(tela, /fiscalcompartilhardanfse/);
 assert.match(tela, /fiscalTipoPrestador/);
 assert.match(tela, /fiscalDocumentoPrestador/);
 assert.match(tela, /function cnpjValido/);
@@ -55,9 +57,12 @@ assert.match(tela, /documento\?\.valorServico \|\| documento\?\.valorMaoDeObra/)
 assert.match(tela, /não inclua o aparelho ou produto/);
 assert.match(tela, /setTimeout\(\(\) => carregar\(\)/);
 assert.match(preload, /fiscalabrirdanfse:\s*\(notaId\)\s*=>\s*invocar\('fiscal:abrirDanfse', notaId\)/);
+assert.match(preload, /fiscalcompartilhardanfse:\s*\(notaId, telefone\)\s*=>\s*invocar\('fiscal:compartilharDanfse', notaId, telefone\)/);
 assert.match(ipc, /ipcMain\.handle\('fiscal:abrirDanfse'/);
+assert.match(ipc, /ipcMain\.handle\('fiscal:compartilharDanfse'/);
+assert.match(ipc, /whatsapp\?\.enviarDocumento\?\.\(telefone, arquivo, nomeArquivo\)/);
 assert.match(ipc, /destino\.protocol !== 'https:'/);
 assert.match(ipc, /bytes\.subarray\(0, 5\)\.toString\('ascii'\) !== '%PDF-'/);
 assert.match(ipc, /shell\.openPath\(arquivo\)/);
 
-console.log('OK: NFS-e autorizada recebe DANFSe oficial privado, seguro e aberto em PDF no PC.');
+console.log('OK: NFS-e autorizada recebe DANFSe oficial privado, seguro, aberto e compartilhável no PC.');

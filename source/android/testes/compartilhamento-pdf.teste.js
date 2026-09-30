@@ -104,6 +104,7 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
     const garantia = ler('www/js/garantia-tela.js');
     const desbloqueio = ler('www/js/desbloqueios-tela.js');
     const consulta = ler('www/js/consulta.js');
+    const fiscal = ler('www/js/fiscal-tela.js');
     const html = ler('www/index.html');
     assert.match(html, /id="btn-compartilhar-pdf"/);
     assert.match(app, /compartilharPdfHtml/);
@@ -119,10 +120,13 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
     assert.match(garantia, /compartilharPdfHtml/);
     assert.match(desbloqueio, /compartilharPdfHtml/);
     assert.match(consulta, /compartilharPdfPorUrl/);
+    assert.match(fiscal, /Compartilhar DANFSe/);
+    assert.match(fiscal, /compartilharPdfPorUrl/);
+    assert.match(fiscal, /Segue o DANFSe da NFS-e/);
     assert.match(ler('www/js/compartilhar-arquivo.js'), /TEMPO_LIMITE_DOWNLOAD_PDF_MS/,
       'download do PDF remoto deve ter limite para não deixar o botão preso indefinidamente');
 
-    console.log('OK: OS, compra, venda, entrega, garantia e desbloqueio compartilham PDF com mensagem pronta no Android.');
+    console.log('OK: OS, compra, venda, entrega, garantia, desbloqueio e DANFSe compartilham PDF com mensagem pronta no Android.');
   } finally {
     dom.window.close();
   }

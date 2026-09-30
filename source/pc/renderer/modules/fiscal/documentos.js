@@ -65,7 +65,7 @@
   function aplicarDisponibilidade(ativa) {
     fiscalHabilitado = ativa === true;
     const secao = $('configFiscalEmpresa');
-    if (secao && !fiscalHabilitado) secao.hidden = true;
+    if (secao) secao.dataset.moduloFiscalAtivo = fiscalHabilitado ? 'true' : 'false';
   }
 
   function fecharCadastroFiscalSuporte() {
@@ -240,9 +240,11 @@
             <div class="campo"><label for="fiscalCodigoMunicipioPrestacao">Município padrão da prestação</label><input id="fiscalCodigoMunicipioPrestacao" inputmode="numeric" maxlength="7" placeholder="Vazio = município do prestador"></div>
           </div>
           <div class="campo" style="margin-top:10px"><label for="fiscalDescricaoServico">Descrição padrão do serviço</label><textarea id="fiscalDescricaoServico" maxlength="500" rows="3" placeholder="Descreva claramente o serviço prestado"></textarea></div>
-          <div class="grade-2" style="margin-top:10px">
-            <label class="campo-checkbox"><input id="fiscalAutoOs" type="checkbox"><span>Preparar NFS-e ao concluir uma OS</span></label>
-            <label class="campo-checkbox"><input id="fiscalAutoVenda" type="checkbox"><span>Preparar NFS-e em venda somente quando houver serviço</span></label>
+          <div class="fiscal-aviso" style="margin-top:12px"><strong>Como cada operação preenche a NFS-e</strong><br>
+            <b>OS:</b> usa o cliente da OS, o valor total do serviço/orçamento e identifica o número da OS.<br>
+            <b>Venda:</b> usa o comprador e somente o valor de serviço ou mão de obra; o preço do aparelho/produto não entra na NFS-e.<br>
+            <b>Compra:</b> não gera nota de saída. Guarde o documento recebido do fornecedor.<br>
+            <b>Outros:</b> emissão avulsa ainda não possui formulário. NF-e/NFC-e de produtos ainda não estão disponíveis.
           </div>
           <details class="fiscal-avancado">
             <summary>Totais aproximados de tributos</summary>
@@ -257,7 +259,7 @@
 
         <section class="fiscal-painel" data-fiscal-painel="4" hidden>
           <h3 class="fiscal-etapa-titulo">Revise o cadastro da sua empresa</h3>
-          <p class="fiscal-ajuda">O administrador preenche os dados da própria empresa aqui. O conector de emissão ainda não está disponível; salvar o cadastro não libera notas reais.</p>
+          <p class="fiscal-ajuda">O administrador preenche os dados da própria empresa aqui, mesmo antes de ativar o módulo fiscal. Salvar o cadastro não libera notas reais; emissão e recarga continuam bloqueadas até a ativação.</p>
           <div class="grade-2" hidden aria-hidden="true">
             <div class="campo"><label for="fiscalRotaEmissao">Rota de emissão</label><select id="fiscalRotaEmissao"><option value="nfse_nacional">Emissor Nacional / SEFIN Nacional</option><option value="municipal">Prefeitura ou provedor municipal</option><option value="provedor">Gateway fiscal contratado</option></select></div>
             <div class="campo"><label for="fiscalAmbiente">Ambiente</label><select id="fiscalAmbiente"><option value="homologacao">Homologação (teste)</option><option value="producao">Produção (NFS-e real)</option></select></div>
@@ -353,6 +355,8 @@
     $('listaNotasFiscais').addEventListener('click', (evento) => {
       const botao = evento.target.closest('[data-abrir-danfse]');
       if (botao) abrirDanfse(botao.dataset.abrirDanfse, botao);
+      const compartilhar = evento.target.closest('[data-compartilhar-danfse]');
+      if (compartilhar) compartilharDanfse(compartilhar.dataset.compartilharDanfse, compartilhar);
       const cancelar = evento.target.closest('[data-cancelar-nota]');
       if (cancelar) cancelarSolicitacao(cancelar.dataset.cancelarNota, cancelar);
       const cancelarAutorizada = evento.target.closest('[data-cancelar-nfse]');
@@ -606,7 +610,7 @@
     $('listaNotasFiscais').innerHTML = notas.length ? `<div class="fiscal-lista-documentos">${notas.slice(0, 8).map((nota) => {
       const danfseDisponivel = nota.status === 'autorizada' && Boolean(nota.danfse_storage_path || nota.danfse_url || nota.pdf_url);
       const acaoDanfse = danfseDisponivel
-        ? `<button type="button" class="botao botao-secundario botao-pequeno" data-abrir-danfse="${escaparHtml(nota.id)}">Abrir DANFSe</button>`
+        ? `<span class="fiscal-acoes"><button type="button" class="botao botao-secundario botao-pequeno" data-abrir-danfse="${escaparHtml(nota.id)}">Abrir DANFSe</button><button type="button" class="botao botao-secundario botao-pequeno" data-compartilhar-danfse="${escaparHtml(nota.id)}">Compartilhar</button></span>`
         : (nota.status === 'autorizada' ? '<small class="campo-desc">DANFSe sendo preparado</small>' : '');
       const acaoCancelar = !empresaSuporte && ['rascunho', 'aguardando_configuracao'].includes(nota.status)
         ? `<button type="button" class="botao botao-secundario botao-pequeno" data-cancelar-nota="${escaparHtml(nota.id)}">Cancelar solicitação</button>`
@@ -745,6 +749,30 @@
       const resposta = await window.api.fiscalabrirdanfse?.(id);
       if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível abrir o DANFSe.');
       window.toast?.('DANFSe aberto no leitor de PDF.', 'sucesso');
+    } catch (erro) {
+      window.toast?.(erro.message || String(erro), 'erro');
+    } finally {
+      if (botao) { botao.disabled = false; botao.textContent = textoAnterior; }
+    }
+  }
+
+  async function compartilharDanfse(id, botao) {
+    if (!id || botao?.disabled) return;
+    const telefone = await promptModal('Informe o WhatsApp do cliente com DDD:', '', {
+      titulo: 'Compartilhar DANFSe'
+    });
+    if (telefone === null) return;
+    const digitos = String(telefone || '').replace(/\D/g, '');
+    if (digitos.length < 10 || digitos.length > 15) {
+      window.toast?.('Informe um telefone válido com DDD.', 'aviso');
+      return;
+    }
+    const textoAnterior = botao?.textContent || 'Compartilhar';
+    if (botao) { botao.disabled = true; botao.textContent = 'Enviando…'; }
+    try {
+      const resposta = await window.api.fiscalcompartilhardanfse?.(id, digitos);
+      if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível compartilhar o DANFSe.');
+      window.toast?.('DANFSe confirmado pelo servidor do WhatsApp.', 'sucesso');
     } catch (erro) {
       window.toast?.(erro.message || String(erro), 'erro');
     } finally {
@@ -936,7 +964,7 @@
     if (!empresaSuporte) aplicarDisponibilidade(status?.fiscalHabilitado === true);
     secao.hidden = empresaSuporte
       ? !status?.autenticado || status?.administradorGlobal !== true
-      : !status?.autenticado || !status?.empresaId || !fiscalHabilitado;
+      : !status?.autenticado || !status?.empresaId || status?.administradorEmpresa !== true;
     if (secao.hidden) return;
     const resposta = await window.api.supabasefiscaldocumentos?.('resumo', empresaSuporte ? { empresaId: empresaSuporte.id } : {});
     if (!resposta?.sucesso) {
@@ -945,6 +973,10 @@
     }
     resumo = resposta;
     preencher();
+    if (!empresaSuporte && !fiscalHabilitado) {
+      const avisoAtual = String($('statusFiscalEmpresa')?.textContent || '').trim();
+      $('statusFiscalEmpresa').textContent = `Cadastro fiscal disponível. ${avisoAtual} Emissão, saldo e recarga permanecem bloqueados até o módulo fiscal ser habilitado.`;
+    }
     await carregarLimitesEquipe();
   }
 

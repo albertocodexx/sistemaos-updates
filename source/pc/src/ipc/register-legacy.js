@@ -34,14 +34,13 @@ function registerLegacyHandlers(deps) {
     return { sucesso: true };
   });
 
-  ipcMain.handle('fiscal:abrirDanfse', async (_e, notaIdBruto) => {
-    try {
+  async function baixarDanfseLocal(notaIdBruto) {
       const notaId = String(notaIdBruto || '').trim();
-      if (!/^[0-9a-f-]{20,50}$/i.test(notaId)) return { sucesso: false, erro: 'Nota fiscal inválida.' };
+      if (!/^[0-9a-f-]{20,50}$/i.test(notaId)) throw new Error('Nota fiscal inválida.');
       const resultado = await supabaseDesktop?.fiscalDocumentos?.('obter_danfse', { id: notaId });
       const urlBruta = resultado?.danfse?.url;
       if (!resultado?.sucesso || !urlBruta) {
-        return { sucesso: false, erro: resultado?.erro || 'DANFSe indisponível.' };
+        throw new Error(resultado?.erro || 'DANFSe indisponível.');
       }
 
       const validarDestino = (valor) => {
@@ -77,9 +76,30 @@ function registerLegacyHandlers(deps) {
       fs.mkdirSync(pasta, { recursive: true });
       const arquivo = path.join(pasta, `DANFSe-${numero}.pdf`);
       fs.writeFileSync(arquivo, bytes, { mode: 0o600 });
+      return { arquivo, nomeArquivo: `DANFSe-${numero}.pdf`, danfse: resultado.danfse };
+  }
+
+  ipcMain.handle('fiscal:abrirDanfse', async (_e, notaIdBruto) => {
+    try {
+      const { arquivo } = await baixarDanfseLocal(notaIdBruto);
       const erroAbertura = await shell.openPath(arquivo);
       if (erroAbertura) throw new Error(erroAbertura);
       return { sucesso: true };
+    } catch (erro) {
+      return { sucesso: false, erro: erro?.message || String(erro) };
+    }
+  });
+
+  ipcMain.handle('fiscal:compartilharDanfse', async (_e, notaIdBruto, telefoneBruto) => {
+    try {
+      const telefone = String(telefoneBruto || '').replace(/\D/g, '');
+      if (telefone.length < 10 || telefone.length > 15) {
+        return { sucesso: false, erro: 'Informe um telefone válido com DDD.' };
+      }
+      const { arquivo, nomeArquivo } = await baixarDanfseLocal(notaIdBruto);
+      const envio = await whatsapp?.enviarDocumento?.(telefone, arquivo, nomeArquivo);
+      if (!envio?.sucesso) return { sucesso: false, erro: envio?.erro || 'Não foi possível enviar o DANFSe.' };
+      return { sucesso: true, numero: envio.numero, statusEnvio: envio.statusEnvio };
     } catch (erro) {
       return { sucesso: false, erro: erro?.message || String(erro) };
     }
@@ -1421,6 +1441,77 @@ function registerLegacyHandlers(deps) {
   ipcMain.handle('clientes:listar', () => db.listarClientes());
   ipcMain.handle('clientes:buscar', (_e, termo) => db.buscarClientes(termo));
   ipcMain.handle('clientes:perfil', (_e, chave) => db.obterPerfilCliente(chave));
+  ipcMain.handle('clientes:exportarCompleto', async (_e, chave, usuario) => {
+    const dados = db.exportarDadosCompletosCliente(chave);
+    const { canceled, filePaths } = await dialog.showOpenDialog(getJanelaPrincipal(), {
+      title: 'Escolha onde salvar os dados completos do cliente',
+      properties: ['openDirectory', 'createDirectory']
+    });
+    if (canceled || !filePaths?.[0]) return { sucesso: false, cancelado: true };
+
+    const seguro = String(dados.cliente?.nome || 'cliente')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'cliente';
+    const carimbo = new Date().toISOString().replace(/[:.]/g, '-');
+    const destino = path.join(filePaths[0], `Sistema-OS-Cliente-${seguro}-${carimbo}`);
+    const pastaArquivos = path.join(destino, 'arquivos');
+    fs.mkdirSync(pastaArquivos, { recursive: true });
+
+    const crypto = require('crypto');
+    const copia = JSON.parse(JSON.stringify(dados));
+    const copiados = [];
+    const porOrigem = new Map();
+    const extensoes = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
+    const copiarCaminhos = valor => {
+      if (!valor || typeof valor !== 'object') return;
+      for (const [campo, conteudo] of Object.entries(valor)) {
+        if (conteudo && typeof conteudo === 'object') {
+          copiarCaminhos(conteudo);
+          continue;
+        }
+        if (typeof conteudo !== 'string' || !/path$/i.test(campo)) continue;
+        const extensao = path.extname(conteudo).toLowerCase();
+        if (!extensoes.includes(extensao)) continue;
+        try {
+          const real = fs.realpathSync(conteudo);
+          if (!caminhoDentroDe(real, db.getRootDir(), extensoes) || !fs.statSync(real).isFile()) {
+            valor[campo] = '';
+            continue;
+          }
+          let relativo = porOrigem.get(real);
+          if (!relativo) {
+            const hash = crypto.createHash('sha256').update(fs.readFileSync(real)).digest('hex');
+            const nomeBase = path.basename(real).replace(/[^a-z0-9._-]+/gi, '-').slice(-100);
+            relativo = path.posix.join('arquivos', `${hash.slice(0, 10)}-${nomeBase}`);
+            fs.copyFileSync(real, path.join(destino, ...relativo.split('/')));
+            porOrigem.set(real, relativo);
+            copiados.push({ arquivo: relativo, sha256: hash, tamanhoBytes: fs.statSync(real).size });
+          }
+          valor[campo] = relativo;
+        } catch (_) {
+          valor[campo] = '';
+        }
+      }
+    };
+    copiarCaminhos(copia);
+    copia.arquivosExportados = copiados;
+    copia.observacao = 'Arquivo confidencial. Contém dados pessoais e deve ser entregue somente ao titular ou responsável autorizado.';
+
+    const arquivoJson = path.join(destino, 'dados-do-cliente.json');
+    const temporario = `${arquivoJson}.tmp-${process.pid}-${Date.now()}`;
+    const texto = JSON.stringify(copia, null, 2);
+    fs.writeFileSync(temporario, texto, { encoding: 'utf8', mode: 0o600 });
+    fs.renameSync(temporario, arquivoJson);
+    const hashJson = crypto.createHash('sha256').update(texto).digest('hex');
+    fs.writeFileSync(path.join(destino, 'SHA256SUMS.txt'), `${hashJson}  dados-do-cliente.json\n${copiados.map(item => `${item.sha256}  ${item.arquivo}`).join('\n')}\n`, { encoding: 'utf8', mode: 0o600 });
+    auditoria.registrar('clientes:exportarCompleto', {
+      sucesso: true,
+      clienteId: dados.cliente?.clienteId || '',
+      registros: Object.values(dados.totais || {}).reduce((soma, total) => soma + Number(total || 0), 0),
+      arquivos: copiados.length
+    }, usuario);
+    return { sucesso: true, destino, registros: dados.totais, arquivos: copiados.length };
+  });
   
   // v46.2.8 — edição de dados de cliente (nome/telefone/CPF), propagada para
   // todos os registros de origem (OS, itens de estoque vendidos, compras) que
