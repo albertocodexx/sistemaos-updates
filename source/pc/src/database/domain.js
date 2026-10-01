@@ -5827,6 +5827,13 @@ module.exports.excluirCliente = clientesRepository.excluirCliente;
 // para produzir um DRE simplificado por período.
 // ═══════════════════════════════════════════════════════════════
 function obterRelatorioFinanceiro({ mes, ano } = {}) {
+  // Data ISO com fuso deve cair no mês local da operação, não no mês UTC.
+  const mesLocal = valor => {
+    const s = String(valor || '');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.slice(0,7);
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? '' : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  };
   const db = loadDB();
   const agora = new Date();
   const mesAlvo = mes !== undefined ? parseInt(mes) : agora.getMonth() + 1;
@@ -5847,14 +5854,14 @@ function obterRelatorioFinanceiro({ mes, ano } = {}) {
   // Receitas usam o caixa confirmado no período. Estimativas e pendências
   // aparecem separadas e nunca são misturadas com dinheiro recebido.
   const pagamentosDoMes = pagamentos.filter(p =>
-    p.status !== 'reembolsado' && String(p.dataPagamento || '').startsWith(prefixo)
+    p.status !== 'reembolsado' && mesLocal(p.dataPagamento) === prefixo
   );
   const receitaServicos = pagamentosDoMes.reduce((s, p) => s + (Number(p.valor) || 0), 0);
   const numerosOSPagasNoMes = [...new Set(pagamentosDoMes.map(p => p.osNumero).filter(Boolean))];
   const osPagasNoMes = numerosOSPagasNoMes.map(numero => ordens.find(os => os.numero === numero)).filter(Boolean);
 
   const aparelhosVendidos = (db.estoque || []).filter(e =>
-    e.status === 'Vendido' && String(e.dataVenda || '').startsWith(prefixo)
+    e.status === 'Vendido' && mesLocal(e.dataVenda) === prefixo
   );
   const receitaVendas = aparelhosVendidos.reduce((s, e) => s + (Number(e.valorVenda) || 0), 0);
   const totalEntradas = receitaServicos + receitaVendas;
@@ -5878,7 +5885,7 @@ function obterRelatorioFinanceiro({ mes, ano } = {}) {
   const custoAparelhos = aparelhosVendidos.reduce((s, e) =>
     s + (Number(e.valorPago) || 0) + (Number(e.valorGastoPecas) || 0) + (Number(e.gastosExtras) || 0), 0
   );
-  const comprasMes = (db.compras || []).filter(c => String(c.data || '').startsWith(prefixo));
+  const comprasMes = (db.compras || []).filter(c => mesLocal(c.data) === prefixo);
   const custoCompras = comprasMes.reduce((s, c) => s + (Number(c.dadosCompra?.valor) || 0), 0);
   const custoPecasCompra = comprasMes.reduce((s, c) => s + (Number(c.dadosCompra?.custoPecas) || 0), 0);
 
@@ -5891,7 +5898,7 @@ function obterRelatorioFinanceiro({ mes, ano } = {}) {
   // O detalhe une OS abertas no mês e OS que receberam pagamento no mês.
   // Assim a OS aparece com o valor estimado antes mesmo de ser paga.
   const mapaDetalhe = new Map();
-  ordens.filter(os => String(os.data || '').startsWith(prefixo)).forEach(os => mapaDetalhe.set(os.numero, os));
+  ordens.filter(os => mesLocal(os.data) === prefixo).forEach(os => mapaDetalhe.set(os.numero, os));
   osPagasNoMes.forEach(os => mapaDetalhe.set(os.numero, os));
   const detalheOS = Array.from(mapaDetalhe.values()).map(os => {
     const estimado = valorTotalDaOS(os);
@@ -5924,8 +5931,8 @@ function obterRelatorioFinanceiro({ mes, ano } = {}) {
   for (let i = 5; i >= 0; i--) {
     const d = new Date(anoAlvo, mesAlvo - 1 - i, 1);
     const p = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const pagamentosM = pagamentos.filter(pg => pg.status !== 'reembolsado' && String(pg.dataPagamento || '').startsWith(p));
-    const vendasM = (db.estoque || []).filter(e => e.status === 'Vendido' && (e.dataVenda || '').startsWith(p));
+    const pagamentosM = pagamentos.filter(pg => pg.status !== 'reembolsado' && mesLocal(pg.dataPagamento) === p);
+    const vendasM = (db.estoque || []).filter(e => e.status === 'Vendido' && mesLocal(e.dataVenda) === p);
     const idsOSM = new Set(pagamentosM.map(pg => pg.osNumero).filter(Boolean));
     const custoPecasM = (db.logPecas || []).filter(l => l.tipo === 'saida' && idsOSM.has(l.osRef))
       .reduce((s, l) => s + (Number(l.custo) || 0) * (Number(l.quantidade) || 1), 0);

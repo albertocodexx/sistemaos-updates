@@ -9,6 +9,12 @@
   let empresaSuporte = null;
   let dadosLimitesEquipe = null;
 
+  function chamarFiscal(acao, dados = {}) {
+    const destino = empresaSuporte?.plataforma ? { escopo: 'plataforma' }
+      : empresaSuporte ? { empresaId: empresaSuporte.id } : {};
+    return window.api.supabasefiscaldocumentos(acao, { ...dados, ...destino });
+  }
+
   function escaparHtml(valor) {
     return String(valor ?? '').replace(/[&<>"']/g, (caractere) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -120,7 +126,7 @@
       <div class="fiscal-cabecalho">
         <div>
           <div class="config-secao-titulo">NFS-e e DANFSe</div>
-          <p class="campo-desc">Configure a emissão de serviço em quatro etapas. O DANFSe oficial só fica disponível depois que a NFS-e é autorizada.</p>
+          <p class="campo-desc">Preencha os dados da empresa, informe o serviço e conclua a ativação. Você faz tudo por aqui.</p>
         </div>
         <span class="fiscal-selo">Documento fiscal de serviço</span>
       </div>
@@ -153,15 +159,15 @@
       </details>
 
       <div class="fiscal-passos" aria-label="Etapas da configuração fiscal">
-        <button type="button" class="fiscal-passo" data-fiscal-etapa="1" aria-current="step"><span>Etapa 1</span><strong>Prestador</strong></button>
-        <button type="button" class="fiscal-passo" data-fiscal-etapa="2"><span>Etapa 2</span><strong>Município e regime</strong></button>
-        <button type="button" class="fiscal-passo" data-fiscal-etapa="3"><span>Etapa 3</span><strong>Serviço padrão</strong></button>
-        <button type="button" class="fiscal-passo" data-fiscal-etapa="4"><span>Etapa 4</span><strong>Revisão</strong></button>
+        <button type="button" class="fiscal-passo" data-fiscal-etapa="1" aria-current="step"><span>1 de 4</span><strong>Dados da empresa</strong></button>
+        <button type="button" class="fiscal-passo" data-fiscal-etapa="2"><span>2 de 4</span><strong>Prefeitura e impostos</strong></button>
+        <button type="button" class="fiscal-passo" data-fiscal-etapa="3"><span>3 de 4</span><strong>Serviço da nota</strong></button>
+        <button type="button" class="fiscal-passo" data-fiscal-etapa="4"><span>4 de 4</span><strong>Salvar e ativar</strong></button>
       </div>
 
       <div class="fiscal-assistente">
         <section class="fiscal-painel" data-fiscal-painel="1">
-          <h3 class="fiscal-etapa-titulo">Quem prestará o serviço?</h3>
+          <h3 class="fiscal-etapa-titulo">Dados de quem vai emitir a nota</h3>
           <p class="fiscal-ajuda">O documento abaixo será o emitente da NFS-e. MEI emite pelo CNPJ; o CPF do titular é usado somente no acesso ao portal nacional.</p>
           <div class="grade-2">
             <div class="campo"><label for="fiscalTipoPrestador">Perfil fiscal <span class="fiscal-obrigatorio">*</span></label><select id="fiscalTipoPrestador"><option value="mei">MEI (CNPJ)</option><option value="juridica">Empresa (CNPJ)</option><option value="fisica">Pessoa física/autônomo (CPF)</option></select></div>
@@ -174,8 +180,8 @@
           </div>
           <p id="fiscalAvisoPessoaFisica" class="fiscal-aviso" hidden>A emissão por CPF só funciona quando a pessoa física está cadastrada e autorizada como prestadora pelo município. Informar um CPF válido, sozinho, não libera a emissão.</p>
           <p id="fiscalAvisoMei" class="fiscal-aviso">Para emissão automática por API, o MEI também precisa concluir a ativação técnica do seu CNPJ. Não informe senha GOV.BR neste sistema.</p>
-          <details class="fiscal-avancado">
-            <summary>Adicionar endereço do prestador</summary>
+          <details class="fiscal-avancado" open>
+            <summary>Endereço da empresa (necessário para ativar)</summary>
             <div class="grade-2">
               <div class="campo"><label for="fiscalCepPrestador">CEP</label><input id="fiscalCepPrestador" inputmode="numeric" maxlength="9"></div>
               <div class="campo"><label for="fiscalLogradouroPrestador">Logradouro</label><input id="fiscalLogradouroPrestador" maxlength="180"></div>
@@ -184,7 +190,7 @@
               <div class="campo"><label for="fiscalBairroPrestador">Bairro</label><input id="fiscalBairroPrestador" maxlength="100"></div>
             </div>
           </details>
-          <details class="fiscal-avancado">
+          <details class="fiscal-avancado" hidden>
             <summary>Emitente de NF-e / NFC-e (produtos)</summary>
             <p class="fiscal-ajuda">Este cadastro prepara os dados para produtos; não habilita emissão antes do credenciamento e da integração com a SEFAZ. CPF de emitente é restrito a produtor rural com inscrição estadual, conforme a UF.</p>
             <div class="grade-2">
@@ -266,14 +272,14 @@
             <div class="campo" id="fiscalProvedorCampo" hidden><label for="fiscalProvedorNome">Nome da prefeitura/provedor</label><input id="fiscalProvedorNome" maxlength="120"></div>
           </div>
           <div id="fiscalRevisao" class="fiscal-revisao"></div>
-          <div class="fiscal-seguranca"><strong>Cadastro e emissão são etapas diferentes.</strong><br>Salvar estes dados não autoriza uma nota. O emitente é a sua empresa, não a Aurevion. Para notas reais, informe os dados municipais e o A1 da empresa quando exigido. Nunca informe senha GOV.BR ou chave de API.</div>
+          <div class="fiscal-seguranca" id="fiscalResumoEmitente">A nota será emitida pela empresa identificada acima. Confira os dados antes de ativar.</div>
           <div class="fiscal-acoes">
             <button type="button" id="btnSalvarFiscal" class="botao botao-primario">Salvar cadastro fiscal</button>
             <button type="button" id="btnAtualizarFiscal" class="botao botao-secundario">Atualizar situação</button>
           </div>
           <div id="fiscalOnboardingNfeio" class="fiscal-painel" style="margin-top:14px" hidden>
             <h4 class="fiscal-etapa-titulo">Ativação do emitente da sua empresa</h4>
-            <p class="fiscal-ajuda">Cadastre aqui a sua empresa. Você não precisa abrir o painel da NFE.io nem informar uma chave de API. A inscrição nasce tecnicamente em Development na NFE.io e pode ser ativada para produção depois de conferir seus dados; uma nota de teste não é obrigatória e nenhuma etapa abaixo emite nota real.</p>
+            <p class="fiscal-ajuda">Depois de salvar, siga os passos disponíveis abaixo. As etapas já concluídas ficam identificadas. Não é necessário acessar outro painel.</p>
             <div class="fiscal-acoes">
               <button type="button" id="btnFiscalCadastrarEmpresaNfeio" class="botao botao-secundario">1. Cadastrar empresa no emissor</button>
               <button type="button" id="btnFiscalCadastrarImNfeio" class="botao botao-secundario">2. Cadastrar inscrição municipal</button>
@@ -298,7 +304,7 @@
               <div class="campo"><label for="fiscalSenhaPrefeitura">Senha da prefeitura (se exigida)</label><input id="fiscalSenhaPrefeitura" type="password" autocomplete="new-password" maxlength="256"></div>
               <div class="campo"><label for="fiscalTokenPrefeitura">Token da prefeitura (se exigido)</label><input id="fiscalTokenPrefeitura" type="password" autocomplete="off" maxlength="256"></div>
             </div>
-            <label class="campo-checkbox"><input id="fiscalConfirmarTitularidade" type="checkbox"><span>Confirmo que os dados municipais e o A1 pertencem à minha empresa e que ela está habilitada a emitir NFS-e.</span></label>
+            <label class="campo-checkbox"><input id="fiscalConfirmarTitularidade" type="checkbox"><span>Confirmo que os dados e o A1 pertencem à empresa deste cadastro e que tenho autorização para ativar sua emissão.</span></label>
             <button type="button" id="btnFiscalAtivarProducao" class="botao botao-secundario">4. Ativar inscrição em produção</button>
             <p id="fiscalAtivacaoStatus" class="campo-desc" role="status" aria-live="polite"></p>
           </div>
@@ -312,6 +318,23 @@
       <div class="fiscal-lista-titulo"><strong>NFS-e recentes</strong><small class="campo-desc">O DANFSe aparece somente após autorização.</small></div>
       <div id="listaNotasFiscais"></div>`;
 
+    // O primeiro objetivo é concluir o cadastro; saldo e limites ficam juntos, abaixo dele.
+    const carteira = document.createElement('details');
+    carteira.id = 'fiscalCarteiraDetalhes';
+    carteira.className = 'fiscal-avancado';
+    carteira.innerHTML = '<summary>Saldo, recargas e limites da equipe</summary>';
+    for (const seletor of ['.fiscal-resumo-cota', '.fiscal-recarga', '#fiscalLimitesEquipe']) {
+      const bloco = secao.querySelector(seletor);
+      if (bloco) carteira.appendChild(bloco);
+    }
+    secao.querySelector('.fiscal-lista-titulo').before(carteira);
+    const detalhesServico = document.createElement('details');
+    detalhesServico.className = 'fiscal-avancado';
+    detalhesServico.innerHTML = '<summary>ISS, NBS e município da prestação (quando aplicável)</summary><div class="grade-2"></div>';
+    for (const id of ['fiscalNbs','fiscalAliquotaIss','fiscalIssRetidoPadrao','fiscalCodigoMunicipioPrestacao']) {
+      detalhesServico.lastElementChild.appendChild(secao.querySelector('#'+id).closest('.campo'));
+    }
+    secao.querySelector('#fiscalDescricaoServico').closest('.campo').after(detalhesServico);
     referencia.after(secao);
     $('fiscalVoltarSuporte').addEventListener('click', () => {
       fecharCadastroFiscalSuporte();
@@ -507,8 +530,15 @@
       ? 'A recarga será liberada quando a emissão fiscal da empresa estiver operacional. Valor mínimo: R$ 1,00.'
       : 'Valor mínimo: R$ 1,00. O saldo só é liberado após a confirmação do pagamento pelo Mercado Pago.';
     const metadados = config.metadados || {};
+    $('fiscalCarteiraDetalhes').hidden = Boolean(empresaSuporte);
+    if (!empresaSuporte) $('fiscalResumoEmitente').textContent = 'A nota será emitida pela sua empresa. Confira os dados antes de ativar.';
+    for (const [id, feito, rotulo] of [
+      ['btnFiscalCadastrarEmpresaNfeio', metadados.nfeio_empresa_id, 'Cadastrar empresa no emissor'],
+      ['btnFiscalCadastrarImNfeio', metadados.nfeio_im_id, 'Cadastrar inscrição municipal'],
+      ['btnFiscalAtivarProducao', metadados.nfeio_im_producao_em, 'Ativar emissão de notas reais']
+    ]) $(id).textContent = feito ? 'Concluído: ' + rotulo : rotulo;
     const prestadorCpf = metadados.tipo_pessoa === 'fisica';
-    if ($('fiscalOnboardingNfeio')) $('fiscalOnboardingNfeio').hidden = Boolean(empresaSuporte) || resumo.pode_configurar !== true;
+    if ($('fiscalOnboardingNfeio')) $('fiscalOnboardingNfeio').hidden = resumo.pode_configurar !== true;
     if ($('btnFiscalCadastrarEmpresaNfeio')) $('btnFiscalCadastrarEmpresaNfeio').disabled =
       resumo.nfeio_disponivel !== true || prestadorCpf || Boolean(metadados.nfeio_empresa_id);
     if ($('btnFiscalCadastrarImNfeio')) $('btnFiscalCadastrarImNfeio').disabled =
@@ -525,7 +555,7 @@
           ? 'Empresa cadastrada no emissor. Cadastre a inscrição municipal com a numeração de RPS confirmada.'
           : 'Salve os dados da empresa e depois cadastre o emitente.';
     if ($('fiscalCertificadoBloco')) $('fiscalCertificadoBloco').hidden = prestadorCpf || resumo.certificado_upload_disponivel !== true ||
-      resumo.pode_configurar !== true || Boolean(empresaSuporte);
+      resumo.pode_configurar !== true;
     if ($('fiscalCertificadoStatus')) {
       const validoAte = metadados.nfeio_certificado_valido_ate;
       $('fiscalCertificadoStatus').textContent = resumo.certificado_upload_disponivel !== true
@@ -536,10 +566,10 @@
     }
     for (const id of ['fiscalCertificadoArquivo', 'fiscalCertificadoSenha', 'btnFiscalEnviarCertificado']) {
       if ($(id)) $(id).disabled = prestadorCpf || resumo.certificado_upload_disponivel !== true ||
-        resumo.pode_configurar !== true || Boolean(empresaSuporte);
+        resumo.pode_configurar !== true;
     }
     const a1Vigente = Date.parse(String(metadados.nfeio_certificado_valido_ate || '')) > Date.now();
-    if ($('fiscalAtivacaoProducao')) $('fiscalAtivacaoProducao').hidden = Boolean(empresaSuporte) ||
+    if ($('fiscalAtivacaoProducao')) $('fiscalAtivacaoProducao').hidden =
       resumo.pode_configurar !== true || prestadorCpf || !metadados.nfeio_im_id;
     if ($('btnFiscalAtivarProducao')) $('btnFiscalAtivarProducao').disabled =
       resumo.nfeio_disponivel !== true || !a1Vigente || Boolean(metadados.nfeio_im_producao_em);
@@ -661,7 +691,7 @@
       for (let inicio = 0; inicio < bytes.length; inicio += 8192) {
         binario += String.fromCharCode(...bytes.subarray(inicio, inicio + 8192));
       }
-      const retorno = await window.api.supabasefiscaldocumentos('cadastrar_certificado_a1', {
+      const retorno = await chamarFiscal('cadastrar_certificado_a1', {
         certificadoBase64: btoa(binario), senha: senhaCampo.value
       });
       if (!retorno?.sucesso || retorno.cadastrado !== true) {
@@ -676,14 +706,14 @@
       if (senhaCampo) senhaCampo.value = '';
       if (arquivoCampo) arquivoCampo.value = '';
       botao.disabled = resumo?.certificado_upload_disponivel !== true ||
-        resumo?.pode_configurar !== true || Boolean(empresaSuporte);
+        resumo?.pode_configurar !== true;
     }
   }
 
   async function ativarInscricaoProducao() {
     const botao = $('btnFiscalAtivarProducao');
     const saida = $('fiscalAtivacaoStatus');
-    if (!botao || botao.disabled || empresaSuporte) return;
+    if (!botao || botao.disabled) return;
     if (!$('fiscalConfirmarTitularidade')?.checked) {
       window.toast?.('Confirme a titularidade e o credenciamento municipal da empresa.', 'aviso');
       $('fiscalConfirmarTitularidade')?.focus();
@@ -692,7 +722,7 @@
     botao.disabled = true;
     try {
       saida.textContent = 'Conferindo a inscrição municipal com a NFE.io...';
-      const resposta = await window.api.supabasefiscaldocumentos('ativar_inscricao_nfeio', {
+      const resposta = await chamarFiscal('ativar_inscricao_nfeio', {
         confirmacaoTitularidade: true,
         loginPrefeitura: $('fiscalLoginPrefeitura')?.value || '',
         senhaPrefeitura: $('fiscalSenhaPrefeitura')?.value || '',
@@ -728,7 +758,7 @@
     }
     botao.disabled = true;
     try {
-      const resposta = await window.api.supabasefiscaldocumentos?.('criar_recarga', { valorCentavos });
+      const resposta = await chamarFiscal?.('criar_recarga', { valorCentavos });
       if (!resposta?.sucesso || !resposta.link) throw new Error(resposta?.erro || 'Não foi possível criar a recarga.');
       const abertura = await window.api.sistemaabrirlinkseguro?.(resposta.link);
       if (abertura?.sucesso === false) throw new Error(abertura.erro || 'Não foi possível abrir o Mercado Pago.');
@@ -811,7 +841,7 @@
     painel.hidden = true;
     dadosLimitesEquipe = null;
     if (empresaSuporte) return;
-    const retorno = await window.api.supabasefiscaldocumentos?.('listar_limites', {});
+    const retorno = await chamarFiscal?.('listar_limites', {});
     if (!retorno?.sucesso) return;
     dadosLimitesEquipe = retorno;
     painel.hidden = false;
@@ -847,7 +877,7 @@
     }
     botao.disabled = true;
     try {
-      const retorno = await window.api.supabasefiscaldocumentos?.('salvar_limite', {
+      const retorno = await chamarFiscal?.('salvar_limite', {
         tipoAlvo, alvo, limiteMensal, limiteGastoCentavos
       });
       if (!retorno?.sucesso) throw new Error(retorno?.erro || 'Não foi possível salvar o limite.');
@@ -864,7 +894,7 @@
     const botao = $('btnFiscalRemoverLimite');
     botao.disabled = true;
     try {
-      const retorno = await window.api.supabasefiscaldocumentos?.('remover_limite', {
+      const retorno = await chamarFiscal?.('remover_limite', {
         tipoAlvo: regra.tipo_alvo, alvo: regra.alvo
       });
       if (!retorno?.sucesso) throw new Error(retorno?.erro || 'Não foi possível remover o limite.');
@@ -885,7 +915,7 @@
     if (!confirmou) return;
     botao.disabled = true;
     try {
-      const resposta = await window.api.supabasefiscaldocumentos?.('cancelar_solicitacao', { id });
+      const resposta = await chamarFiscal?.('cancelar_solicitacao', { id });
       if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível cancelar a solicitação.');
       window.toast?.('Solicitação fiscal cancelada.', 'sucesso');
       await carregar();
@@ -913,7 +943,7 @@
     if (!confirmou) return;
     botao.disabled = true;
     try {
-      const resposta = await window.api.supabasefiscaldocumentos?.('solicitar_cancelamento', { id, justificativa });
+      const resposta = await chamarFiscal?.('solicitar_cancelamento', { id, justificativa });
       if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível solicitar o cancelamento.');
       window.toast?.(resposta.mensagem || 'Cancelamento enviado para confirmação.', 'sucesso');
       await carregar();
@@ -940,7 +970,7 @@
     }
     botao.disabled = true;
     try {
-      const resposta = await window.api.supabasefiscaldocumentos?.('alterar_solicitacao', {
+      const resposta = await chamarFiscal?.('alterar_solicitacao', {
         id, valor, descricao: String(descricao).trim()
       });
       if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível editar a solicitação.');
@@ -966,7 +996,7 @@
       ? !status?.autenticado || status?.administradorGlobal !== true
       : !status?.autenticado || !status?.empresaId || status?.administradorEmpresa !== true;
     if (secao.hidden) return;
-    const resposta = await window.api.supabasefiscaldocumentos?.('resumo', empresaSuporte ? { empresaId: empresaSuporte.id } : {});
+    const resposta = await chamarFiscal?.('resumo', empresaSuporte ? { empresaId: empresaSuporte.id } : {});
     if (!resposta?.sucesso) {
       $('statusFiscalEmpresa').textContent = resposta?.erro || 'Não foi possível consultar a situação da NFS-e.';
       return;
@@ -983,10 +1013,13 @@
   window.abrirCadastroFiscalSuporte = async (empresa) => {
     if (!empresa?.id) throw new Error('Selecione uma empresa válida.');
     garantirSecao();
-    empresaSuporte = { id: empresa.id, nome: empresa.nome_fantasia || empresa.codigo || 'Empresa' };
+    empresaSuporte = { id: empresa.id, plataforma: empresa.plataforma === true, nome: empresa.nome_fantasia || empresa.codigo || 'Empresa' };
     document.body.classList.add('fiscal-suporte-edicao');
     $('fiscalAcoesSuporte').hidden = false;
     $('fiscalEmpresaSuporteNome').textContent = empresaSuporte.nome;
+    $('fiscalResumoEmitente').textContent = empresaSuporte.plataforma
+      ? 'Este é o emitente da Aurevion para as assinaturas pagas. As notas são geradas automaticamente após o pagamento confirmado, sem usar o saldo fiscal do cliente.'
+      : 'O suporte está preenchendo o cadastro da empresa selecionada. O emitente será esta empresa.';
     $('configFiscalEmpresa').querySelector('.fiscal-recarga').hidden = true;
     await carregar();
     $('configFiscalEmpresa').scrollIntoView({ block: 'start' });
@@ -1051,7 +1084,7 @@
     const botao = $('btnSalvarFiscal');
     if (botao) botao.disabled = true;
     try {
-      const resposta = await window.api.supabasefiscaldocumentos('salvar_configuracao', {
+      const resposta = await chamarFiscal('salvar_configuracao', {
         ...coletarConfiguracao(), ...(empresaSuporte ? { empresaId: empresaSuporte.id } : {})
       });
       if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível salvar a configuração fiscal.');
@@ -1070,14 +1103,14 @@
   async function cadastrarNoEmissor(acao) {
     const botao = acao === 'cadastrar_empresa_nfeio' ? $('btnFiscalCadastrarEmpresaNfeio') : $('btnFiscalCadastrarImNfeio');
     const saida = $('fiscalOnboardingStatus');
-    if (!botao || botao.disabled || empresaSuporte) return;
+    if (!botao || botao.disabled) return;
     botao.disabled = true;
     saida.textContent = 'Salvando e conferindo o cadastro fiscal...';
     try {
       const salvo = await salvar({ silencioso: true });
       if (!salvo?.sucesso) throw new Error(salvo?.erro || 'Não foi possível salvar o cadastro fiscal.');
       saida.textContent = 'Consultando o emissor fiscal...';
-      const resposta = await window.api.supabasefiscaldocumentos(acao, {});
+      const resposta = await chamarFiscal(acao, {});
       if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível cadastrar no emissor.');
       await carregar();
       saida.textContent = resposta.mensagem || 'Cadastro concluído em ambiente de testes.';
@@ -1120,7 +1153,7 @@
       const descricao = tipo === 'venda'
         ? `Serviço relacionado à venda ${[documento.marca, documento.modelo].filter(Boolean).join(' ')}`.trim()
         : `Serviço realizado na OS ${origemId}`;
-      const resposta = await window.api.supabasefiscaldocumentos('solicitar_emissao', {
+      const resposta = await chamarFiscal('solicitar_emissao', {
         origemTipo: tipo,
         origemId,
         valor,

@@ -87,7 +87,8 @@ Deno.serve(async (req) => {
     }
     const suporteCadastro = contexto.administrador_global === true;
     if (suporteCadastro) {
-      if (!['resumo', 'listar', 'salvar_configuracao', 'verificar_emitente_nfeio'].includes(acao)) {
+      if (!['resumo', 'listar', 'salvar_configuracao', 'verificar_emitente_nfeio',
+        'cadastrar_empresa_nfeio', 'cadastrar_inscricao_nfeio', 'cadastrar_certificado_a1', 'ativar_inscricao_nfeio'].includes(acao)) {
         return resposta(403, { erro: 'O suporte so pode consultar ou atualizar o cadastro fiscal da empresa.' });
       }
       const { data: papel, error: papelErro } = await admin.from('administradores_globais')
@@ -99,8 +100,11 @@ Deno.serve(async (req) => {
     } else if (!contexto?.empresa_id || !licencaPermiteOperacao(contexto)) {
       return resposta(403, { erro: 'Entre em uma empresa ativa para usar a NFS-e.' });
     }
-    const empresaId = suporteCadastro ? texto(dados.empresaId) : contexto.empresa_id;
-    if (suporteCadastro) {
+    const plataformaFiscal = suporteCadastro && dados.escopo === 'plataforma';
+    const tabelaConfiguracoes = plataformaFiscal ? 'configuracoes_fiscais_plataforma' : 'configuracoes_fiscais';
+    const empresaId = plataformaFiscal ? '00000000-0000-4000-8000-000000000001'
+      : suporteCadastro ? texto(dados.empresaId) : contexto.empresa_id;
+    if (suporteCadastro && !plataformaFiscal) {
       if (!/^[0-9a-f-]{36}$/i.test(empresaId)) return resposta(400, { erro: 'Empresa invalida.' });
       const { data: empresa, error: empresaErro } = await admin.from('empresas')
         .select('id').eq('id', empresaId).maybeSingle();
@@ -113,7 +117,7 @@ Deno.serve(async (req) => {
     const fiscalNoTrial = ['trial', 'beta'].includes(texto(empresaFiscal?.plano?.nome).toLowerCase()) &&
       empresaFiscal?.licenca_status === 'teste' &&
       Date.parse(texto(empresaFiscal.fim_trial)) > Date.now();
-    const fiscalDisponivel = fiscalNoTrial ||
+    const fiscalDisponivel = plataformaFiscal || fiscalNoTrial ||
       (empresaFiscal?.licenca_status === 'ativa' && Date.parse(texto(empresaFiscal?.data_vencimento)) > Date.now());
     // Os dados fiscais e a identidade do emitente pertencem à empresa, mas
     // somente o administrador dela pode alterá-los. A permissão genérica de
@@ -179,7 +183,7 @@ Deno.serve(async (req) => {
     if (acao === 'resumo' || acao === 'listar') {
       if (!podeLerFinanceiro) return resposta(403, { erro: 'Seu usuário não pode consultar documentos fiscais.' });
       const [configConsulta, notasConsulta, contaConsulta, usoConsulta, recargasConsulta] = await Promise.all([
-        admin.from('configuracoes_fiscais').select('empresa_id,provedor,ambiente,status,emissao_automatica_os,emissao_automatica_venda,emissao_automatica_assinatura,metadados,ultimo_erro,updated_at').eq('empresa_id', empresaId).maybeSingle(),
+        admin.from(tabelaConfiguracoes).select('empresa_id,provedor,ambiente,status,emissao_automatica_os,emissao_automatica_venda,emissao_automatica_assinatura,metadados,ultimo_erro,updated_at').eq('empresa_id', empresaId).maybeSingle(),
         suporteCadastro ? Promise.resolve({ data: [], error: null }) :
           admin.from('notas_fiscais').select('id,origem_tipo,origem_id,valor,descricao,status,numero,codigo_verificacao,chave_acesso,url_consulta,pdf_url,danfse_url,danfse_storage_path,danfse_gerado_em,emitida_em,ultimo_erro,created_at,payload').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(100),
         admin.from('contas_fiscais').select('limite_gratuito_mensal,preco_excedente_centavos,saldo_centavos,debito_pendente_centavos').eq('empresa_id', empresaId).maybeSingle(),
@@ -206,7 +210,7 @@ Deno.serve(async (req) => {
       return resposta(200, { configuracao: configConsulta.data, notas,
         provedor_fiscal: 'nfeio', pode_configurar: podeConfigurar,
         nfeio_disponivel: Boolean(Deno.env.get('NFEIO_INVOICE_KEY')) && Boolean(Deno.env.get('NFEIO_ACCOUNT_ID')),
-        certificado_upload_disponivel: !suporteCadastro && podeConfigurar &&
+        certificado_upload_disponivel: podeConfigurar &&
           Boolean(Deno.env.get('NFEIO_INVOICE_KEY')) &&
           Boolean(configConsulta.data?.metadados?.nfeio_empresa_id),
         emissor_operacional: emissorOperacional,
@@ -221,7 +225,7 @@ Deno.serve(async (req) => {
 
     if (acao === 'verificar_emitente_nfeio') {
       if (!podeConfigurar) return resposta(403, { erro: 'Somente o administrador pode conferir o emitente fiscal.' });
-      const { data: config, error: configErro } = await admin.from('configuracoes_fiscais')
+      const { data: config, error: configErro } = await admin.from(tabelaConfiguracoes)
         .select('metadados').eq('empresa_id', empresaId).maybeSingle();
       if (configErro) throw configErro;
       const cnpj = cnpjNormalizado(config?.metadados?.cnpj || config?.metadados?.documento_prestador);
@@ -245,12 +249,12 @@ Deno.serve(async (req) => {
     }
 
     if (['cadastrar_empresa_nfeio', 'cadastrar_inscricao_nfeio', 'ativar_inscricao_nfeio'].includes(acao)) {
-      if (suporteCadastro || !podeConfigurar) return resposta(403, { erro: 'Somente o administrador da propria empresa pode cadastrar o emitente.' });
-      if (!fiscalDisponivel) return resposta(409, { erro: 'Ative ou renove o plano para configurar o emissor.' });
+      if (!podeConfigurar) return resposta(403, { erro: 'Somente o administrador da empresa ou Administrador Geral pode cadastrar o emitente.' });
+      if (!fiscalDisponivel && !suporteCadastro) return resposta(409, { erro: 'Ative ou renove o plano para configurar o emissor.' });
       const chave = texto(Deno.env.get('NFEIO_INVOICE_KEY'));
       const contaId = texto(Deno.env.get('NFEIO_ACCOUNT_ID'));
       if (!chave || !contaId) return resposta(503, { erro: 'Integracao fiscal ainda nao configurada no servidor.' });
-      const { data: config, error: configErro } = await admin.from('configuracoes_fiscais')
+      const { data: config, error: configErro } = await admin.from(tabelaConfiguracoes)
         .select('metadados,updated_at').eq('empresa_id', empresaId).maybeSingle();
       if (configErro) throw configErro;
       const fiscal = config?.metadados || {};
@@ -283,7 +287,7 @@ Deno.serve(async (req) => {
           return resposta(409, { erro: mensagens[ativada.motivo] ||
             'A NFE.io nao confirmou a ativacao. Confira o credenciamento municipal e os dados fiscais.' });
         }
-        const { data: atualizada, error: atualizarErro } = await admin.from('configuracoes_fiscais')
+        const { data: atualizada, error: atualizarErro } = await admin.from(tabelaConfiguracoes)
           .update({ provedor: 'nfeio', ambiente: 'producao', status: 'configurada', ultimo_erro: null,
             metadados: { ...fiscal, nfeio_im_producao_em: new Date().toISOString() },
             updated_at: new Date().toISOString() })
@@ -313,7 +317,7 @@ Deno.serve(async (req) => {
             ? 'Complete razao social, CNPJ, regime e endereco fiscal antes de cadastrar a empresa.'
             : 'O emissor nao confirmou o cadastro. Confira os dados fiscais e tente novamente.'
         });
-        const { data: vinculo, error: vinculoErro } = await admin.from('configuracoes_fiscais')
+        const { data: vinculo, error: vinculoErro } = await admin.from(tabelaConfiguracoes)
           .update({ metadados: { ...fiscal, nfeio_empresa_id: criado.id, nfeio_cnpj: cnpj },
             updated_at: new Date().toISOString() })
           .eq('empresa_id', empresaId).eq('updated_at', config.updated_at)
@@ -339,7 +343,7 @@ Deno.serve(async (req) => {
           ? 'Informe inscricao municipal ou dispensa, serie RPS e proximo numero informado pela prefeitura/contador.'
           : 'O emissor nao confirmou a inscricao municipal. Confira os dados antes de repetir.'
       });
-      const { data: vinculada, error: vinculoErro } = await admin.from('configuracoes_fiscais')
+      const { data: vinculada, error: vinculoErro } = await admin.from(tabelaConfiguracoes)
         .update({ metadados: { ...fiscal, nfeio_im_id: criada.id }, updated_at: new Date().toISOString() })
         .eq('empresa_id', empresaId).eq('updated_at', config.updated_at)
         .select('empresa_id').maybeSingle();
@@ -355,7 +359,7 @@ Deno.serve(async (req) => {
       if (!Number.isInteger(valorCentavos) || valorCentavos < 100 || valorCentavos > 10000000) {
         return resposta(400, { erro: 'Informe uma recarga entre R$ 1,00 e R$ 100.000,00.' });
       }
-      const { data: configFiscal, error: configErro } = await admin.from('configuracoes_fiscais')
+      const { data: configFiscal, error: configErro } = await admin.from(tabelaConfiguracoes)
         .select('status,ambiente').eq('empresa_id', empresaId).maybeSingle();
       if (configErro) throw configErro;
       if (!emissorOperacional || configFiscal?.status !== 'configurada' || configFiscal?.ambiente !== 'producao') {
@@ -489,7 +493,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      const { data: configuracaoAtual, error: configuracaoAtualErro } = await admin.from('configuracoes_fiscais')
+      const { data: configuracaoAtual, error: configuracaoAtualErro } = await admin.from(tabelaConfiguracoes)
         .select('provedor,ambiente,status,metadados,ultimo_erro').eq('empresa_id', empresaId).maybeSingle();
       if (configuracaoAtualErro) throw configuracaoAtualErro;
       const metadadosAtuais: Record<string, unknown> = configuracaoAtual?.metadados &&
@@ -540,7 +544,7 @@ Deno.serve(async (req) => {
         : (tipoPrestador === 'fisica' && !cadastroMunicipalConfirmado
           ? 'Confirme o cadastro municipal da pessoa fisica e complete os dados da NFS-e.'
           : 'Complete os dados fiscais da empresa antes de solicitar uma nota.'));
-      const { data: configuracao, error } = await admin.from('configuracoes_fiscais').upsert({
+      const { data: configuracao, error } = await admin.from(tabelaConfiguracoes).upsert({
         empresa_id: empresaId,
         provedor: 'nfeio',
         ambiente,
@@ -605,7 +609,7 @@ Deno.serve(async (req) => {
       if (error) throw error;
       if (suporteCadastro) {
         const { error: auditoriaErro } = await admin.from('auditoria_comercial').insert({
-          empresa_id: empresaId, autor_id: autenticacao.user.id,
+          empresa_id: plataformaFiscal ? null : empresaId, autor_id: autenticacao.user.id,
           acao: 'cadastro_fiscal_atualizado_suporte', entidade: 'empresa', entidade_id: empresaId,
           metadados: { ambiente, status: statusConfiguracao, tipo_prestador: tipoPrestador,
             tipo_emitente_produtos: tipoEmitenteProdutos, identidade_mudou: identidadeMudou }
@@ -621,10 +625,10 @@ Deno.serve(async (req) => {
     }
 
     if (acao === 'cadastrar_certificado_a1') {
-      if (suporteCadastro || !podeConfigurar) return resposta(403, { erro: 'Somente o administrador da propria empresa pode enviar o A1.' });
+      if (!podeConfigurar) return resposta(403, { erro: 'Somente o administrador da empresa ou Administrador Geral pode enviar o A1.' });
       const chave = texto(Deno.env.get('NFEIO_INVOICE_KEY'));
       if (!chave) return resposta(503, { erro: 'Integracao fiscal ainda nao configurada no servidor.' });
-      const { data: config, error: configErro } = await admin.from('configuracoes_fiscais')
+      const { data: config, error: configErro } = await admin.from(tabelaConfiguracoes)
         .select('metadados,updated_at').eq('empresa_id', empresaId).maybeSingle();
       if (configErro) throw configErro;
       const fiscal = config?.metadados || {};
@@ -645,7 +649,7 @@ Deno.serve(async (req) => {
       const enviado = await enviarCertificadoNfeio(idExterno, cnpj, bytes, senha, chave);
       bytes.fill(0);
       if (!enviado.ok) return resposta(502, { erro: 'O emissor nao confirmou o A1. Confira se e um e-CNPJ valido dessa empresa, com senha correta.' });
-      const { data: atualizado, error: atualizarErro } = await admin.from('configuracoes_fiscais')
+      const { data: atualizado, error: atualizarErro } = await admin.from(tabelaConfiguracoes)
         .update({ metadados: { ...fiscal, nfeio_certificado_valido_ate: enviado.valido_ate },
           updated_at: new Date().toISOString() })
         .eq('empresa_id', empresaId).eq('updated_at', config.updated_at)
@@ -676,7 +680,7 @@ Deno.serve(async (req) => {
           ? 'Esta NFS-e ja foi autorizada. O DANFSe continua disponivel no historico.'
           : 'A solicitacao desta NFS-e ja esta em andamento.' });
       }
-      const { data: config, error: configErro } = await admin.from('configuracoes_fiscais')
+      const { data: config, error: configErro } = await admin.from(tabelaConfiguracoes)
         .select('status,provedor,ambiente').eq('empresa_id', empresaId).maybeSingle();
       if (configErro) throw configErro;
       const pronta = emissorOperacional && config?.provedor === 'nfeio' &&

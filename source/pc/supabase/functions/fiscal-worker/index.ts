@@ -4,8 +4,9 @@ import {
   baixarXmlNfseNfeio,
   cancelarNfseNfeio,
   consultarNfseNfeio,
-  emitirNfseNfeio
+  emitirNfseNfeio, estadoNfseNfeio
 } from '../_shared/nfeio-nfse.ts';
+import { processarNotasAssinaturas } from '../_shared/notas-assinaturas.ts';
 
 type Registro = Record<string, any>;
 
@@ -34,11 +35,7 @@ function podeTentar(payload: Registro) {
 }
 
 function estadoNfeio(retorno: Registro) {
-  const estado = `${texto(retorno.status)} ${texto(retorno.fluxo)}`.toLowerCase();
-  if (/cancel/.test(estado)) return 'cancelada';
-  if (/issued|authorized|autoriz/.test(estado)) return 'autorizada';
-  if (/issuefailed|error|reject|denied|falh|rejeit/.test(estado)) return 'rejeitada';
-  return 'processando';
+  return estadoNfseNfeio(retorno);
 }
 
 function payloadComProcessamento(payload: Registro, atualizacao: Registro) {
@@ -236,6 +233,9 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     { auth: { persistSession: false } });
   const limite = Math.max(1, Math.min(50, Number(Deno.env.get('FISCAL_WORKER_BATCH')) || 10));
+  const pedido = await req.json().catch(() => ({}));
+  const assinatura = await processarNotasAssinaturas(admin, texto(pedido.cobrancaId));
+  if (pedido.cobrancaId) return responder(200, { assinatura });
   const { data, error } = await admin.from('notas_fiscais')
     .select('id,empresa_id,origem_tipo,origem_id,valor,descricao,status,provedor,referencia_provedor,numero,codigo_verificacao,danfse_storage_path,danfse_gerado_em,emitida_em,payload,updated_at')
     .in('status', ['na_fila', 'processando', 'autorizada'])

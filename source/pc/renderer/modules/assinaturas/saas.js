@@ -81,6 +81,7 @@
       <div class="modal-cabecalho"><div><h2>Minha assinatura</h2><p class="campo-desc">Renove, mude de plano ou fale com o suporte.</p></div><button type="button" class="botao-fechar" data-fechar-assinatura>×</button></div>
       <div style="padding:18px 22px;max-height:70vh;overflow:auto">
         <div id="resumoAssinaturaAtual" class="assinatura-resumo"></div>
+        <details id="historicoNotasAssinatura" style="margin-top:14px"><summary>Notas fiscais das assinaturas pagas</summary><p class="campo-desc">A nota fica disponível após a autorização da prefeitura. Você pode abrir ou baixar o PDF aqui.</p><div id="listaNotasAssinatura" aria-live="polite"></div></details>
         <div style="margin-top:18px"><strong>Continuar com o mesmo plano ou escolher outro?</strong><p class="campo-desc">A renovação soma os novos dias ao período que você ainda tem.</p></div>
         <div id="listaPlanosAssinatura" class="assinatura-planos"></div>
         <div class="campo" id="campoMesesAssinatura" style="margin-top:16px;max-width:320px" hidden><label for="quantidadeMesesAssinatura">Período que deseja pagar</label><select id="quantidadeMesesAssinatura"><option value="1">1 mês</option><option value="2">2 meses</option><option value="3">3 meses · 5% de desconto</option><option value="6">6 meses · 10% de desconto</option><option value="12">12 meses · 15% de desconto</option></select><p class="campo-desc">Os meses são somados ao prazo restante após a confirmação.</p></div>
@@ -91,6 +92,9 @@
       <div class="modal-rodape"><button type="button" id="btnSuporteAssinatura" class="botao botao-fantasma">Dúvidas / suporte</button><button type="button" class="botao botao-fantasma" data-fechar-assinatura>Agora não</button><button type="button" id="btnPagarAssinatura" class="botao botao-primario" disabled>Pagar agora</button></div>
     </div>`;
     document.body.appendChild(modal);
+    $('historicoNotasAssinatura').addEventListener('toggle', () => {
+      if ($('historicoNotasAssinatura').open) window.carregarNotasAssinaturaPC?.($('listaNotasAssinatura'));
+    });
 
     const bloqueioTrial = document.createElement('div');
     bloqueioTrial.id = 'bloqueioTrialEncerrado';

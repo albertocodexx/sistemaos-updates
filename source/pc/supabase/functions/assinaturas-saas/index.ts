@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { contextoUsuarioAtivo, temPermissao } from '../_shared/access.ts';
+import { atenderNotasAssinatura } from '../_shared/notas-assinaturas-api.ts';
 import {
   carregarIntegracaoPlataforma, cifrarJson, cors, resposta, texto
 } from './saas.ts';
@@ -73,6 +74,8 @@ Deno.serve(async (req) => {
     const corpo = await req.json().catch(() => ({}));
     const acao = texto(corpo.acao);
     const dados = corpo.dados && typeof corpo.dados === 'object' ? corpo.dados : {};
+    const retornoFiscal = await atenderNotasAssinatura(admin, contexto, autenticacao.user.id, acao, dados, resposta);
+    if (retornoFiscal) return retornoFiscal;
     if (acao === 'catalogo' || acao === 'resumo') {
       let { data: planos, error: planosErro } = await admin.from('planos')
         .select('id,nome,descricao,preco_referencia,periodo,duracao_dias,ordem,destaque,limites,plano_recursos(habilitado,limite,recurso:recursos(chave,nome,descricao))')

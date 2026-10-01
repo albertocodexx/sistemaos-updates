@@ -17,10 +17,17 @@ function numero(valor) {
 
 function diaIso(valor) {
   const texto = String(valor || '').trim();
-  const correspondencia = /^(\d{4}-\d{2}-\d{2})/.exec(texto);
-  if (correspondencia) return correspondencia[1];
+  // Datas sem horário já representam um dia civil. Instantes completos,
+  // porém, precisam ser classificados no fuso local da assistência: perto
+  // da meia-noite a data UTC pode pertencer ao mês seguinte/anterior.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto;
   const data = new Date(texto);
-  return Number.isNaN(data.getTime()) ? '' : data.toISOString().slice(0, 10);
+  if (Number.isNaN(data.getTime())) return '';
+  return [
+    data.getFullYear(),
+    String(data.getMonth() + 1).padStart(2, '0'),
+    String(data.getDate()).padStart(2, '0')
+  ].join('-');
 }
 
 function textoBusca(valor) {
@@ -271,7 +278,8 @@ function periodoDosFiltros(filtros = {}) {
   const mes = Number.parseInt(filtros.mes, 10) || agora.getMonth() + 1;
   const ano = Number.parseInt(filtros.ano, 10) || agora.getFullYear();
   const inicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
-  const fim = new Date(ano, mes, 0).toISOString().slice(0, 10);
+  const ultimoDia = new Date(ano, mes, 0).getDate();
+  const fim = `${ano}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
   return { inicio, fim, mes, ano, prefixo: `${ano}-${String(mes).padStart(2, '0')}` };
 }
 

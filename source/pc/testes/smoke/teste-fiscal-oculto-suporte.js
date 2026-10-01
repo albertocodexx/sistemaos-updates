@@ -29,7 +29,7 @@ assert.match(renderer, /if \(suporteEhAdministradorGeral\(\)\)/);
 assert.match(adminGlobal, /'configurar_fiscal_empresa'/);
 assert.match(adminGlobal, /fiscal_habilitado:\s*ativa/);
 assert.match(adminGlobal, /recurso_fiscal_configurado_suporte/);
-assert.match(fiscalApi, /const fiscalDisponivel = fiscalNoTrial \|\|/);
+assert.match(fiscalApi, /const fiscalDisponivel = plataformaFiscal \|\| fiscalNoTrial \|\|/);
 assert.match(fiscalApi, /if \(!fiscalDisponivel\) return resposta\(409/);
 assert.match(fiscalApi, /Deno\.env\.get\('FISCAL_EMISSOR_ATIVO'\) === 'true'/);
 assert.match(fiscalApi, /NFEIO_INVOICE_KEY/);

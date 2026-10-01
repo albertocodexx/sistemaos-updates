@@ -6,6 +6,7 @@ const { spawnSync } = require('child_process');
 
 const raiz = path.resolve(__dirname, '..', '..');
 const testes = [
+  'teste-notas-assinatura.js',
   'teste-chamados-historico-anexos.js',
   'teste-autorizacao-runtime.js',
   'teste-autorizacao-edge-functions.js',

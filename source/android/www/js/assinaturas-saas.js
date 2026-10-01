@@ -172,11 +172,15 @@
         '<small>Fiscal: ' + (resumoAtual.modulo_fiscal?.ativo ? 'disponível com saldo na carteira' : 'disponível após ativar o plano') + '</small>' +
       '</div>' +
       avisoTrial +
+      '<details id="notas-assinatura-mobile"><summary>Notas fiscais das assinaturas pagas</summary><p>A nota fica disponível após autorização da prefeitura.</p><div id="notas-assinatura-mobile-lista" aria-live="polite"></div></details>' +
       (cobranca ? '<div class="assinatura-mobile-aviso">Pagamento aguardando confirmação. Se você já pagou, esta tela será liberada automaticamente.</div>' : '') +
       listaPlanos +
       '<div class="assinatura-mobile-seguranca"><div><strong>Formas de pagamento</strong><span>Pix, cartão e opções disponíveis na sua conta Mercado Pago.</span></div><div><strong>Seus dados protegidos</strong><span>O pagamento acontece no Mercado Pago. O Sistema OS não recebe nem armazena os dados do seu cartão.</span></div><div><strong>Liberação automática</strong><span>Plano e dias são ativados somente após o servidor conferir assinatura, valor e moeda.</span></div></div>';
 
     var botaoRecarregar = document.getElementById('btn-recarregar-planos-mobile');
+    document.getElementById('notas-assinatura-mobile').addEventListener('toggle', function (evento) {
+      if (evento.target.open) window.carregarNotasAssinaturaMobile(document.getElementById('notas-assinatura-mobile-lista'), chamar);
+    });
     if (botaoRecarregar) {
       botaoRecarregar.addEventListener('click', function () { carregar(false).catch(function () {}); });
     }

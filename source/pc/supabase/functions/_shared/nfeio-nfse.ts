@@ -3,6 +3,16 @@
 type Consulta = typeof fetch;
 type Registro = Record<string, any>;
 
+export function estadoNfseNfeio(retorno: Registro) {
+  const status = String(retorno.status ?? '').toLowerCase();
+  const fluxo = String(retorno.fluxo ?? '').toLowerCase();
+  if (['cancelled', '3'].includes(status) && ['cancelled', '2'].includes(fluxo)) return 'cancelada';
+  // CancelFailed é falha no cancelamento, não nota cancelada.
+  if (['issued', '2'].includes(status)) return 'autorizada';
+  if (['error', '-1'].includes(status) && ['issuefailed', '-1'].includes(fluxo)) return 'rejeitada';
+  return 'processando';
+}
+
 const texto = (valor: unknown) => String(valor ?? '').trim();
 const digitos = (valor: unknown) => texto(valor).replace(/\D/g, '');
 const idValido = (valor: string) => /^[A-Za-z0-9_-]{8,100}$/.test(valor);

@@ -48,7 +48,7 @@ assert.match(tela, /data-fiscal-etapa="1"/);
 assert.match(tela, /data-fiscal-etapa="4"/);
 assert.match(tela, /Salvar cadastro fiscal/);
 assert.match(tela, /O administrador preenche os dados da própria empresa aqui/);
-assert.match(tela, /nenhuma etapa abaixo emite nota real/);
+assert.match(tela, /As etapas já concluídas ficam identificadas/);
 assert.match(tela, /cadastrar_certificado_a1/);
 assert.doesNotMatch(tela, /Solicitar ativação fiscal|supabasecriarchamadosuporte/);
 assert.match(tela, /Não informe senha GOV\.BR/);

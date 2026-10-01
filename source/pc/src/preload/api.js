@@ -72,6 +72,7 @@ function criarApiPublica({ invocar, assinar, removerAssinatura }) {
   supabaseassinaturassaas:  (acao, dados) => invocar('supabase:assinaturasSaas', acao, dados),
   supabasefiscaldocumentos: (acao, dados) => invocar('supabase:fiscalDocumentos', acao, dados),
   fiscalabrirdanfse: (notaId) => invocar('fiscal:abrirDanfse', notaId),
+  assinaturadocumentofiscal: (notaId, baixar) => invocar('assinaturas:documentoFiscal', notaId, baixar === true),
   fiscalcompartilhardanfse: (notaId, telefone) => invocar('fiscal:compartilharDanfse', notaId, telefone),
   supabaseintegracaowhatsappapi: (acao, dados) => invocar('supabase:integracaoWhatsAppApi', acao, dados),
   supabaseintegracaoia: (acao, dados) => invocar('supabase:integracaoIA', acao, dados),

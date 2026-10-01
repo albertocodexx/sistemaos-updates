@@ -34,10 +34,13 @@ function registerLegacyHandlers(deps) {
     return { sucesso: true };
   });
 
-  async function baixarDanfseLocal(notaIdBruto) {
+  async function baixarDanfseLocal(notaIdBruto, assinatura = false) {
       const notaId = String(notaIdBruto || '').trim();
       if (!/^[0-9a-f-]{20,50}$/i.test(notaId)) throw new Error('Nota fiscal inválida.');
-      const resultado = await supabaseDesktop?.fiscalDocumentos?.('obter_danfse', { id: notaId });
+      const resultado = assinatura
+        ? await supabaseDesktop?.assinaturasSaas?.('obter_nota_assinatura', { id: notaId })
+        : await supabaseDesktop?.fiscalDocumentos?.('obter_danfse', { id: notaId });
+      if (assinatura && resultado?.nota) resultado.danfse = resultado.nota;
       const urlBruta = resultado?.danfse?.url;
       if (!resultado?.sucesso || !urlBruta) {
         throw new Error(resultado?.erro || 'DANFSe indisponível.');
@@ -74,7 +77,7 @@ function registerLegacyHandlers(deps) {
       const numero = String(resultado.danfse.numero || notaId).replace(/[^0-9A-Za-z_-]/g, '').slice(0, 80) || notaId;
       const pasta = path.join(app.getPath('temp'), 'Sistema OS', 'documentos-fiscais');
       fs.mkdirSync(pasta, { recursive: true });
-      const arquivo = path.join(pasta, `DANFSe-${numero}.pdf`);
+      const arquivo = path.join(pasta, `DANFSe-${numero}-${notaId}.pdf`);
       fs.writeFileSync(arquivo, bytes, { mode: 0o600 });
       return { arquivo, nomeArquivo: `DANFSe-${numero}.pdf`, danfse: resultado.danfse };
   }
@@ -88,6 +91,23 @@ function registerLegacyHandlers(deps) {
     } catch (erro) {
       return { sucesso: false, erro: erro?.message || String(erro) };
     }
+  });
+
+  ipcMain.handle('assinaturas:documentoFiscal', async (_e, notaId, baixar) => {
+    try {
+      const { arquivo, nomeArquivo } = await baixarDanfseLocal(notaId, true);
+      if (baixar === true) {
+        const destino = await dialog.showSaveDialog({ title: 'Salvar nota da assinatura',
+          defaultPath: path.join(app.getPath('downloads'), nomeArquivo),
+          filters: [{ name: 'PDF', extensions: ['pdf'] }] });
+        if (destino.canceled || !destino.filePath) return { sucesso: true, cancelado: true };
+        fs.copyFileSync(arquivo, destino.filePath);
+      } else {
+        const erro = await shell.openPath(arquivo);
+        if (erro) throw new Error(erro);
+      }
+      return { sucesso: true };
+    } catch (erro) { return { sucesso: false, erro: erro?.message || 'Não foi possível abrir a nota.' }; }
   });
 
   ipcMain.handle('fiscal:compartilharDanfse', async (_e, notaIdBruto, telefoneBruto) => {

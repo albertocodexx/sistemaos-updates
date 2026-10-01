@@ -2169,7 +2169,8 @@ class DesktopSupabaseRuntime {
   }
 
   async fiscalDocumentos(acao, dados = {}) {
-    const acoesSuporte = new Set(['resumo', 'listar', 'salvar_configuracao']);
+    const acoesSuporte = new Set(['resumo', 'listar', 'salvar_configuracao', 'verificar_emitente_nfeio',
+      'cadastrar_empresa_nfeio', 'cadastrar_inscricao_nfeio', 'cadastrar_certificado_a1', 'ativar_inscricao_nfeio']);
     if (!this.client || !this.contexto ||
         (this.contexto.administrador_global && !acoesSuporte.has(String(acao || '')))) {
       return { sucesso: false, erro: 'Entre em uma empresa para usar a nota fiscal.' };

@@ -303,6 +303,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (status === 'aprovada') {
+      const segredoFiscal = texto(Deno.env.get('FISCAL_WORKER_CRON_SECRET'));
+      if (segredoFiscal) {
+        const tarefa = fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/fiscal-worker`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'x-cron-secret': segredoFiscal },
+          body: JSON.stringify({ cobrancaId: cobranca.id }), signal: AbortSignal.timeout(5000)
+        }).catch(() => null);
+        (globalThis as any).EdgeRuntime?.waitUntil?.(tarefa);
+      }
+    }
     return resposta(200, { recebido: true, status, aplicacao });
   } catch (erro) {
     console.error('[mercado-pago-saas-webhook]', mensagemErro(erro));

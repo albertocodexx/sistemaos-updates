@@ -43,6 +43,12 @@
           <div class="linha-acoes" style="margin-top:10px"><button type="button" id="btnDesconectarWhatsPlataforma" class="botao botao-perigo botao-pequeno" hidden>Desconectar canal</button></div>
         </div>
       </div>
+      <div class="suporte-integracao-card">
+        <strong>Notas fiscais das assinaturas</strong>
+        <p class="campo-desc">Cadastre a Aurevion como emitente. Após cada pagamento confirmado, a nota é enviada para autorização e aparece na assinatura da empresa cliente.</p>
+        <div class="linha-acoes"><button type="button" id="btnFiscalPlataforma" class="botao botao-secundario">Dados fiscais da Aurevion</button><button type="button" id="btnNotasAssinaturasSuporte" class="botao botao-secundario">Ver notas das assinaturas</button></div>
+        <div id="notasAssinaturasSuporte" hidden aria-live="polite"></div>
+      </div>
       <div class="suporte-integracao-card suporte-ia-global-card">
         <div><strong>Assistente IA global</strong><p id="statusIAGlobal" class="campo-desc">Consultando o cofre seguro…</p></div>
         <p class="campo-desc">Esta chave atende todas as empresas sem ser enviada ao PC ou ao celular. Somente o Administrador Geral pode alterá-la.</p>
@@ -65,6 +71,13 @@
     const metricas = $('metricasSuporteGlobal');
     if (metricas) metricas.before(secao); else painel.appendChild(secao);
     $('btnConectarMpPlataforma').addEventListener('click', conectarMp);
+    $('btnFiscalPlataforma').addEventListener('click', () => window.abrirCadastroFiscalSuporte?.({
+      id: 'plataforma', plataforma: true, nome_fantasia: 'Aurevion Tecnologia: notas das assinaturas'
+    }));
+    $('btnNotasAssinaturasSuporte').addEventListener('click', () => {
+      $('notasAssinaturasSuporte').hidden = false;
+      window.carregarNotasAssinaturaPC?.($('notasAssinaturasSuporte'), true);
+    });
     $('btnDesconectarMpPlataforma').addEventListener('click', () => desconectar('mercado_pago'));
     $('btnConectarWhatsPlataforma').addEventListener('click', conectarWhats);
     $('btnDesconectarWhatsPlataforma').addEventListener('click', () => desconectar('whatsapp'));
