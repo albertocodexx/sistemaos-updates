@@ -17,12 +17,20 @@ O cliente deve preencher seu próprio cadastro fiscal na Configuração Fiscal d
 
 As ações dependem das secrets `NFEIO_INVOICE_KEY` e `NFEIO_ACCOUNT_ID` na Edge Function. Nenhum valor de segredo deve ser colocado no código, instalador, APK ou documentação.
 
-## Dependências para ativação no servidor
+## Estado do servidor em 09/10/2026
+
+- `NFEIO_INVOICE_KEY`, `NFEIO_ACCOUNT_ID` e `FISCAL_EMISSOR_ATIVO=true` estão configurados nos segredos do projeto Supabase.
+- A credencial foi validada diretamente na API oficial da NFE.io com resposta HTTP 200, sem registrar o valor da chave e sem emitir documento fiscal.
+- O worker fiscal continua agendado a cada cinco minutos e o fluxo permanece idempotente e isolado por empresa.
+- Nenhuma emissão real foi usada como teste nesta ativação. A primeira emissão de cada cliente continua bloqueada até o administrador da própria empresa concluir os dados fiscais, a inscrição municipal e o certificado/credenciais exigidos pelo município.
+
+## Dependências restantes para a primeira emissão de cada empresa
 
 - NF-e e NFC-e: são documentos diferentes de NFS-e e exigem conector/validações próprios; o formulário atual não os emite.
-- Configurar no Supabase as secrets `NFEIO_INVOICE_KEY`, `NFEIO_ACCOUNT_ID` e `FISCAL_WORKER_CRON_SECRET`, agendar o worker e só então definir `FISCAL_EMISSOR_ATIVO=true`.
-- Aplicar e conferir as migrações fiscais após backup restaurável e reconciliação do histórico remoto.
-- Fazer uma emissão de homologação e uma de produção com emitente legítimo e dados autorizados antes de disponibilizar o botão para clientes.
+- Preencher e validar o cadastro fiscal do emitente legítimo no Sistema OS.
+- Informar a inscrição municipal, o ambiente e as credenciais exigidas pela prefeitura.
+- Transmitir o certificado A1 válido quando ele for exigido pelo município.
+- Conferir uma emissão em homologação e a primeira emissão de produção com dados reais e autorizados antes de operar em escala.
 
 Na ausência de qualquer uma dessas secrets, a aplicação falha fechada: mantém o pedido em `aguardando_configuracao` e não reserva cota nem cobra saldo fiscal.
 
