@@ -121,7 +121,16 @@
         #configFiscalEmpresa details.fiscal-avancado summary{cursor:pointer;font-weight:700;font-size:12px}
         #configFiscalEmpresa details.fiscal-avancado .grade-2{margin-top:12px}
         #configFiscalEmpresa .fiscal-lista-titulo{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:18px 0 9px}
-        @media(max-width:760px){#configFiscalEmpresa .fiscal-passos{grid-template-columns:repeat(2,minmax(0,1fr))}#configFiscalEmpresa .fiscal-revisao{grid-template-columns:1fr}}
+        #configFiscalEmpresa .fiscal-tutorial{margin-top:14px;padding:0;border:1px solid rgba(148,163,184,.25);border-radius:14px;background:rgba(148,163,184,.05);overflow:hidden}
+        #configFiscalEmpresa .fiscal-tutorial>summary{padding:14px 16px;cursor:pointer;font-weight:800;list-style-position:inside}
+        #configFiscalEmpresa .fiscal-tutorial-conteudo{padding:0 16px 16px;border-top:1px solid rgba(148,163,184,.18)}
+        #configFiscalEmpresa .fiscal-tutorial-grade{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+        #configFiscalEmpresa .fiscal-tutorial-card{padding:12px;border:1px solid rgba(148,163,184,.2);border-radius:11px;background:rgba(15,23,42,.08);font-size:12px;line-height:1.5}
+        #configFiscalEmpresa .fiscal-tutorial-card strong{display:block;margin-bottom:4px;font-size:13px}
+        #configFiscalEmpresa .fiscal-tutorial-lista{margin:10px 0 0;padding-left:22px;font-size:12px;line-height:1.55}
+        #configFiscalEmpresa .fiscal-tutorial-lista li+li{margin-top:7px}
+        #configFiscalEmpresa .fiscal-tutorial-check{margin:12px 0 0;padding:12px;border:1px solid rgba(34,197,94,.3);border-radius:11px;background:rgba(34,197,94,.07);font-size:12px;line-height:1.55}
+        @media(max-width:760px){#configFiscalEmpresa .fiscal-passos{grid-template-columns:repeat(2,minmax(0,1fr))}#configFiscalEmpresa .fiscal-revisao{grid-template-columns:1fr}#configFiscalEmpresa .fiscal-tutorial-grade{grid-template-columns:1fr}}
       </style>
       <div class="fiscal-cabecalho">
         <div>
@@ -132,6 +141,36 @@
       </div>
       <div id="fiscalAcoesSuporte" class="fiscal-acoes" hidden><button type="button" id="fiscalVoltarSuporte" class="botao botao-secundario">Voltar às empresas</button><strong id="fiscalEmpresaSuporteNome"></strong></div>
       <div id="statusFiscalEmpresa" class="fiscal-aviso" style="margin-top:12px">Consultando a situação fiscal…</div>
+      <details id="fiscalTutorialCadastro" class="fiscal-tutorial" open>
+        <summary>Como cadastrar a empresa para emitir nota — passo a passo</summary>
+        <div class="fiscal-tutorial-conteudo">
+          <p class="fiscal-ajuda" style="margin-top:14px">Você faz todo o cadastro nesta tela. Antes de começar, separe os dados oficiais da empresa e confirme os códigos tributários com o contador.</p>
+          <div class="fiscal-tutorial-grade">
+            <div class="fiscal-tutorial-card"><strong>NFS-e — serviços</strong>CNPJ, inscrição municipal ou dispensa, código IBGE, regime tributário, código do serviço, ISS, série e próximo RPS.</div>
+            <div class="fiscal-tutorial-card"><strong>NF-e — produtos</strong>CNPJ, inscrição estadual credenciada na SEFAZ, e-CNPJ A1, série e número, NCM, CFOP, CST/CSOSN, PIS e COFINS.</div>
+            <div class="fiscal-tutorial-card"><strong>NFC-e — venda ao consumidor</strong>Os mesmos dados estaduais da NF-e e também o CSC e seu identificador, obtidos no portal da SEFAZ da empresa.</div>
+          </div>
+          <strong>Onde encontrar cada informação</strong>
+          <ul class="fiscal-tutorial-lista">
+            <li><b>CNPJ, razão social e endereço:</b> cartão CNPJ e documentos oficiais da empresa.</li>
+            <li><b>Inscrição municipal, código do serviço, ISS e RPS:</b> prefeitura ou contador. Marque “dispensada” somente quando a prefeitura confirmar.</li>
+            <li><b>Inscrição estadual, credenciamento, série, numeração e CSC:</b> portal da SEFAZ da UF ou contador. O Sistema OS não cria inscrição nem credenciamento.</li>
+            <li><b>NCM, CFOP, CST/CSOSN, PIS e COFINS:</b> contador. Não copie códigos de outra empresa.</li>
+            <li><b>Certificado A1:</b> arquivo <code>.pfx</code> ou <code>.p12</code> e senha entregues pela certificadora. Envie somente nesta tela; nunca por mensagem ou chamado.</li>
+          </ul>
+          <strong style="display:block;margin-top:14px">Faça assim no Sistema OS</strong>
+          <ol class="fiscal-tutorial-lista">
+            <li>Na etapa <b>Dados da empresa</b>, informe o emitente e o endereço. Abra “Emitente de NF-e / NFC-e” se vender produtos.</li>
+            <li>Em <b>Prefeitura e impostos</b>, informe município, UF, inscrição municipal e regime tributário.</li>
+            <li>Em <b>Serviço da nota</b>, cadastre o serviço padrão e os códigos confirmados pelo contador.</li>
+            <li>Em <b>Salvar e ativar</b>, revise tudo e clique em <b>Salvar cadastro fiscal</b>.</li>
+            <li>Para NFS-e, conclua os botões numerados: cadastrar empresa, cadastrar inscrição municipal, enviar A1 e ativar a inscrição.</li>
+            <li>Para NF-e/NFC-e, marque os modelos desejados e clique em <b>Configurar e iniciar teste automático</b>. O teste não usa saldo.</li>
+            <li>Aguarde o status <b>Aprovada/Produção</b>. Só depois adicione saldo e emita documentos reais.</li>
+          </ol>
+          <div class="fiscal-tutorial-check"><b>Pronto para emitir quando:</b> dados salvos, A1 aceito, inscrição ativa, homologação aprovada e saldo/cortesia disponível. Se algum item for rejeitado, corrija o dado indicado antes de tentar novamente.</div>
+        </div>
+      </details>
       <section class="fiscal-resumo-cota" aria-label="Uso e saldo de notas fiscais">
         <div><small>Cortesia no mês</small><strong id="fiscalCotaIncluida">—</strong></div>
         <div><small>Notas no mês</small><strong id="fiscalCotaUtilizada">—</strong></div>
@@ -197,7 +236,7 @@
             <div class="grade-2">
               <div class="campo"><label for="fiscalTipoEmitenteProdutos">Documento do emitente</label><select id="fiscalTipoEmitenteProdutos"><option value="cnpj">CNPJ da empresa</option><option value="cpf">CPF de produtor rural</option></select></div>
               <div class="campo"><label for="fiscalDocumentoEmitenteProdutos">CPF ou CNPJ</label><input id="fiscalDocumentoEmitenteProdutos" inputmode="text" maxlength="18" autocomplete="off" spellcheck="false"><small id="fiscalDocumentoProdutosStatus" class="campo-desc" aria-live="polite">Informe o documento para validar.</small></div>
-              <div class="campo"><label for="fiscalInscricaoEstadual">Inscrição estadual</label><input id="fiscalInscricaoEstadual" maxlength="20"></div>
+              <div class="campo"><label for="fiscalInscricaoEstadual">Inscrição estadual</label><input id="fiscalInscricaoEstadual" maxlength="20"><small class="campo-desc">Use a IE ativa e credenciada na SEFAZ da UF. Não é o número do CNPJ.</small></div>
               <label class="campo-checkbox"><input id="fiscalProdutorRural" type="checkbox"><span>Sou produtor rural credenciado na UF</span></label>
               <div class="campo"><label for="fiscalNfeSerie">Série NF-e</label><input id="fiscalNfeSerie" type="number" min="0" max="999"></div>
               <div class="campo"><label for="fiscalNfeNumero">Próximo número NF-e</label><input id="fiscalNfeNumero" type="number" min="1" max="999999999"></div>

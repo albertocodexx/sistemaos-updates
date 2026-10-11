@@ -66,6 +66,7 @@ const testes = [
   'teste-conflito-comercial-idempotente.js',
   'teste-checklist-entrada-ampliado.js',
   'teste-atualizador-github.js',
+  'teste-compatibilidade-versoes.js',
   'teste-atualizacao-suporte.js',
   'teste-seguranca-cyber.js',
   'teste-seguranca-baileys-cve.js',

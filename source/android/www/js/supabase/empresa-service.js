@@ -8,6 +8,17 @@
 
   async function carregarContexto() {
     var cliente = root.SupabaseClientApp.obterCliente();
+    var compatibilidade = await cliente.rpc('verificar_compatibilidade_aplicativo', {
+      p_plataforma: 'android',
+      p_versao: root.SupabaseClientApp.versaoApp || '20.5.23',
+      p_schema: root.SupabaseClientApp.versaoSchemaSync || 10
+    });
+    if (compatibilidade.error && compatibilidade.error.code !== 'PGRST202') throw compatibilidade.error;
+    var regra = Array.isArray(compatibilidade.data) ? compatibilidade.data[0] : compatibilidade.data;
+    if (regra && regra.compativel === false) {
+      throw new Error(String(regra.mensagem ||
+        'Atualização obrigatória. Instale a versão mais recente para continuar.'));
+    }
     var resposta = await cliente.rpc('obter_contexto_comercial');
     if (resposta.error) throw resposta.error;
     var dados = Array.isArray(resposta.data) ? resposta.data[0] : resposta.data;

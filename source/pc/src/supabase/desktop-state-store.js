@@ -6,6 +6,7 @@ const VERSAO_ESTADO = 2;
 
 const CAMPOS_POR_EMPRESA = Object.freeze([
   'dispositivoId', 'ultimoPullEm', 'ultimaReconciliacaoOSCompletaEm',
+  'schemaSincronizacao',
   'ultimoPullExclusoesEm', 'ultimoPullEstoqueEm', 'ultimoPullComercialEm',
   'ultimoPullArquivosEm', 'fila', 'filaAssinaturas', 'mapeamentosOS',
   'mapeamentosEstoque', 'documentosComerciais', 'posAtendimento',
@@ -19,6 +20,7 @@ function estadoInicial() {
     deviceKey: crypto.randomUUID(),
     empresaId: '',
     dispositivoId: '',
+    schemaSincronizacao: 0,
     ultimoPullEm: '1970-01-01T00:00:00.000Z',
     ultimaReconciliacaoOSCompletaEm: '',
     ultimoPullExclusoesEm: '1970-01-01T00:00:00.000Z',
@@ -122,6 +124,24 @@ class DesktopStateStore {
         estado[campo] = clonar(restaurado[campo] === undefined ? vazio[campo] : restaurado[campo]);
       });
       estado.empresaId = proxima;
+    });
+  }
+
+  garantirSchemaSincronizacao(schemaEsperado) {
+    const esperado = Number(schemaEsperado) || 0;
+    if (esperado < 1) return false;
+    return this.alterar((estado) => {
+      if (Number(estado.schemaSincronizacao || 0) >= esperado) return false;
+      // Uma versao nova pode compreender campos que a anterior ignorava.
+      // Refazemos somente os pulls; filas offline e mapeamentos permanecem.
+      estado.ultimoPullEm = '1970-01-01T00:00:00.000Z';
+      estado.ultimaReconciliacaoOSCompletaEm = '';
+      estado.ultimoPullExclusoesEm = '1970-01-01T00:00:00.000Z';
+      estado.ultimoPullEstoqueEm = '1970-01-01T00:00:00.000Z';
+      estado.ultimoPullComercialEm = '1970-01-01T00:00:00.000Z';
+      estado.ultimoPullArquivosEm = '1970-01-01T00:00:00.000Z';
+      estado.schemaSincronizacao = esperado;
+      return true;
     });
   }
 

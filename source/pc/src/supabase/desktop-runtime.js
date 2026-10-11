@@ -11,6 +11,7 @@ const { localParaSupabase, remotoParaLocal } = require('./os-mapper');
 const { mesclarExtrasCobranca } = require('./cobrancas-sync');
 const SUPABASE_PUBLIC_CONFIG = require('./public-config');
 const APP_VERSION = require('../../package.json').version;
+const SYNC_SCHEMA_VERSION = 10;
 const CHAVE_TROCA_CONTA_PENDENTE = '__sistema_os_troca_conta_pendente_v1__';
 const CHAVE_TROCA_CONTA_ERRO = '__sistema_os_troca_conta_erro_v1__';
 const TAMANHO_PAGINA_OS = 500;
@@ -338,7 +339,7 @@ class DesktopSupabaseRuntime {
         autoRefreshToken: true,
         detectSessionInUrl: false
       },
-      global: { headers: { 'x-client-info': 'sistema-os-electron-stage7' } }
+      global: { headers: { 'x-client-info': `sistema-os/windows/${APP_VERSION}/schema/${SYNC_SCHEMA_VERSION}` } }
     });
     this.assinaturaAuth = client.auth.onAuthStateChange?.((evento, sessao) => {
       // Callback síncrono: chamar Auth/RPC aqui disputa o lock do próprio SDK.
@@ -373,6 +374,7 @@ class DesktopSupabaseRuntime {
     if (!contexto?.empresa_id || typeof this.db.ativarEscopoEmpresa !== 'function') return null;
     const escopo = this.db.ativarEscopoEmpresa(contexto.empresa_id, { migrarLegado });
     this.stateStore.trocarEmpresa(contexto.empresa_id);
+    this.stateStore.garantirSchemaSincronizacao(SYNC_SCHEMA_VERSION);
     this._recriarServicoArquivosDoEscopo();
     this.db.migrarSegredosParaArmazenamentoSeguro?.();
     return escopo;
@@ -434,11 +436,31 @@ class DesktopSupabaseRuntime {
     }
   }
 
+  async _verificarCompatibilidadeAplicativo() {
+    const { data, error } = await this.client.rpc('verificar_compatibilidade_aplicativo', {
+      p_plataforma: 'windows',
+      p_versao: APP_VERSION,
+      p_schema: SYNC_SCHEMA_VERSION
+    });
+    // Permite publicar o cliente antes da migracao, sem quebrar a janela curta
+    // entre os dois deploys. Depois que a RPC existe, qualquer outra falha e
+    // tratada normalmente.
+    if (error && error.code === 'PGRST202') return { compativel: true, legado: true };
+    if (error) throw error;
+    const resultado = primeiraLinha(data) || data || {};
+    if (resultado.compativel === false) {
+      throw new Error(String(resultado.mensagem ||
+        'Atualizacao obrigatoria. Instale a versao mais recente para continuar.'));
+    }
+    return resultado;
+  }
+
   async _carregarContexto(user, usuarioInformado) {
     const { data, error } = await this.client.rpc('obter_contexto_comercial');
     if (error) throw error;
     const contexto = primeiraLinha(data);
     if (!contexto) throw new Error('Usuário sem perfil ou empresa vinculada.');
+    await this._verificarCompatibilidadeAplicativo();
     if (!contexto.usuario_ativo) throw new Error('Usuário inativo.');
     const suporteGlobal = contexto.administrador_global === true;
     if (!suporteGlobal && !contexto.empresa_ativa) throw new Error('Empresa inativa.');

@@ -12,6 +12,8 @@
 
   var cliente = null;
   var assinaturaCliente = '';
+  var VERSAO_APP = '20.5.23';
+  var VERSAO_SCHEMA_SYNC = 10;
 
   function texto(valor) {
     return String(valor == null ? '' : valor).trim();
@@ -139,7 +141,9 @@
         storage: persistir ? root.localStorage : undefined,
         storageKey: 'sistema-os-auth-' + referencia
       },
-      global: { headers: { 'X-Client-Info': 'sistema-os-android-etapa3' } }
+      global: { headers: {
+        'X-Client-Info': 'sistema-os/android/' + VERSAO_APP + '/schema/' + VERSAO_SCHEMA_SYNC
+      } }
     };
   }
 
@@ -187,6 +191,8 @@
     criarClienteTemporario: criarClienteTemporario,
     assinaturaConfiguracao: assinatura,
     limparCliente: limparCliente,
+    versaoApp: VERSAO_APP,
+    versaoSchemaSync: VERSAO_SCHEMA_SYNC,
     _papelDaChaveJwt: papelDaChaveJwt
   };
 });
