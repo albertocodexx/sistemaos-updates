@@ -18,6 +18,7 @@ const testes = [
   'teste-nfeio-preflight.js',
   'teste-nfeio-onboarding.js',
   'teste-nfeio-nfse.js',
+  'teste-nfeio-produtos.js',
   'teste-fiscal-acoes-empresa.js',
   'teste-pos-atendimento.js',
   'teste-entrega-retorno-preserva-original.js',

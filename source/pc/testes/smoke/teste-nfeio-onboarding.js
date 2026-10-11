@@ -27,6 +27,24 @@ const { pathToFileURL } = require('node:url');
       assert.equal(corpo.Company.Address.City.Code, '3550308');
       return new Response(JSON.stringify({ Company: { Id: id, FederalTaxNumber: cnpj } }), { status: 200 });
     }
+    if (url.includes('/statetaxes')) {
+      if (url.includes('/statetaxes?') && opcoes.method === 'GET') {
+        return new Response(JSON.stringify({ StateTaxes: [] }), { status: 200 });
+      }
+      if (opcoes.method === 'GET') return new Response(JSON.stringify({ StateTax: {
+        Id: 'statetax_abc123', CompanyId: id, Status: 'Active', EnvironmentType: 'Test', Type: 'NFe'
+      } }), { status: 200 });
+      const corpo = JSON.parse(opcoes.body);
+      if (opcoes.method === 'PUT') {
+        assert.equal(corpo.StateTax.EnvironmentType, 'Production');
+        return new Response(JSON.stringify({ StateTax: { Id: 'statetax_abc123', CompanyId: id,
+          Status: 'Active', EnvironmentType: 'Production', Type: 'NFe' } }), { status: 200 });
+      }
+      assert.equal(corpo.StateTax.EnvironmentType, 'Test');
+      assert.equal(corpo.StateTax.Type, 'NFe');
+      return new Response(JSON.stringify({ StateTax: { Id: 'statetax_abc123', CompanyId: id,
+        Status: 'Active', EnvironmentType: 'Test', Type: 'NFe' } }), { status: 200 });
+    }
     if (url.includes('/municipaltaxes')) {
       if (opcoes.method === 'GET') return new Response(JSON.stringify({ MunicipalTax: {
         Id: 'municipal_abc123', CompanyId: id, Status: 'Active', FiscalStatus: 'Active',
@@ -73,7 +91,16 @@ const { pathToFileURL } = require('node:url');
   'inscricao_divergente', 'nao promover inscricao que nao corresponde ao cadastro da empresa');
   assert.equal((await modulo.criarEmpresaNfeio(cadastro, 'acc_12345678', '', consultar)).motivo,
     'credencial_indisponivel');
-  assert.equal(envios.length, 7, 'entradas invalidas nao fazem requisicoes externas');
+  const cadastroProdutos = { ...cadastro, inscricao_estadual: '110042490114', nfe_serie: 1,
+    nfe_proximo_numero: 1, nfce_serie: 1, nfce_proximo_numero: 1 };
+  assert.equal((await modulo.listarInscricoesEstaduaisNfeio(id, 'chave-de-teste', consultar)).ok, true);
+  assert.equal((await modulo.criarInscricaoEstadualNfeio(id, cadastroProdutos, 'NFe', undefined,
+    'chave-de-teste', consultar)).id, 'statetax_abc123');
+  assert.equal((await modulo.criarInscricaoEstadualNfeio(id, cadastroProdutos, 'NFCe', undefined,
+    'chave-de-teste', consultar)).motivo, 'inscricao_incompleta', 'NFC-e exige CSC');
+  assert.equal((await modulo.ativarInscricaoEstadualNfeio(id, 'statetax_abc123', 'NFe',
+    'chave-de-teste', consultar)).ok, true);
+  assert.equal(envios.length, 11, 'entradas invalidas nao fazem requisicoes externas');
 
   const edge = fs.readFileSync(path.join(__dirname, '../../supabase/functions/fiscal-documentos/index.ts'), 'utf8');
   const tela = fs.readFileSync(path.join(__dirname, '../../renderer/modules/fiscal/documentos.js'), 'utf8');
@@ -83,11 +110,14 @@ const { pathToFileURL } = require('node:url');
   assert.match(edge, /FISCAL_EMISSOR_ATIVO/);
   assert.match(edge, /NFEIO_INVOICE_KEY/);
   assert.match(edge, /FISCAL_WORKER_CRON_SECRET/);
+  assert.match(edge, /conector NFE\.io atual exige emitente CNPJ/i);
+  assert.match(edge, /homologacaoPorTipo\.get\('nfe'\) !== 'aprovada'/);
   assert.match(tela, /btnFiscalCadastrarEmpresaNfeio/);
   assert.match(tela, /btnFiscalCadastrarImNfeio/);
   assert.match(tela, /btnFiscalAtivarProducao/);
   assert.match(tela, /prestadorCpf \|\| Boolean\(metadados\.nfeio_empresa_id\)/);
   assert.match(tela, /cadastro de prestador CPF pode ser salvo, mas ainda não permite emitir notas/);
+  assert.match(tela, /conector NFE\.io atual não aceita e-CPF A1/i);
   assert.doesNotMatch(tela, /ID da empresa na NFE\.io/);
   console.log('NFE.io: cadastro pela empresa, IM de teste, A1 transitório e trava segura do emissor OK');
 })().catch((erro) => { console.error(erro); process.exitCode = 1; });

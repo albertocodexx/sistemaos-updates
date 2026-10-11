@@ -33,9 +33,11 @@ async function main() {
     data_vencimento: new Date(Date.now() + 30 * 86400000).toISOString() }];
   const reservasFiscais = [];
   const recargasFiscais = [];
+  const homologacoesFiscais = [];
   const colecoes = { notas_fiscais: notas, configuracoes_fiscais: configuracoes,
     limites_emissao_fiscal: limites, perfis, contas_fiscais: contas,
-    reservas_fiscais: reservasFiscais, recargas_fiscais: recargasFiscais, empresas };
+    reservas_fiscais: reservasFiscais, recargas_fiscais: recargasFiscais,
+    homologacoes_fiscais: homologacoesFiscais, empresas };
   function consulta(tabela) {
     const colecao = colecoes[tabela];
     assert.ok(colecao, `Tabela inesperada: ${tabela}`);
@@ -152,6 +154,9 @@ async function main() {
       inscricoesNfeio += 1;
       return { ok: true, id: 'municipal_qa123456' };
     },
+    listarInscricoesEstaduaisNfeio: async () => ({ ok: true, inscricoes: [] }),
+    criarInscricaoEstadualNfeio: async () => ({ ok: true, id: 'statetax_qa123456' }),
+    montarDocumentoProdutoNfeio: () => ({ ok: true, corpo: {} }),
     ativarInscricaoMunicipalNfeio: async (_id, _imId, fiscal, credenciais) => {
       assert.equal(fiscal.cnpj, '11444777000161');
       assert.equal(credenciais.loginPassword, 'senha-municipal-qa');

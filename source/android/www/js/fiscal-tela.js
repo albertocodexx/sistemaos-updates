@@ -35,7 +35,10 @@
     var item = document.createElement('article');
     item.className = 'fiscal-mobile-item';
     var titulo = document.createElement('strong');
-    titulo.textContent = 'NFS-e ' + (nota.numero ? 'nº ' + nota.numero : 'em preparação');
+    var tipoDocumento = String(nota.tipo_documento || 'nfse').toLowerCase();
+    var rotuloDocumento = tipoDocumento === 'nfe' ? 'NF-e' : tipoDocumento === 'nfce' ? 'NFC-e' : 'NFS-e';
+    var rotuloAuxiliar = tipoDocumento === 'nfse' ? 'DANFSe' : tipoDocumento === 'nfe' ? 'DANFE NF-e' : 'DANFE NFC-e';
+    titulo.textContent = rotuloDocumento + ' ' + (nota.numero ? 'nº ' + nota.numero : 'em preparação');
     var origem = document.createElement('span');
     origem.className = 'fiscal-mobile-origem';
     origem.textContent = rotuloOrigem(nota) + (nota.origem_id ? ' ' + nota.origem_id : '') +
@@ -60,7 +63,7 @@
     if (nota.status === 'autorizada' && (nota.danfse_storage_path || nota.danfse_url || nota.pdf_url)) {
       var acoes = document.createElement('div'); acoes.className = 'fiscal-mobile-acoes';
       var abrir = document.createElement('button');
-      abrir.type = 'button'; abrir.className = 'btn-secundario'; abrir.textContent = 'Abrir DANFSe';
+      abrir.type = 'button'; abrir.className = 'btn-secundario'; abrir.textContent = 'Abrir ' + rotuloAuxiliar;
       abrir.addEventListener('click', async function () {
         if (abrir.disabled) return;
         abrir.disabled = true;
@@ -69,7 +72,7 @@
           var navegador = root.Capacitor?.Plugins?.Browser;
           if (navegador?.open) await navegador.open({ url: url });
           else if (!root.open(url, '_blank', 'noopener,noreferrer')) throw new Error('Permita abrir o navegador para visualizar o documento.');
-        } catch (erro) { aviso(erro.message || 'Falha ao abrir o DANFSe.'); }
+        } catch (erro) { aviso(erro.message || 'Falha ao abrir o documento fiscal.'); }
         finally { abrir.disabled = false; }
       });
       var compartilhar = document.createElement('button');
@@ -79,10 +82,10 @@
         compartilhar.disabled = true;
         try {
           var url = await obterPdf(nota);
-          await root.SistemaOSCompartilhar.compartilharPdfPorUrl(url, 'DANFSe-' + (nota.numero || nota.id) + '.pdf',
-            'Compartilhar DANFSe', 'Segue o DANFSe da NFS-e ' + (nota.numero || nota.origem_id || '') +
+          await root.SistemaOSCompartilhar.compartilharPdfPorUrl(url, rotuloAuxiliar.replace(/\s+/g, '-') + '-' + (nota.numero || nota.id) + '.pdf',
+            'Compartilhar ' + rotuloAuxiliar, 'Segue o ' + rotuloAuxiliar + ' da ' + rotuloDocumento + ' ' + (nota.numero || nota.origem_id || '') +
             (nota.cliente_nome ? ' de ' + nota.cliente_nome : '') + '.');
-        } catch (erro) { aviso(erro.message || 'Falha ao compartilhar o DANFSe.'); }
+        } catch (erro) { aviso(erro.message || 'Falha ao compartilhar o documento fiscal.'); }
         finally { compartilhar.disabled = false; }
       });
       acoes.append(abrir, compartilhar); item.append(acoes);
@@ -124,6 +127,8 @@
       texto($('fiscal-mobile-saldo'), Number(cota.debito_pendente_centavos || 0) > 0
         ? dinheiro(cota.saldo_centavos) + ' · débito ' + dinheiro(cota.debito_pendente_centavos)
         : dinheiro(cota.saldo_centavos));
+      texto($('fiscal-mobile-estimativa'), cota.estimativa_notas_com_saldo == null
+        ? 'Sem limite por saldo' : '≈ ' + cota.estimativa_notas_com_saldo + ' nota(s)');
       var habilitado = dados.emissor_operacional === true && dados.configuracao?.status === 'configurada' && dados.configuracao?.ambiente === 'producao';
       $('btn-recarga-fiscal-mobile').disabled = !habilitado;
       $('fiscal-mobile-recarga-ajuda').textContent = habilitado

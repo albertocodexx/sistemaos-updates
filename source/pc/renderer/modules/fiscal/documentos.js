@@ -125,8 +125,8 @@
       </style>
       <div class="fiscal-cabecalho">
         <div>
-          <div class="config-secao-titulo">NFS-e e DANFSe</div>
-          <p class="campo-desc">Preencha os dados da empresa, informe o serviço e conclua a ativação. Você faz tudo por aqui.</p>
+          <div class="config-secao-titulo">NFS-e, NF-e e NFC-e</div>
+          <p class="campo-desc">Cadastre o emitente, confira os códigos com o contador e acompanhe homologação, saldo e documentos por aqui.</p>
         </div>
         <span class="fiscal-selo">Documento fiscal de serviço</span>
       </div>
@@ -138,6 +138,7 @@
         <div><small>Cortesia restante</small><strong id="fiscalCotaRestante">—</strong></div>
         <div><small>Preço por nota</small><strong id="fiscalCotaPreco">—</strong></div>
         <div><small>Saldo fiscal</small><strong id="fiscalCotaSaldo">—</strong></div>
+        <div><small>Estimativa com saldo</small><strong id="fiscalCotaEstimativa">—</strong></div>
       </section>
       <div class="fiscal-recarga">
         <label for="fiscalValorRecarga">Adicionar saldo para emitir notas</label>
@@ -190,15 +191,33 @@
               <div class="campo"><label for="fiscalBairroPrestador">Bairro</label><input id="fiscalBairroPrestador" maxlength="100"></div>
             </div>
           </details>
-          <details class="fiscal-avancado" hidden>
+          <details class="fiscal-avancado">
             <summary>Emitente de NF-e / NFC-e (produtos)</summary>
-            <p class="fiscal-ajuda">Este cadastro prepara os dados para produtos; não habilita emissão antes do credenciamento e da integração com a SEFAZ. CPF de emitente é restrito a produtor rural com inscrição estadual, conforme a UF.</p>
+            <p class="fiscal-ajuda">Este cadastro prepara os dados para produtos; não habilita emissão antes do credenciamento na SEFAZ. O conector atual da NFE.io aceita emissão automática pelo CNPJ/e-CNPJ A1. CPF de produtor rural pode ser cadastrado para conferência, mas exige um conector compatível com e-CPF antes de emitir.</p>
             <div class="grade-2">
               <div class="campo"><label for="fiscalTipoEmitenteProdutos">Documento do emitente</label><select id="fiscalTipoEmitenteProdutos"><option value="cnpj">CNPJ da empresa</option><option value="cpf">CPF de produtor rural</option></select></div>
               <div class="campo"><label for="fiscalDocumentoEmitenteProdutos">CPF ou CNPJ</label><input id="fiscalDocumentoEmitenteProdutos" inputmode="text" maxlength="18" autocomplete="off" spellcheck="false"><small id="fiscalDocumentoProdutosStatus" class="campo-desc" aria-live="polite">Informe o documento para validar.</small></div>
               <div class="campo"><label for="fiscalInscricaoEstadual">Inscrição estadual</label><input id="fiscalInscricaoEstadual" maxlength="20"></div>
               <label class="campo-checkbox"><input id="fiscalProdutorRural" type="checkbox"><span>Sou produtor rural credenciado na UF</span></label>
+              <div class="campo"><label for="fiscalNfeSerie">Série NF-e</label><input id="fiscalNfeSerie" type="number" min="0" max="999"></div>
+              <div class="campo"><label for="fiscalNfeNumero">Próximo número NF-e</label><input id="fiscalNfeNumero" type="number" min="1" max="999999999"></div>
+              <div class="campo"><label for="fiscalNfceSerie">Série NFC-e</label><input id="fiscalNfceSerie" type="number" min="0" max="999"></div>
+              <div class="campo"><label for="fiscalNfceNumero">Próximo número NFC-e</label><input id="fiscalNfceNumero" type="number" min="1" max="999999999"></div>
             </div>
+            <h4 class="fiscal-etapa-titulo" style="margin-top:14px">Padrão fiscal dos produtos</h4>
+            <p class="fiscal-ajuda">Não adivinhe estes códigos. Eles serão usados no teste automático e devem ser confirmados pelo contador.</p>
+            <div class="grade-2">
+              <div class="campo"><label for="fiscalNcmPadrao">NCM (8 dígitos)</label><input id="fiscalNcmPadrao" inputmode="numeric" maxlength="8"></div>
+              <div class="campo"><label for="fiscalCestPadrao">CEST (se aplicável)</label><input id="fiscalCestPadrao" inputmode="numeric" maxlength="7"></div>
+              <div class="campo"><label for="fiscalCfopPadrao">CFOP</label><input id="fiscalCfopPadrao" inputmode="numeric" maxlength="4"></div>
+              <div class="campo"><label for="fiscalUnidadePadrao">Unidade</label><input id="fiscalUnidadePadrao" maxlength="6" placeholder="UN"></div>
+              <div class="campo"><label for="fiscalOrigemPadrao">Origem da mercadoria</label><input id="fiscalOrigemPadrao" inputmode="numeric" maxlength="1"></div>
+              <div class="campo"><label for="fiscalCstIcmsPadrao">CST ICMS</label><input id="fiscalCstIcmsPadrao" inputmode="numeric" maxlength="2"></div>
+              <div class="campo"><label for="fiscalCsosnPadrao">CSOSN (Simples)</label><input id="fiscalCsosnPadrao" inputmode="numeric" maxlength="3"></div>
+              <div class="campo"><label for="fiscalCstPisPadrao">CST PIS</label><input id="fiscalCstPisPadrao" inputmode="numeric" maxlength="2"></div>
+              <div class="campo"><label for="fiscalCstCofinsPadrao">CST COFINS</label><input id="fiscalCstCofinsPadrao" inputmode="numeric" maxlength="2"></div>
+            </div>
+            <label class="campo-checkbox"><input id="fiscalContadorConfirmouProdutos" type="checkbox"><span>O contador confirmou IE, numeração e códigos fiscais acima</span></label>
           </details>
         </section>
 
@@ -250,7 +269,8 @@
             <b>OS:</b> usa o cliente da OS, o valor total do serviço/orçamento e identifica o número da OS.<br>
             <b>Venda:</b> usa o comprador e somente o valor de serviço ou mão de obra; o preço do aparelho/produto não entra na NFS-e.<br>
             <b>Compra:</b> não gera nota de saída. Guarde o documento recebido do fornecedor.<br>
-            <b>Outros:</b> emissão avulsa ainda não possui formulário. NF-e/NFC-e de produtos ainda não estão disponíveis.
+            <b>Compra:</b> pode gerar NF-e de entrada somente quando a operação e o CFOP forem confirmados pelo contador.<br>
+            <b>Outros:</b> use emissão avulsa para situações permitidas pelo contador. NF-e e NFC-e são liberadas após A1, IE/credenciamento, códigos fiscais e homologação automática aprovada.
           </div>
           <details class="fiscal-avancado">
             <summary>Totais aproximados de tributos</summary>
@@ -308,6 +328,18 @@
             <button type="button" id="btnFiscalAtivarProducao" class="botao botao-secundario">4. Ativar inscrição em produção</button>
             <p id="fiscalAtivacaoStatus" class="campo-desc" role="status" aria-live="polite"></p>
           </div>
+          <div id="fiscalAtivacaoProdutos" class="fiscal-painel" style="margin-top:14px" hidden>
+            <h4 class="fiscal-etapa-titulo">Homologação automática de NF-e e NFC-e</h4>
+            <p class="fiscal-ajuda">Informe o CSC somente se usar NFC-e. O código é enviado direto ao emissor e não é salvo pelo Sistema OS. O teste não consome cota nem saldo.</p>
+            <div class="grade-2">
+              <label class="campo-checkbox"><input id="fiscalHabilitarNfe" type="checkbox" checked><span>Configurar NF-e (modelo 55)</span></label>
+              <label class="campo-checkbox"><input id="fiscalHabilitarNfce" type="checkbox"><span>Configurar NFC-e (modelo 65)</span></label>
+              <div class="campo"><label for="fiscalCscId">ID do CSC (NFC-e)</label><input id="fiscalCscId" type="number" min="1" step="1" autocomplete="off"></div>
+              <div class="campo"><label for="fiscalCscCodigo">Código CSC (NFC-e)</label><input id="fiscalCscCodigo" type="password" maxlength="128" autocomplete="new-password"></div>
+            </div>
+            <button type="button" id="btnFiscalHomologarProdutos" class="botao botao-secundario">Configurar e iniciar teste automático</button>
+            <div id="fiscalHomologacaoStatus" class="campo-desc" role="status" aria-live="polite"></div>
+          </div>
         </section>
       </div>
 
@@ -315,7 +347,7 @@
         <button type="button" id="btnFiscalAnterior" class="botao botao-secundario" hidden>Voltar</button>
         <button type="button" id="btnFiscalProxima" class="botao botao-primario" style="margin-left:auto">Continuar</button>
       </div>
-      <div class="fiscal-lista-titulo"><strong>NFS-e recentes</strong><small class="campo-desc">O DANFSe aparece somente após autorização.</small></div>
+      <div class="fiscal-lista-titulo"><strong>Documentos fiscais recentes</strong><small class="campo-desc">DANFSe/DANFE aparecem somente após autorização.</small></div>
       <div id="listaNotasFiscais"></div>`;
 
     // O primeiro objetivo é concluir o cadastro; saldo e limites ficam juntos, abaixo dele.
@@ -346,6 +378,7 @@
     $('btnFiscalCadastrarImNfeio').addEventListener('click', () => cadastrarNoEmissor('cadastrar_inscricao_nfeio'));
     $('btnFiscalEnviarCertificado').addEventListener('click', enviarCertificadoA1);
     $('btnFiscalAtivarProducao').addEventListener('click', ativarInscricaoProducao);
+    $('btnFiscalHomologarProdutos').addEventListener('click', configurarProdutosNfeio);
     $('btnCriarRecargaFiscal').addEventListener('click', criarRecargaFiscal);
     $('fiscalLimiteTipo').addEventListener('change', atualizarAlvosLimite);
     $('fiscalLimiteAlvo').addEventListener('change', preencherLimiteSelecionado);
@@ -525,6 +558,8 @@
     definirTexto('fiscalCotaSaldo', Number(cota.debito_pendente_centavos || 0) > 0
       ? `${moeda(cota.saldo_centavos)} · débito ${moeda(cota.debito_pendente_centavos)}`
       : moeda(cota.saldo_centavos));
+    definirTexto('fiscalCotaEstimativa', cota.estimativa_notas_com_saldo == null
+      ? 'Sem limite por saldo' : `≈ ${cota.estimativa_notas_com_saldo} nota(s)`);
     $('btnCriarRecargaFiscal').disabled = Boolean(empresaSuporte) || resumo.emissor_operacional !== true || config.status !== 'configurada' || config.ambiente !== 'producao';
     $('fiscalRecargaAjuda').textContent = $('btnCriarRecargaFiscal').disabled
       ? 'A recarga será liberada quando a emissão fiscal da empresa estiver operacional. Valor mínimo: R$ 1,00.'
@@ -569,6 +604,7 @@
         resumo.pode_configurar !== true;
     }
     const a1Vigente = Date.parse(String(metadados.nfeio_certificado_valido_ate || '')) > Date.now();
+    const emitenteProdutoCpf = metadados.tipo_emitente_produtos === 'cpf';
     if ($('fiscalAtivacaoProducao')) $('fiscalAtivacaoProducao').hidden =
       resumo.pode_configurar !== true || prestadorCpf || !metadados.nfeio_im_id;
     if ($('btnFiscalAtivarProducao')) $('btnFiscalAtivarProducao').disabled =
@@ -577,6 +613,12 @@
       ? 'Inscrição em produção confirmada. Aguarde a liberação da emissão pelo Sistema OS.'
       : !a1Vigente ? 'Envie primeiro o A1 válido da própria empresa.'
         : 'Confira os dados da prefeitura e confirme a titularidade para ativar a inscrição.';
+    if ($('fiscalAtivacaoProdutos')) $('fiscalAtivacaoProdutos').hidden = resumo.pode_configurar !== true ||
+      prestadorCpf || emitenteProdutoCpf || !metadados.nfeio_empresa_id || !a1Vigente;
+    const homologacoes = Array.isArray(resumo.homologacoes) ? resumo.homologacoes : [];
+    if ($('fiscalHomologacaoStatus')) $('fiscalHomologacaoStatus').innerHTML = homologacoes.length
+      ? homologacoes.map((item) => `${escaparHtml(String(item.tipo_documento || '').toUpperCase())}: <strong>${escaparHtml(rotuloStatus(item.status))}</strong>${item.ultimo_erro ? ` — ${escaparHtml(item.ultimo_erro)}` : ''}`).join('<br>')
+      : 'Ainda não há teste de NF-e/NFC-e. Complete o cadastro e inicie a homologação automática.';
     const tipoPrestador = ['mei', 'juridica', 'fisica'].includes(metadados.tipo_prestador)
       ? metadados.tipo_prestador
       : (metadados.tipo_pessoa === 'fisica' || (metadados.cpf && !metadados.cnpj) ? 'fisica' : (metadados.regime_tributario === 'mei' ? 'mei' : 'juridica'));
@@ -623,6 +665,20 @@
     definirValor('fiscalDocumentoEmitenteProdutos', metadados.documento_emitente_produtos || '');
     definirValor('fiscalInscricaoEstadual', metadados.inscricao_estadual || '');
     definirMarcado('fiscalProdutorRural', metadados.produtor_rural);
+    definirValor('fiscalNfeSerie', metadados.nfe_serie ?? '');
+    definirValor('fiscalNfeNumero', metadados.nfe_proximo_numero ?? '');
+    definirValor('fiscalNfceSerie', metadados.nfce_serie ?? '');
+    definirValor('fiscalNfceNumero', metadados.nfce_proximo_numero ?? '');
+    definirValor('fiscalNcmPadrao', metadados.ncm_padrao || '');
+    definirValor('fiscalCestPadrao', metadados.cest_padrao || '');
+    definirValor('fiscalCfopPadrao', metadados.cfop_padrao || '');
+    definirValor('fiscalUnidadePadrao', metadados.unidade_padrao || '');
+    definirValor('fiscalOrigemPadrao', metadados.origem_mercadoria_padrao || '');
+    definirValor('fiscalCstIcmsPadrao', metadados.cst_icms_padrao || '');
+    definirValor('fiscalCsosnPadrao', metadados.csosn_padrao || '');
+    definirValor('fiscalCstPisPadrao', metadados.cst_pis_padrao || '');
+    definirValor('fiscalCstCofinsPadrao', metadados.cst_cofins_padrao || '');
+    definirMarcado('fiscalContadorConfirmouProdutos', metadados.contador_confirmou_produtos);
     definirMarcado('fiscalAutoOs', config.emissao_automatica_os);
     definirMarcado('fiscalAutoVenda', config.emissao_automatica_venda);
 
@@ -633,30 +689,32 @@
     const avisoFiscal = /solicite.*ativa[çc][aã]o|ativacao tecnica/i.test(String(config.ultimo_erro || ''))
       ? '' : String(config.ultimo_erro || '');
     $('statusFiscalEmpresa').textContent = resumo.emissor_operacional === true && config.status === 'configurada' && config.ambiente === 'producao'
-      ? 'Emissão de NFS-e habilitada em produção.'
+      ? 'Emissão fiscal habilitada. NF-e/NFC-e dependem do teste individual mostrado abaixo.'
       : (avisoFiscal || 'Preencha e salve o cadastro fiscal. O A1 é fornecido pela própria empresa; a emissão real ainda não está disponível.');
 
     const notas = Array.isArray(resumo.notas) ? resumo.notas : [];
     $('listaNotasFiscais').innerHTML = notas.length ? `<div class="fiscal-lista-documentos">${notas.slice(0, 8).map((nota) => {
       const danfseDisponivel = nota.status === 'autorizada' && Boolean(nota.danfse_storage_path || nota.danfse_url || nota.pdf_url);
+      const tipoNota = String(nota.tipo_documento || 'nfse').toLowerCase();
+      const nomeAuxiliar = tipoNota === 'nfse' ? 'DANFSe' : (tipoNota === 'nfe' ? 'DANFE NF-e' : 'DANFE NFC-e');
       const acaoDanfse = danfseDisponivel
-        ? `<span class="fiscal-acoes"><button type="button" class="botao botao-secundario botao-pequeno" data-abrir-danfse="${escaparHtml(nota.id)}">Abrir DANFSe</button><button type="button" class="botao botao-secundario botao-pequeno" data-compartilhar-danfse="${escaparHtml(nota.id)}">Compartilhar</button></span>`
-        : (nota.status === 'autorizada' ? '<small class="campo-desc">DANFSe sendo preparado</small>' : '');
+        ? `<span class="fiscal-acoes"><button type="button" class="botao botao-secundario botao-pequeno" data-abrir-danfse="${escaparHtml(nota.id)}">Abrir ${nomeAuxiliar}</button><button type="button" class="botao botao-secundario botao-pequeno" data-compartilhar-danfse="${escaparHtml(nota.id)}">Compartilhar</button></span>`
+        : (nota.status === 'autorizada' ? `<small class="campo-desc">${nomeAuxiliar} sendo preparado</small>` : '');
       const acaoCancelar = !empresaSuporte && ['rascunho', 'aguardando_configuracao'].includes(nota.status)
         ? `<button type="button" class="botao botao-secundario botao-pequeno" data-cancelar-nota="${escaparHtml(nota.id)}">Cancelar solicitação</button>`
         : '';
       const acaoCancelarAutorizada = !empresaSuporte && nota.status === 'autorizada' && !nota.cancelamento_solicitado
-        ? `<button type="button" class="botao botao-perigo botao-pequeno" data-cancelar-nfse="${escaparHtml(nota.id)}">Cancelar NFS-e</button>`
+        ? `<button type="button" class="botao botao-perigo botao-pequeno" data-cancelar-nfse="${escaparHtml(nota.id)}">Cancelar ${escaparHtml(tipoNota.toUpperCase())}</button>`
         : (nota.cancelamento_solicitado ? '<small class="campo-desc">Cancelamento aguardando confirmação</small>' : '');
       const acaoEditar = !empresaSuporte && ['rascunho', 'aguardando_configuracao'].includes(nota.status)
         ? `<button type="button" class="botao botao-secundario botao-pequeno" data-editar-nota="${escaparHtml(nota.id)}">Editar solicitação</button>`
         : '';
       const origem = String(nota.origem_tipo || '').toUpperCase();
       return `<div class="fiscal-documento-item">
-        <span><strong>${escaparHtml(origem)} ${escaparHtml(nota.origem_id || '')}</strong><br><small>${Number(nota.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</small></span>
+        <span><strong>${escaparHtml(tipoNota.toUpperCase())} · ${escaparHtml(origem)} ${escaparHtml(nota.origem_id || '')}</strong><br><small>${Number(nota.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</small></span>
         <span class="fiscal-documento-status">${escaparHtml(rotuloStatus(nota.status))}${acaoDanfse}${acaoEditar}${acaoCancelar}${acaoCancelarAutorizada}</span>
       </div>`;
-    }).join('')}</div>` : '<p class="campo-desc">Nenhuma NFS-e solicitada.</p>';
+    }).join('')}</div>` : '<p class="campo-desc">Nenhum documento fiscal solicitado.</p>';
 
     if (atualizacaoFiscalTimer) clearTimeout(atualizacaoFiscalTimer);
     if (notas.some((nota) => ['na_fila', 'processando'].includes(nota.status) || nota.cancelamento_solicitado ||
@@ -740,6 +798,44 @@
       if ($('fiscalConfirmarTitularidade')) $('fiscalConfirmarTitularidade').checked = false;
       botao.disabled = Boolean(resumo?.configuracao?.metadados?.nfeio_im_producao_em) ||
         !(Date.parse(String(resumo?.configuracao?.metadados?.nfeio_certificado_valido_ate || '')) > Date.now());
+    }
+  }
+
+  async function configurarProdutosNfeio() {
+    const botao = $('btnFiscalHomologarProdutos');
+    const saida = $('fiscalHomologacaoStatus');
+    if (!botao || botao.disabled) return;
+    if (textoCampo('fiscalTipoEmitenteProdutos') === 'cpf') {
+      window.toast?.('O conector NFE.io atual não aceita e-CPF A1. O cadastro do produtor rural foi preservado, mas a emissão automática permanece bloqueada.', 'aviso');
+      return;
+    }
+    const habilitarNfe = $('fiscalHabilitarNfe')?.checked === true;
+    const habilitarNfce = $('fiscalHabilitarNfce')?.checked === true;
+    if (!habilitarNfe && !habilitarNfce) {
+      window.toast?.('Selecione NF-e e/ou NFC-e.', 'aviso'); return;
+    }
+    if (habilitarNfce && (!textoCampo('fiscalCscId') || !textoCampo('fiscalCscCodigo'))) {
+      window.toast?.('Informe ID e código CSC fornecidos pela SEFAZ para a NFC-e.', 'aviso'); return;
+    }
+    botao.disabled = true;
+    try {
+      saida.textContent = 'Salvando os dados e cadastrando inscrições estaduais em homologação…';
+      const salvo = await salvar({ silencioso: true });
+      if (!salvo?.sucesso) throw new Error(salvo?.erro || 'Não foi possível salvar o cadastro fiscal.');
+      const retorno = await chamarFiscal('configurar_inscricoes_estaduais_nfeio', {
+        habilitarNfe, habilitarNfce, cscId: textoCampo('fiscalCscId'), cscCodigo: $('fiscalCscCodigo')?.value || ''
+      });
+      if (!retorno?.sucesso) throw new Error(retorno?.erro || 'Não foi possível iniciar a homologação.');
+      saida.textContent = retorno.mensagem || 'Teste automático colocado na fila.';
+      window.toast?.(saida.textContent, 'sucesso');
+      setTimeout(() => carregar().catch(() => {}), 3000);
+    } catch (erro) {
+      saida.textContent = erro?.message || String(erro);
+      window.toast?.(saida.textContent, 'erro');
+    } finally {
+      if ($('fiscalCscCodigo')) $('fiscalCscCodigo').value = '';
+      if ($('fiscalCscId')) $('fiscalCscId').value = '';
+      botao.disabled = false;
     }
   }
 
@@ -983,7 +1079,9 @@
   }
 
   function rotuloStatus(status) {
-    return ({ rascunho: 'Rascunho', aguardando_configuracao: 'Aguardando ativação', na_fila: 'Na fila', processando: 'Processando', autorizada: 'Autorizada', rejeitada: 'Rejeitada', cancelada: 'Cancelada' })[status] || status || '—';
+    return ({ rascunho: 'Rascunho', aguardando_dados: 'Aguardando dados', aguardando_configuracao: 'Aguardando ativação',
+      na_fila: 'Na fila', processando: 'Processando', aprovada: 'Aprovada', autorizada: 'Autorizada',
+      rejeitada: 'Rejeitada', cancelada: 'Cancelada' })[status] || status || '—';
   }
 
   async function carregar() {
@@ -1075,6 +1173,20 @@
       documentoEmitenteProdutos: textoCampo('fiscalDocumentoEmitenteProdutos'),
       inscricaoEstadual: textoCampo('fiscalInscricaoEstadual'),
       produtorRural: $('fiscalProdutorRural')?.checked === true,
+      nfeSerie: textoCampo('fiscalNfeSerie'),
+      nfeProximoNumero: textoCampo('fiscalNfeNumero'),
+      nfceSerie: textoCampo('fiscalNfceSerie'),
+      nfceProximoNumero: textoCampo('fiscalNfceNumero'),
+      ncmPadrao: textoCampo('fiscalNcmPadrao'),
+      cestPadrao: textoCampo('fiscalCestPadrao'),
+      cfopPadrao: textoCampo('fiscalCfopPadrao'),
+      unidadePadrao: textoCampo('fiscalUnidadePadrao'),
+      origemMercadoriaPadrao: textoCampo('fiscalOrigemPadrao'),
+      cstIcmsPadrao: textoCampo('fiscalCstIcmsPadrao'),
+      csosnPadrao: textoCampo('fiscalCsosnPadrao'),
+      cstPisPadrao: textoCampo('fiscalCstPisPadrao'),
+      cstCofinsPadrao: textoCampo('fiscalCstCofinsPadrao'),
+      contadorConfirmouProdutos: $('fiscalContadorConfirmouProdutos')?.checked === true,
       emissaoAutomaticaOs: $('fiscalAutoOs')?.checked === true,
       emissaoAutomaticaVenda: $('fiscalAutoVenda')?.checked === true
     };
@@ -1187,6 +1299,63 @@
     } catch (erro) {
       window.toast?.(erro.message || String(erro), 'erro');
     }
+  };
+
+  window.emitirNotaFiscalProdutoSistemaOS = async function (tipoDocumento, tipo, documento) {
+    try {
+      if (!['nfe', 'nfce'].includes(tipoDocumento)) throw new Error('Tipo de documento fiscal inválido.');
+      if (!fiscalHabilitado) throw new Error('O módulo fiscal ainda não está liberado para esta empresa.');
+      if (!documento) throw new Error('Venda não encontrada.');
+      if (!resumo) await carregar();
+      const metadados = resumo?.configuracao?.metadados || {};
+      const homologacao = (resumo?.homologacoes || []).find((item) => item.tipo_documento === tipoDocumento);
+      if (homologacao?.status !== 'aprovada') {
+        throw new Error(`${tipoDocumento === 'nfe' ? 'NF-e' : 'NFC-e'} ainda não foi homologada. Abra Configurações > Fiscal.`);
+      }
+      const valor = Number(documento.valorVenda || documento.valorFinal || documento.valor || 0);
+      if (!(valor > 0)) throw new Error('Informe o valor da venda antes de emitir.');
+      const origemId = String(documento.id || documento.numero || '').trim();
+      if (!origemId) throw new Error('A venda não possui identificador.');
+      const descricao = [documento.marca, documento.modelo, documento.descricao].filter(Boolean).join(' ').trim() || 'Produto vendido';
+      const cliente = documento.cliente || documento.comprador || {};
+      const documentoCliente = cliente.cpf || cliente.cnpj || cliente.cpfCnpj || documento.compradorCpf || '';
+      const enderecoCliente = {
+        estado: cliente.uf || '', codigo_municipio: cliente.codigoMunicipio || cliente.codigo_municipio || '',
+        municipio: cliente.cidade || cliente.municipio || '', bairro: cliente.bairro || '',
+        logradouro: cliente.endereco || cliente.logradouro || '', numero: cliente.numero || '',
+        complemento: cliente.complemento || '', cep: cliente.cep || ''
+      };
+      const enderecoCompleto = enderecoCliente.estado && String(enderecoCliente.codigo_municipio).replace(/\D/g, '').length === 7 &&
+        enderecoCliente.municipio && enderecoCliente.bairro && enderecoCliente.logradouro && enderecoCliente.numero &&
+        String(enderecoCliente.cep).replace(/\D/g, '').length === 8;
+      if (tipoDocumento === 'nfe' && (!documentoCliente || !enderecoCompleto)) {
+        throw new Error('NF-e exige CPF/CNPJ e endereço fiscal completo do comprador. Complete o perfil do cliente.');
+      }
+      const tomador = documentoCliente && enderecoCompleto ? {
+        nome: cliente.nome || cliente.razaoSocial || documento.compradorNome || 'Consumidor',
+        documento: documentoCliente, email: cliente.email || '', endereco: enderecoCliente
+      } : {};
+      const resposta = await chamarFiscal('solicitar_emissao', {
+        tipoDocumento, origemTipo: tipo, origemId, valor, descricao,
+        naturezaOperacao: 'Venda de mercadoria', tomador,
+        itens: [{ codigo: documento.codigo || documento.id || origemId, descricao,
+          ncm: documento.ncm || metadados.ncm_padrao, cest: documento.cest || metadados.cest_padrao,
+          cfop: documento.cfop || metadados.cfop_padrao, unidade: documento.unidade || metadados.unidade_padrao,
+          // Uma venda de aparelho é um item fiscal pelo valor total. O campo
+          // quantidade do estoque representa disponibilidade e não pode
+          // multiplicar indevidamente o total da nota.
+          quantidade: 1, valor_unitario: valor,
+          origem: documento.origemMercadoria ?? metadados.origem_mercadoria_padrao,
+          cst_icms: documento.cstIcms || metadados.cst_icms_padrao,
+          csosn: documento.csosn || metadados.csosn_padrao,
+          cst_pis: documento.cstPis || metadados.cst_pis_padrao,
+          cst_cofins: documento.cstCofins || metadados.cst_cofins_padrao }],
+        pagamentos: [{ metodo: 'Others', valor }]
+      });
+      if (!resposta?.sucesso) throw new Error(resposta?.erro || 'Não foi possível solicitar o documento fiscal.');
+      window.toast?.(resposta.mensagem || 'Documento fiscal adicionado à fila.', 'sucesso');
+      setTimeout(() => carregar().catch(() => {}), 500);
+    } catch (erro) { window.toast?.(erro.message || String(erro), 'erro'); }
   };
 
   document.addEventListener('sistemaos:sessao-pronta', (evento) => {

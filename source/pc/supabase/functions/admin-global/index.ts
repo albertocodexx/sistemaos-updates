@@ -1107,17 +1107,29 @@ Deno.serve(async (req) => {
       if (empresaErro) throw empresaErro;
       if (!empresa) return resposta(404, { erro: 'Empresa nao encontrada.' });
       if (acao === 'obter_conta_fiscal') {
-        const [contaConsulta, movimentosConsulta] = await Promise.all([
+        const partesCompetencia = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit' })
+          .formatToParts(new Date());
+        const competenciaAtual = `${partesCompetencia.find((p) => p.type === 'year')?.value}-${partesCompetencia.find((p) => p.type === 'month')?.value}-01`;
+        const [contaConsulta, movimentosConsulta, usoConsulta] = await Promise.all([
           admin.from('contas_fiscais')
             .select('limite_gratuito_mensal,preco_excedente_centavos,saldo_centavos,debito_pendente_centavos')
             .eq('empresa_id', empresaId).maybeSingle(),
           admin.from('movimentos_fiscais').select('tipo,valor_centavos,motivo,criado_em')
-            .eq('empresa_id', empresaId).order('criado_em', { ascending: false }).limit(30)
+            .eq('empresa_id', empresaId).order('criado_em', { ascending: false }).limit(30),
+          admin.from('reservas_fiscais').select('status', { count: 'exact', head: true })
+            .eq('empresa_id', empresaId).eq('competencia', competenciaAtual).in('status', ['reservada', 'consumida'])
         ]);
         if (contaConsulta.error) throw contaConsulta.error;
         if (movimentosConsulta.error) throw movimentosConsulta.error;
-        return resposta(200, { conta: contaConsulta.data || { limite_gratuito_mensal: 0, preco_excedente_centavos: 99,
-          saldo_centavos: 0, debito_pendente_centavos: 0 }, movimentos: movimentosConsulta.data || [] });
+        if (usoConsulta.error) throw usoConsulta.error;
+        const conta = contaConsulta.data || { limite_gratuito_mensal: 0, preco_excedente_centavos: 99,
+          saldo_centavos: 0, debito_pendente_centavos: 0 };
+        const gratuitas = Math.max(0, Number(conta.limite_gratuito_mensal || 0) - Number(usoConsulta.count || 0));
+        const saldoUtil = Math.max(0, Number(conta.saldo_centavos || 0) - Number(conta.debito_pendente_centavos || 0));
+        const precoAtual = Number(conta.preco_excedente_centavos || 0);
+        return resposta(200, { conta: { ...conta, utilizadas: usoConsulta.count || 0,
+          restantes_gratuitas: gratuitas, estimativa_notas_com_saldo: precoAtual > 0 ? Math.floor(saldoUtil / precoAtual) : null },
+          movimentos: movimentosConsulta.data || [] });
       }
       const limite = Number(dados.limite);
       const preco = Number(dados.precoCentavos);

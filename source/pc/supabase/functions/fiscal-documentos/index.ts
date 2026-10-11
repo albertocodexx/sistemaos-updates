@@ -3,8 +3,9 @@ import { contextoUsuarioAtivo, ehAdministradorEmpresa, licencaPermiteOperacao, t
 import { carregarIntegracaoPlataforma } from '../assinaturas-saas/saas.ts';
 import { verificarEmitenteNfeio } from '../_shared/nfeio-preflight.ts';
 import { consultarEmpresaExistenteNfeio, criarEmpresaNfeio, criarInscricaoMunicipalNfeio,
-  ativarInscricaoMunicipalNfeio,
+  ativarInscricaoMunicipalNfeio, criarInscricaoEstadualNfeio, listarInscricoesEstaduaisNfeio,
   enviarCertificadoNfeio } from '../_shared/nfeio-onboarding.ts';
+import { montarDocumentoProdutoNfeio } from '../_shared/nfeio-produtos.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -88,7 +89,8 @@ Deno.serve(async (req) => {
     const suporteCadastro = contexto.administrador_global === true;
     if (suporteCadastro) {
       if (!['resumo', 'listar', 'salvar_configuracao', 'verificar_emitente_nfeio',
-        'cadastrar_empresa_nfeio', 'cadastrar_inscricao_nfeio', 'cadastrar_certificado_a1', 'ativar_inscricao_nfeio'].includes(acao)) {
+        'cadastrar_empresa_nfeio', 'cadastrar_inscricao_nfeio', 'cadastrar_certificado_a1',
+        'ativar_inscricao_nfeio', 'configurar_inscricoes_estaduais_nfeio'].includes(acao)) {
         return resposta(403, { erro: 'O suporte so pode consultar ou atualizar o cadastro fiscal da empresa.' });
       }
       const { data: papel, error: papelErro } = await admin.from('administradores_globais')
@@ -182,20 +184,23 @@ Deno.serve(async (req) => {
 
     if (acao === 'resumo' || acao === 'listar') {
       if (!podeLerFinanceiro) return resposta(403, { erro: 'Seu usuário não pode consultar documentos fiscais.' });
-      const [configConsulta, notasConsulta, contaConsulta, usoConsulta, recargasConsulta] = await Promise.all([
+      const [configConsulta, notasConsulta, contaConsulta, usoConsulta, recargasConsulta, homologacoesConsulta] = await Promise.all([
         admin.from(tabelaConfiguracoes).select('empresa_id,provedor,ambiente,status,emissao_automatica_os,emissao_automatica_venda,emissao_automatica_assinatura,metadados,ultimo_erro,updated_at').eq('empresa_id', empresaId).maybeSingle(),
         suporteCadastro ? Promise.resolve({ data: [], error: null }) :
-          admin.from('notas_fiscais').select('id,origem_tipo,origem_id,valor,descricao,status,numero,codigo_verificacao,chave_acesso,url_consulta,pdf_url,danfse_url,danfse_storage_path,danfse_gerado_em,emitida_em,ultimo_erro,created_at,payload').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(100),
+          admin.from('notas_fiscais').select('id,tipo_documento,origem_tipo,origem_id,valor,descricao,status,numero,codigo_verificacao,chave_acesso,url_consulta,pdf_url,danfse_url,danfse_storage_path,danfse_gerado_em,emitida_em,ultimo_erro,created_at,payload').eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(100),
         admin.from('contas_fiscais').select('limite_gratuito_mensal,preco_excedente_centavos,saldo_centavos,debito_pendente_centavos').eq('empresa_id', empresaId).maybeSingle(),
         admin.from('reservas_fiscais').select('status', { count: 'exact', head: true }).eq('empresa_id', empresaId).eq('competencia', competenciaAtual()).in('status', ['reservada', 'consumida']),
         suporteCadastro ? Promise.resolve({ data: [], error: null }) :
-          admin.from('recargas_fiscais').select('id,valor_centavos,status,checkout_url,criado_em,aplicado_em').eq('empresa_id', empresaId).order('criado_em', { ascending: false }).limit(5)
+          admin.from('recargas_fiscais').select('id,valor_centavos,status,checkout_url,criado_em,aplicado_em').eq('empresa_id', empresaId).order('criado_em', { ascending: false }).limit(5),
+        admin.from('homologacoes_fiscais').select('tipo_documento,status,tentativas,ultimo_erro,concluida_em,updated_at')
+          .eq('empresa_id', empresaId).order('tipo_documento')
       ]);
       if (configConsulta.error) throw configConsulta.error;
       if (notasConsulta.error) throw notasConsulta.error;
       if (contaConsulta.error) throw contaConsulta.error;
       if (usoConsulta.error) throw usoConsulta.error;
       if (recargasConsulta.error) throw recargasConsulta.error;
+      if (homologacoesConsulta.error) throw homologacoesConsulta.error;
       const conta = contaConsulta.data || { limite_gratuito_mensal: 0, preco_excedente_centavos: 99,
         saldo_centavos: 0, debito_pendente_centavos: 0 };
       const utilizadas = usoConsulta.count || 0;
@@ -203,10 +208,14 @@ Deno.serve(async (req) => {
         const tomador = nota.payload?.tomador;
         const clienteNome = tomador && typeof tomador === 'object' ? texto(tomador.nome).slice(0, 160) : '';
         const { payload: _payload, ...dadosNota } = nota;
-        return { ...dadosNota, cliente_nome: clienteNome, tipo_documento: 'nfse',
+        return { ...dadosNota, cliente_nome: clienteNome, tipo_documento: texto(nota.tipo_documento) || 'nfse',
           cancelamento_solicitado: Boolean(nota.payload?.cancelamento?.solicitado_em),
           xml_disponivel: Boolean(nota.payload?.documentos?.xml_storage_path) };
       });
+      const saldoUtil = Math.max(0, Number(conta.saldo_centavos || 0) - Number(conta.debito_pendente_centavos || 0));
+      const preco = Number(conta.preco_excedente_centavos || 0);
+      const gratuitas = fiscalDisponivel ? Math.max(0, conta.limite_gratuito_mensal - utilizadas) : 0;
+      const estimativaSaldo = preco > 0 ? Math.floor(saldoUtil / preco) : null;
       return resposta(200, { configuracao: configConsulta.data, notas,
         provedor_fiscal: 'nfeio', pode_configurar: podeConfigurar,
         nfeio_disponivel: Boolean(Deno.env.get('NFEIO_INVOICE_KEY')) && Boolean(Deno.env.get('NFEIO_ACCOUNT_ID')),
@@ -218,9 +227,11 @@ Deno.serve(async (req) => {
         modulo_fiscal_trial: fiscalNoTrial,
         modulo_fiscal_ativo_ate: fiscalNoTrial ? empresaFiscal?.fim_trial : empresaFiscal?.data_vencimento || null,
         cota: { ...conta, limite_gratuito_mensal: fiscalDisponivel ? conta.limite_gratuito_mensal : 0,
-          utilizadas, restantes_gratuitas: fiscalDisponivel ? Math.max(0, conta.limite_gratuito_mensal - utilizadas) : 0,
-          competencia: competenciaAtual() },
-        recargas: recargasConsulta.data || [] });
+          utilizadas, restantes_gratuitas: gratuitas,
+          estimativa_notas_com_saldo: estimativaSaldo,
+          capacidade_estimada_total: estimativaSaldo === null ? null : gratuitas + estimativaSaldo,
+          estimativa: true, competencia: competenciaAtual() },
+        homologacoes: homologacoesConsulta.data || [], recargas: recargasConsulta.data || [] });
     }
 
     if (acao === 'verificar_emitente_nfeio') {
@@ -352,6 +363,114 @@ Deno.serve(async (req) => {
       return resposta(200, { cadastrada: true, mensagem: 'Inscricao municipal cadastrada para testes. A emissao ainda nao esta liberada.' });
     }
 
+    if (acao === 'configurar_inscricoes_estaduais_nfeio') {
+      if (!podeConfigurar) return resposta(403, { erro: 'Somente o administrador da empresa ou Administrador Geral pode configurar NF-e/NFC-e.' });
+      if (!fiscalDisponivel && !suporteCadastro) return resposta(409, { erro: 'Ative ou renove o plano antes de configurar documentos fiscais.' });
+      const chave = texto(Deno.env.get('NFEIO_INVOICE_KEY'));
+      if (!chave) return resposta(503, { erro: 'Integracao fiscal indisponivel no servidor.' });
+      const habilitarNfe = dados.habilitarNfe === true;
+      const habilitarNfce = dados.habilitarNfce === true;
+      if (!habilitarNfe && !habilitarNfce) return resposta(400, { erro: 'Selecione NF-e e/ou NFC-e.' });
+      const cscId = Number(dados.cscId);
+      // O CSC e usado somente nesta chamada HTTPS ao emissor e nunca entra no banco ou nos logs.
+      const cscCodigo = typeof dados.cscCodigo === 'string' ? dados.cscCodigo : '';
+      if (habilitarNfce && (!Number.isSafeInteger(cscId) || cscId < 1 || !cscCodigo || cscCodigo.length > 128)) {
+        return resposta(400, { erro: 'Para NFC-e, informe o ID e o codigo CSC fornecidos pela SEFAZ.' });
+      }
+      const { data: config, error: configErro } = await admin.from(tabelaConfiguracoes)
+        .select('metadados,updated_at').eq('empresa_id', empresaId).maybeSingle();
+      if (configErro) throw configErro;
+      const fiscal = config?.metadados || {};
+      const empresaNfeioId = texto(fiscal.nfeio_empresa_id);
+      const cnpj = digitos(fiscal.cnpj || fiscal.documento_emitente_produtos, 14);
+      if (texto(fiscal.tipo_emitente_produtos) === 'cpf' ||
+          texto(fiscal.documento_emitente_produtos) !== cnpj) {
+        return resposta(409, { erro: 'O conector NFE.io atual exige emitente CNPJ vinculado ao e-CNPJ A1. CPF de produtor rural pode ficar salvo no cadastro, mas nao sera homologado por este conector.' });
+      }
+      const validadeA1 = Date.parse(texto(fiscal.nfeio_certificado_valido_ate));
+      if (!empresaNfeioId || !cnpjValido(cnpj) || !Number.isFinite(validadeA1) || validadeA1 <= Date.now()) {
+        return resposta(409, { erro: 'Cadastre o CNPJ no emissor e envie um e-CNPJ A1 valido antes de configurar NF-e/NFC-e.' });
+      }
+      if (!texto(fiscal.inscricao_estadual) || !texto(fiscal.uf)) {
+        return resposta(409, { erro: 'Informe UF e inscricao estadual ja credenciada na SEFAZ.' });
+      }
+      if (fiscal.contador_confirmou_produtos !== true) {
+        return resposta(409, { erro: 'Confirme com o contador os codigos fiscais dos produtos antes do teste automatico.' });
+      }
+      const lista = await listarInscricoesEstaduaisNfeio(empresaNfeioId, chave);
+      if (!lista.ok) return resposta(502, { erro: 'Nao foi possivel conferir as inscricoes estaduais no emissor.' });
+      const localizar = (tipo: 'NFe' | 'NFCe') => (lista.inscricoes || []).find((item: Record<string, any>) =>
+        texto(item.Type ?? item.type).toLowerCase() === tipo.toLowerCase() &&
+        texto(item.TaxNumber ?? item.taxNumber).replace(/[^0-9A-Za-z]/g, '') === texto(fiscal.inscricao_estadual) &&
+        texto(item.Code ?? item.code).toUpperCase() === texto(fiscal.uf).toUpperCase());
+      const ids: Record<string, string> = {
+        nfe: texto(fiscal.nfeio_ie_nfe_id), nfce: texto(fiscal.nfeio_ie_nfce_id)
+      };
+      const { data: homologacoesAtuais, error: homologacoesErro } = await admin.from('homologacoes_fiscais')
+        .select('tipo_documento,status').eq('empresa_id', empresaId);
+      if (homologacoesErro) throw homologacoesErro;
+      const homologacaoPorTipo = new Map((homologacoesAtuais || []).map((item: Record<string, any>) =>
+        [texto(item.tipo_documento), texto(item.status)]));
+      for (const tipo of ([...(habilitarNfe ? ['NFe'] : []), ...(habilitarNfce ? ['NFCe'] : [])] as Array<'NFe' | 'NFCe'>)) {
+        const chaveTipo = tipo === 'NFe' ? 'nfe' : 'nfce';
+        const existente = localizar(tipo);
+        if (existente) ids[chaveTipo] = texto(existente.Id ?? existente.id);
+        const ambienteExistente = texto(existente?.EnvironmentType ?? existente?.environmentType).toLowerCase();
+        if (existente && ['production', 'producao'].includes(ambienteExistente) &&
+            homologacaoPorTipo.get(chaveTipo) !== 'aprovada') {
+          return resposta(409, { erro: `${tipo === 'NFe' ? 'NF-e' : 'NFC-e'} ja esta em producao no emissor, mas o Sistema OS nao possui um teste aprovado. O suporte deve conferir o vinculo; nenhum teste sera enviado para producao.` });
+        }
+        if (!ids[chaveTipo]) {
+          const criada = await criarInscricaoEstadualNfeio(empresaNfeioId, fiscal, tipo,
+            tipo === 'NFCe' ? { id: cscId, codigo: cscCodigo } : undefined, chave);
+          if (!criada.ok) return resposta(criada.motivo === 'inscricao_incompleta' ? 400 : 502, {
+            erro: criada.motivo === 'inscricao_incompleta'
+              ? `Complete IE, serie e proximo numero da ${tipo === 'NFe' ? 'NF-e' : 'NFC-e'}.`
+              : `O emissor nao confirmou a inscricao estadual de ${tipo === 'NFe' ? 'NF-e' : 'NFC-e'}.`
+          });
+          ids[chaveTipo] = criada.id;
+        }
+      }
+      const metadados = { ...fiscal,
+        ...(ids.nfe ? { nfeio_ie_nfe_id: ids.nfe } : {}),
+        ...(ids.nfce ? { nfeio_ie_nfce_id: ids.nfce } : {}) };
+      const { data: atualizada, error: atualizarErro } = await admin.from(tabelaConfiguracoes)
+        .update({ metadados, updated_at: new Date().toISOString() })
+        .eq('empresa_id', empresaId).eq('updated_at', config.updated_at).select('empresa_id').maybeSingle();
+      if (atualizarErro) throw atualizarErro;
+      if (!atualizada) return resposta(409, { erro: 'O cadastro mudou durante a configuracao. Atualize a tela; as inscricoes criadas serao reconhecidas sem duplicar.' });
+      const itemTeste = {
+        codigo: 'HOMOLOGACAO', descricao: 'EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL',
+        ncm: fiscal.ncm_padrao, cest: fiscal.cest_padrao, cfop: fiscal.cfop_padrao,
+        unidade: fiscal.unidade_padrao, quantidade: 1, valor_unitario: 1,
+        origem: fiscal.origem_mercadoria_padrao, cst_icms: fiscal.cst_icms_padrao,
+        csosn: fiscal.csosn_padrao, cst_pis: fiscal.cst_pis_padrao,
+        cst_cofins: fiscal.cst_cofins_padrao
+      };
+      const tomadorTeste = {
+        nome: fiscal.nome_prestador, documento: cnpj,
+        endereco: { estado: fiscal.uf, codigo_municipio: fiscal.codigo_municipio,
+          municipio: fiscal.municipio_nome, bairro: fiscal.bairro_prestador,
+          logradouro: fiscal.logradouro_prestador, numero: fiscal.numero_prestador,
+          complemento: fiscal.complemento_prestador, cep: fiscal.cep_prestador }
+      };
+      const filas = [
+        ...(habilitarNfe && homologacaoPorTipo.get('nfe') !== 'aprovada' ? [{ empresa_id: empresaId, tipo_documento: 'nfe', status: 'na_fila',
+          requisitos: { inscricao_id: ids.nfe, itens: [itemTeste], tomador: tomadorTeste } }] : []),
+        ...(habilitarNfce && homologacaoPorTipo.get('nfce') !== 'aprovada' ? [{ empresa_id: empresaId, tipo_documento: 'nfce', status: 'na_fila',
+          requisitos: { inscricao_id: ids.nfce, itens: [itemTeste], tomador: tomadorTeste } }] : [])
+      ];
+      if (filas.length) {
+        const { error: filaErro } = await admin.from('homologacoes_fiscais').upsert(filas,
+          { onConflict: 'empresa_id,tipo_documento', ignoreDuplicates: false });
+        if (filaErro) throw filaErro;
+      }
+      return resposta(200, { configurada: true, homologacao_automatica: true,
+        mensagem: filas.length
+          ? 'Inscricoes estaduais cadastradas em teste. A homologacao automatica entrou na fila e nao consome cota nem saldo.'
+          : 'NF-e/NFC-e ja possuem homologacao aprovada. Nenhum novo teste foi enviado.' });
+    }
+
     if (acao === 'criar_recarga') {
       if (!fiscalDisponivel) return resposta(409, { erro: 'O teste ou a assinatura da empresa terminou. Renove o plano para adicionar saldo fiscal.' });
       if (!podeConfigurar) return resposta(403, { erro: 'Somente o administrador da empresa pode adicionar credito fiscal.' });
@@ -463,6 +582,20 @@ Deno.serve(async (req) => {
         : cnpjNormalizado(dados.documentoEmitenteProdutos);
       const produtorRural = dados.produtorRural === true;
       const inscricaoEstadual = texto(dados.inscricaoEstadual).replace(/[^0-9A-Za-z]/g, '').slice(0, 20);
+      const nfeSerie = dados.nfeSerie === '' || dados.nfeSerie == null ? null : Number(dados.nfeSerie);
+      const nfeProximoNumero = dados.nfeProximoNumero === '' || dados.nfeProximoNumero == null ? null : Number(dados.nfeProximoNumero);
+      const nfceSerie = dados.nfceSerie === '' || dados.nfceSerie == null ? null : Number(dados.nfceSerie);
+      const nfceProximoNumero = dados.nfceProximoNumero === '' || dados.nfceProximoNumero == null ? null : Number(dados.nfceProximoNumero);
+      const ncmPadrao = digitos(dados.ncmPadrao, 8);
+      const cestPadrao = digitos(dados.cestPadrao, 7);
+      const cfopPadrao = digitos(dados.cfopPadrao, 4);
+      const unidadePadrao = texto(dados.unidadePadrao).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+      const origemMercadoriaPadrao = texto(dados.origemMercadoriaPadrao).replace(/\D/g, '').slice(0, 1);
+      const cstIcmsPadrao = digitos(dados.cstIcmsPadrao, 2);
+      const csosnPadrao = digitos(dados.csosnPadrao, 3);
+      const cstPisPadrao = digitos(dados.cstPisPadrao, 2);
+      const cstCofinsPadrao = digitos(dados.cstCofinsPadrao, 2);
+      const contadorConfirmouProdutos = dados.contadorConfirmouProdutos === true;
       if (tipoPessoa === 'fisica' && documentoPrestador && !cpfValido(cpf)) return resposta(400, { erro: 'CPF do prestador invalido.' });
       if (tipoPessoa === 'juridica' && cnpj && !cnpjValido(cnpj)) {
         return resposta(400, { erro: 'CNPJ invalido: confira os caracteres e digitos verificadores.' });
@@ -473,6 +606,21 @@ Deno.serve(async (req) => {
       }
       if (documentoEmitenteProdutos && tipoEmitenteProdutos === 'cpf' && (!produtorRural || !inscricaoEstadual)) {
         return resposta(400, { erro: 'Emissao de NF-e/NFC-e por CPF exige produtor rural com inscricao estadual e credenciamento da UF.' });
+      }
+      const numerosProdutos = [[nfeSerie, 0, 999], [nfceSerie, 0, 999],
+        [nfeProximoNumero, 1, 999999999], [nfceProximoNumero, 1, 999999999]] as Array<[number | null, number, number]>;
+      if (numerosProdutos.some(([numero, minimo, maximo]) => numero !== null &&
+          (!Number.isSafeInteger(numero) || numero < minimo || numero > maximo))) {
+        return resposta(400, { erro: 'Serie ou proximo numero de NF-e/NFC-e invalido.' });
+      }
+      const algumPadraoProduto = Boolean(ncmPadrao || cestPadrao || cfopPadrao || unidadePadrao ||
+        origemMercadoriaPadrao || cstIcmsPadrao || csosnPadrao || cstPisPadrao || cstCofinsPadrao);
+      if (algumPadraoProduto && (!/^\d{8}$/.test(ncmPadrao) || !/^\d{4}$/.test(cfopPadrao) ||
+          !/^[A-Z0-9]{1,6}$/.test(unidadePadrao) || !/^[0-8]$/.test(origemMercadoriaPadrao) ||
+          (!/^\d{2}$/.test(cstIcmsPadrao) && !/^\d{3}$/.test(csosnPadrao)) ||
+          !/^\d{2}$/.test(cstPisPadrao) || !/^\d{2}$/.test(cstCofinsPadrao) ||
+          (cestPadrao && !/^\d{7}$/.test(cestPadrao)))) {
+        return resposta(400, { erro: 'Complete NCM, CFOP, unidade, origem e codigos ICMS/PIS/COFINS conforme seu contador.' });
       }
       if (codigoMunicipio && codigoMunicipio.length !== 7) return resposta(400, { erro: 'Codigo do municipio invalido.' });
       if (codigoMunicipioPrestacao && codigoMunicipioPrestacao.length !== 7) return resposta(400, { erro: 'Codigo do municipio da prestacao invalido.' });
@@ -524,6 +672,15 @@ Deno.serve(async (req) => {
         texto(metadadosAtuais.rps_serie) !== rpsSerie ||
         Number(metadadosAtuais.rps_proximo_numero) !== rpsProximoNumero
       )) return resposta(409, { erro: 'A inscricao municipal vinculada nao pode ser alterada por este formulario. Fale com o suporte.' });
+      const produtoVinculado = texto(metadadosAtuais.nfeio_ie_nfe_id) || texto(metadadosAtuais.nfeio_ie_nfce_id);
+      if (produtoVinculado && (
+        texto(metadadosAtuais.tipo_emitente_produtos) !== tipoEmitenteProdutos ||
+        texto(metadadosAtuais.documento_emitente_produtos) !== documentoEmitenteProdutos ||
+        texto(metadadosAtuais.inscricao_estadual) !== inscricaoEstadual ||
+        texto(metadadosAtuais.uf) !== uf ||
+        (metadadosAtuais.nfe_serie == null ? null : Number(metadadosAtuais.nfe_serie)) !== nfeSerie ||
+        (metadadosAtuais.nfce_serie == null ? null : Number(metadadosAtuais.nfce_serie)) !== nfceSerie
+      )) return resposta(409, { erro: 'A identidade, IE, UF e series vinculadas de NF-e/NFC-e nao podem ser alteradas por este formulario. Fale com o suporte.' });
       const rotaAnterior = texto(metadadosAtuais.rota_emissao) || 'nfse_nacional';
       const identidadeMudou = Boolean(configuracaoAtual && (
         texto(configuracaoAtual.provedor) !== 'nfeio' ||
@@ -598,7 +755,15 @@ Deno.serve(async (req) => {
           tipo_emitente_produtos: tipoEmitenteProdutos,
           documento_emitente_produtos: documentoEmitenteProdutos || null,
           produtor_rural: produtorRural,
-          inscricao_estadual: inscricaoEstadual || null
+          inscricao_estadual: inscricaoEstadual || null,
+          nfe_serie: nfeSerie, nfe_proximo_numero: nfeProximoNumero,
+          nfce_serie: nfceSerie, nfce_proximo_numero: nfceProximoNumero,
+          ncm_padrao: ncmPadrao || null, cest_padrao: cestPadrao || null,
+          cfop_padrao: cfopPadrao || null, unidade_padrao: unidadePadrao || null,
+          origem_mercadoria_padrao: origemMercadoriaPadrao || null,
+          cst_icms_padrao: cstIcmsPadrao || null, csosn_padrao: csosnPadrao || null,
+          cst_pis_padrao: cstPisPadrao || null, cst_cofins_padrao: cstCofinsPadrao || null,
+          contador_confirmou_produtos: contadorConfirmouProdutos
         },
         ultimo_erro: ultimoErro,
         updated_at: new Date().toISOString()
@@ -662,36 +827,66 @@ Deno.serve(async (req) => {
     if (acao === 'solicitar_emissao') {
       if (!fiscalDisponivel) return resposta(409, { erro: 'O teste ou a assinatura da empresa terminou. Renove o plano para emitir notas.' });
       if (!podeEmitir) return resposta(403, { erro: 'Seu usuário não pode emitir documentos fiscais.' });
+      const tipoDocumento = ['nfse', 'nfe', 'nfce'].includes(texto(dados.tipoDocumento).toLowerCase())
+        ? texto(dados.tipoDocumento).toLowerCase() : 'nfse';
       const origemTipo = texto(dados.origemTipo);
       const origemId = texto(dados.origemId).slice(0, 120);
       const valor = Number(dados.valor || 0);
       const descricao = texto(dados.descricao).slice(0, 500);
-      if (!['os', 'venda', 'avulsa'].includes(origemTipo) || !origemId ||
+      if (!['os', 'venda', 'compra', 'avulsa'].includes(origemTipo) || !origemId ||
           !Number.isFinite(valor) || valor <= 0 || valor > 9999999999.99 ||
           Math.abs(valor * 100 - Math.round(valor * 100)) > 0.000001 || !descricao) {
         return resposta(400, { erro: 'Informe documento, valor e descricao validos.' });
       }
+      if (tipoDocumento === 'nfse' && origemTipo === 'compra') {
+        return resposta(400, { erro: 'Compra de mercadoria nao gera NFS-e. Selecione NF-e e confira a operacao de entrada com o contador.' });
+      }
       const { data: existente, error: existenteErro } = await admin.from('notas_fiscais')
-        .select('id,origem_tipo,origem_id,valor,descricao,status,numero,chave_acesso,url_consulta,pdf_url,danfse_url,danfse_storage_path,danfse_gerado_em,created_at')
-        .eq('empresa_id', empresaId).eq('origem_tipo', origemTipo).eq('origem_id', origemId).maybeSingle();
+        .select('id,tipo_documento,origem_tipo,origem_id,valor,descricao,status,numero,chave_acesso,url_consulta,pdf_url,danfse_url,danfse_storage_path,danfse_gerado_em,created_at')
+        .eq('empresa_id', empresaId).eq('origem_tipo', origemTipo).eq('origem_id', origemId)
+        .eq('tipo_documento', tipoDocumento).maybeSingle();
       if (existenteErro) throw existenteErro;
       if (existente && ['autorizada', 'na_fila', 'processando'].includes(existente.status)) {
         return resposta(200, { nota: existente, reutilizada: true, mensagem: existente.status === 'autorizada'
-          ? 'Esta NFS-e ja foi autorizada. O DANFSe continua disponivel no historico.'
-          : 'A solicitacao desta NFS-e ja esta em andamento.' });
+          ? `Esta ${tipoDocumento.toUpperCase()} ja foi autorizada. O documento auxiliar continua no historico.`
+          : `A solicitacao desta ${tipoDocumento.toUpperCase()} ja esta em andamento.` });
       }
       const { data: config, error: configErro } = await admin.from(tabelaConfiguracoes)
-        .select('status,provedor,ambiente').eq('empresa_id', empresaId).maybeSingle();
+        .select('status,provedor,ambiente,metadados').eq('empresa_id', empresaId).maybeSingle();
       if (configErro) throw configErro;
+      const homologacaoTipo = tipoDocumento === 'nfse' ? { status: 'aprovada' } :
+        (await admin.from('homologacoes_fiscais').select('status').eq('empresa_id', empresaId)
+          .eq('tipo_documento', tipoDocumento).maybeSingle()).data;
+      const inscricaoProduto = tipoDocumento === 'nfe' ? texto(config?.metadados?.nfeio_ie_nfe_id) :
+        tipoDocumento === 'nfce' ? texto(config?.metadados?.nfeio_ie_nfce_id) : '';
       const pronta = emissorOperacional && config?.provedor === 'nfeio' &&
-        config?.status === 'configurada' && config?.ambiente === 'producao';
+        config?.status === 'configurada' && config?.ambiente === 'producao' &&
+        (tipoDocumento === 'nfse' || (Boolean(inscricaoProduto) && homologacaoTipo?.status === 'aprovada'));
       const status = pronta ? 'rascunho' : 'aguardando_configuracao';
       const payload = {
         tomador: dados.tomador && typeof dados.tomador === 'object' ? dados.tomador : {},
+        itens: Array.isArray(dados.itens) ? dados.itens.slice(0, 200) : [],
+        pagamentos: Array.isArray(dados.pagamentos) ? dados.pagamentos.slice(0, 20) : [],
+        natureza_operacao: texto(dados.naturezaOperacao).slice(0, 120),
+        tipo_operacao: origemTipo === 'compra' ? 'entrada' : 'saida',
         observacoes: texto(dados.observacoes).slice(0, 1000)
       };
+      if (tipoDocumento !== 'nfse') {
+        const validacaoProduto = montarDocumentoProdutoNfeio({ id: crypto.randomUUID(), payload },
+          tipoDocumento as 'nfe' | 'nfce');
+        if (!validacaoProduto.ok) {
+          return resposta(400, { erro: validacaoProduto.motivo === 'destinatario_incompleto'
+            ? 'Informe CPF/CNPJ e endereco fiscal completo do destinatario.'
+            : 'Complete os itens com NCM, CFOP, unidade, origem e codigos ICMS/PIS/COFINS confirmados pelo contador.' });
+        }
+        const totalItensCentavos = payload.itens.reduce((total: number, item: Record<string, any>) =>
+          total + Math.round(Number(item.quantidade ?? item.quantity) * Number(item.valor_unitario ?? item.unitAmount) * 100), 0);
+        if (!Number.isSafeInteger(totalItensCentavos) || totalItensCentavos !== Math.round(valor * 100)) {
+          return resposta(400, { erro: 'A soma dos itens da NF-e/NFC-e deve ser exatamente igual ao valor do documento.' });
+        }
+      }
       const mutacao = {
-        empresa_id: empresaId, origem_tipo: origemTipo, origem_id: origemId, valor,
+        empresa_id: empresaId, tipo_documento: tipoDocumento, origem_tipo: origemTipo, origem_id: origemId, valor,
         descricao, status, provedor: config?.provedor || 'nfeio', payload,
         ultimo_erro: status === 'aguardando_configuracao' ? 'Configure os dados da NFS-e e conclua a ativacao fiscal.' : null,
         updated_at: new Date().toISOString()
@@ -701,8 +896,8 @@ Deno.serve(async (req) => {
             .in('status', ['rascunho', 'aguardando_configuracao', 'rejeitada'])
         : admin.from('notas_fiscais').insert(mutacao);
       const { data: nota, error } = await consulta
-        .select('id,origem_tipo,origem_id,valor,descricao,status,numero,url_consulta,pdf_url,created_at').maybeSingle();
-      if (error?.code === '23505') return resposta(409, { erro: 'A NFS-e foi criada por outro usuario. Atualize a lista.' });
+        .select('id,tipo_documento,origem_tipo,origem_id,valor,descricao,status,numero,url_consulta,pdf_url,created_at').maybeSingle();
+      if (error?.code === '23505') return resposta(409, { erro: 'O documento fiscal foi criado por outro usuario. Atualize a lista.' });
       if (error) throw error;
       if (!nota) return resposta(409, { erro: 'A NFS-e mudou de estado. Atualize a lista.' });
       if (pronta) {
@@ -719,9 +914,9 @@ Deno.serve(async (req) => {
           throw reservaErro;
         }
         return resposta(200, { nota: { ...nota, status: 'na_fila' }, reserva,
-          mensagem: 'Valor da NFS-e reservado na carteira e pedido adicionado a fila de emissao.' });
+          mensagem: `Valor da ${tipoDocumento.toUpperCase()} reservado na carteira e pedido adicionado a fila de emissao.` });
       }
-      return resposta(200, { nota, mensagem: 'Solicitacao de NFS-e salva. Conclua a ativacao fiscal para autoriza-la.' });
+      return resposta(200, { nota, mensagem: `Solicitacao de ${tipoDocumento.toUpperCase()} salva. Conclua a homologacao fiscal para autoriza-la.` });
     }
 
     if (acao === 'alterar_solicitacao') {
@@ -748,12 +943,12 @@ Deno.serve(async (req) => {
       const id = texto(dados.id);
       if (!id) return resposta(400, { erro: 'Informe a NFS-e.' });
       const { data: nota, error } = await admin.from('notas_fiscais')
-        .select('id,status,numero,chave_acesso,codigo_verificacao,pdf_url,danfse_url,danfse_storage_path,danfse_gerado_em')
+        .select('id,tipo_documento,status,numero,chave_acesso,codigo_verificacao,pdf_url,danfse_url,danfse_storage_path,danfse_gerado_em')
         .eq('id', id).eq('empresa_id', empresaId).maybeSingle();
       if (error) throw error;
-      if (!nota) return resposta(404, { erro: 'NFS-e nao encontrada.' });
+      if (!nota) return resposta(404, { erro: 'Documento fiscal nao encontrado.' });
       if (nota.status !== 'autorizada') {
-        return resposta(409, { erro: 'O DANFSe so fica disponivel depois que a NFS-e e autorizada.' });
+        return resposta(409, { erro: 'O documento auxiliar so fica disponivel depois da autorizacao fiscal.' });
       }
       if (!texto(nota.chave_acesso) && !texto(nota.codigo_verificacao)) {
         return resposta(409, { erro: 'Documento sem chave de acesso ou codigo de verificacao confirmado pelo emissor.' });
@@ -762,13 +957,15 @@ Deno.serve(async (req) => {
       let url = '';
       if (nota.danfse_storage_path) {
         const { data: assinatura, error: assinaturaErro } = await admin.storage
-          .from('documentos-fiscais').createSignedUrl(nota.danfse_storage_path, 300, { download: `DANFSe-${nota.numero || nota.id}.pdf` });
+          .from('documentos-fiscais').createSignedUrl(nota.danfse_storage_path, 300, {
+            download: `${nota.tipo_documento === 'nfse' ? 'DANFSe' : nota.tipo_documento === 'nfe' ? 'DANFE-NFe' : 'DANFE-NFCe'}-${nota.numero || nota.id}.pdf`
+          });
         if (assinaturaErro) throw assinaturaErro;
         url = urlHttps(assinatura?.signedUrl);
       }
       if (!url) url = urlHttps(nota.danfse_url || nota.pdf_url);
       if (!url) {
-        return resposta(409, { erro: 'A NFS-e foi autorizada, mas o provedor ainda nao entregou o DANFSe. Atualize a situacao em instantes.' });
+        return resposta(409, { erro: 'A nota foi autorizada, mas o provedor ainda nao entregou o documento auxiliar. Atualize em instantes.' });
       }
       return resposta(200, {
         danfse: {
@@ -792,7 +989,7 @@ Deno.serve(async (req) => {
       const { data: existente, error: consultaErro } = await admin.from('notas_fiscais')
         .select('id,status,payload,updated_at').eq('id', id).eq('empresa_id', empresaId).maybeSingle();
       if (consultaErro) throw consultaErro;
-      if (!existente) return resposta(404, { erro: 'NFS-e nao encontrada.' });
+      if (!existente) return resposta(404, { erro: 'Documento fiscal nao encontrado.' });
       if (existente.status === 'cancelada') {
         return resposta(200, { nota: { id, status: 'cancelada' }, reutilizada: true,
           mensagem: 'Esta NFS-e ja foi cancelada.' });

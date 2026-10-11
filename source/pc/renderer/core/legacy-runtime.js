@@ -4376,13 +4376,23 @@ window.abrirModalEstoque = async (id, tipoPreset) => {
     btnAssinatura.onclick = () => exportarParaAssinaturaCelular('venda', item.id);
     acoesVenda.appendChild(btnAssinatura);
     const valorServicoVenda = Number(item.valorServico || item.valorMaoDeObra || 0);
-    if (window.fiscalSistemaOSHabilitado?.() === true && valorServicoVenda > 0) {
-      const btnNotaFiscal = document.createElement('button');
-      btnNotaFiscal.type = 'button';
-      btnNotaFiscal.className = 'botao botao-secundario';
-      btnNotaFiscal.textContent = 'Emitir NFS-e do serviço';
-      btnNotaFiscal.onclick = () => window.emitirNotaFiscalSistemaOS?.('venda', item);
-      acoesVenda.appendChild(btnNotaFiscal);
+    if (window.fiscalSistemaOSHabilitado?.() === true) {
+      if (valorServicoVenda > 0) {
+        const btnNotaFiscal = document.createElement('button');
+        btnNotaFiscal.type = 'button';
+        btnNotaFiscal.className = 'botao botao-secundario';
+        btnNotaFiscal.textContent = 'Emitir NFS-e do serviço';
+        btnNotaFiscal.onclick = () => window.emitirNotaFiscalSistemaOS?.('venda', item);
+        acoesVenda.appendChild(btnNotaFiscal);
+      }
+      for (const [tipoDocumento, rotulo] of [['nfe', 'Emitir NF-e da venda'], ['nfce', 'Emitir NFC-e da venda']]) {
+        const btnProduto = document.createElement('button');
+        btnProduto.type = 'button';
+        btnProduto.className = 'botao botao-secundario';
+        btnProduto.textContent = rotulo;
+        btnProduto.onclick = () => window.emitirNotaFiscalProdutoSistemaOS?.(tipoDocumento, 'venda', item);
+        acoesVenda.appendChild(btnProduto);
+      }
     }
   }
 
@@ -7297,9 +7307,9 @@ async function ajustarContaFiscalEmpresaGlobal(empresa) {
   dialogo.style.cssText = 'width:min(640px,calc(100vw - 28px));max-height:85vh;overflow:auto;border:1px solid var(--borda);border-radius:12px;background:var(--bg-card);color:var(--texto);padding:24px';
   dialogo.innerHTML = '<form method="dialog" style="display:grid;gap:14px">' +
     '<div style="display:flex;align-items:start;justify-content:space-between;gap:12px"><div><h2 style="margin:0">Carteira fiscal</h2><p id="carteiraFiscalEmpresaNome" class="campo-desc"></p></div><button type="submit" class="botao botao-fantasma" aria-label="Fechar carteira">Fechar</button></div>' +
-    '<div class="assinatura-resumo"><strong id="carteiraFiscalSaldo"></strong><span id="carteiraFiscalDebito"></span></div>' +
+    '<div class="assinatura-resumo"><strong id="carteiraFiscalSaldo"></strong><span id="carteiraFiscalDebito"></span><span id="carteiraFiscalEstimativa"></span></div>' +
     '<div class="grade-2"><label class="campo">Cortesia mensal excepcional<input id="carteiraFiscalLimite" type="number" min="0" max="1000000" step="1"></label><label class="campo">Preço por nota autorizada (R$)<input id="carteiraFiscalPreco" inputmode="decimal"></label></div>' +
-    '<label class="campo">Ajuste do saldo (R$)<input id="carteiraFiscalAjuste" inputmode="decimal" placeholder="Ex.: 10,00 para adicionar ou -10,00 para remover"><small class="campo-desc">Deixe vazio para não alterar. Ajustes não substituem pagamentos do Mercado Pago.</small></label>' +
+    '<label class="campo">Ajuste somente do saldo de notas (R$)<input id="carteiraFiscalAjuste" inputmode="decimal" placeholder="Ex.: 10,00 para adicionar ou -10,00 para remover"><small class="campo-desc">Este saldo paga somente emissões fiscais. Não altera assinatura, caixa ou outros créditos. Deixe vazio para não alterar.</small></label>' +
     '<label class="campo">Motivo do ajuste<input id="carteiraFiscalMotivo" maxlength="300" placeholder="Obrigatório ao adicionar ou remover saldo"></label>' +
     '<button type="button" id="carteiraFiscalSalvar" class="botao botao-primario">Confirmar alteração</button>' +
     '<p id="carteiraFiscalErro" role="alert" style="color:var(--acento-erro)"></p>' +
@@ -7310,6 +7320,7 @@ async function ajustarContaFiscalEmpresaGlobal(empresa) {
   campo('carteiraFiscalSaldo').textContent = 'Saldo disponível: ' + dinheiroFiscal(conta.saldo_centavos);
   campo('carteiraFiscalDebito').textContent = Number(conta.debito_pendente_centavos || 0) > 0
     ? 'Débito pendente: ' + dinheiroFiscal(conta.debito_pendente_centavos) : 'Sem débito pendente';
+  campo('carteiraFiscalEstimativa').textContent = `Cortesia restante: ${conta.restantes_gratuitas ?? 0} · saldo emite ${conta.estimativa_notas_com_saldo == null ? 'quantidade ilimitada pelo preço atual' : 'aprox. ' + conta.estimativa_notas_com_saldo + ' nota(s)'}`;
   campo('carteiraFiscalLimite').value = String(conta.limite_gratuito_mensal ?? 0);
   campo('carteiraFiscalPreco').value = (Number(conta.preco_excedente_centavos ?? 99) / 100).toFixed(2).replace('.', ',');
   const movimentos = campo('carteiraFiscalMovimentos');

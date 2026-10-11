@@ -185,3 +185,92 @@ export async function enviarCertificadoNfeio(id: string, cnpj: string, arquivo: 
   }
   return { ok: true, valido_ate: validoAte };
 }
+
+type TipoInscricaoEstadual = 'NFe' | 'NFCe';
+
+function montarInscricaoEstadual(cadastro: Cadastro, tipo: TipoInscricaoEstadual,
+  credencial?: { id: number; codigo: string }) {
+  const uf = texto(cadastro.uf).toUpperCase();
+  const inscricao = texto(cadastro.inscricao_estadual).replace(/[^0-9A-Za-z]/g, '');
+  const serie = Number(tipo === 'NFe' ? cadastro.nfe_serie : cadastro.nfce_serie);
+  const numero = Number(tipo === 'NFe' ? cadastro.nfe_proximo_numero : cadastro.nfce_proximo_numero);
+  if (!/^[A-Z]{2}$/.test(uf) || !inscricao || inscricao.length > 20 ||
+      !Number.isSafeInteger(serie) || serie < 0 || serie > 999 ||
+      !Number.isSafeInteger(numero) || numero < 1 || numero > 999999999) return null;
+  if (tipo === 'NFCe' && (!credencial || !Number.isSafeInteger(credencial.id) || credencial.id < 1 ||
+      !credencial.codigo || credencial.codigo.length > 128)) return null;
+  return { StateTax: {
+    Code: uf, TaxNumber: inscricao, EnvironmentType: 'Test', Type: tipo,
+    Serie: serie, Number: numero,
+    ProcessingDetails: { SwitchAuthorizerStrategy: 'Manual' },
+    ...(tipo === 'NFCe' ? { SecurityCredential: { Id: credencial!.id, Code: credencial!.codigo } } : {})
+  } };
+}
+
+export async function listarInscricoesEstaduaisNfeio(empresaId: string, chave: string,
+  consultar: Consulta = fetch) {
+  if (!idValido(empresaId)) return { ok: false, motivo: 'identificacao_invalida' };
+  const retorno = await requisitar(`/v2/companies/${encodeURIComponent(empresaId)}/statetaxes?limit=50`,
+    'GET', chave, undefined, consultar);
+  if (!retorno.ok) return retorno;
+  const lista = retorno.dados?.StateTaxes ?? retorno.dados?.stateTaxes ??
+    retorno.dados?.Items ?? retorno.dados?.items;
+  return Array.isArray(lista) ? { ok: true, inscricoes: lista } : { ok: false, motivo: 'resposta_inesperada' };
+}
+
+export async function criarInscricaoEstadualNfeio(empresaId: string, cadastro: Cadastro,
+  tipo: TipoInscricaoEstadual, credencial: { id: number; codigo: string } | undefined,
+  chave: string, consultar: Consulta = fetch) {
+  if (!idValido(empresaId) || !['NFe', 'NFCe'].includes(tipo)) {
+    return { ok: false, motivo: 'identificacao_invalida' };
+  }
+  const corpo = montarInscricaoEstadual(cadastro, tipo, credencial);
+  if (!corpo) return { ok: false, motivo: 'inscricao_incompleta' };
+  const retorno = await requisitar(`/v2/companies/${encodeURIComponent(empresaId)}/statetaxes`,
+    'POST', chave, corpo, consultar);
+  if (!retorno.ok) return retorno;
+  const estadual = retorno.dados?.StateTax ?? retorno.dados?.stateTax;
+  const id = texto(estadual?.Id ?? estadual?.id);
+  const companyId = texto(estadual?.CompanyId ?? estadual?.companyId);
+  const tipoConfirmado = texto(estadual?.Type ?? estadual?.type).toLowerCase();
+  if (!idValido(id) || companyId !== empresaId || tipoConfirmado !== tipo.toLowerCase()) {
+    return { ok: false, motivo: 'resposta_inesperada' };
+  }
+  return { ok: true, id };
+}
+
+export async function consultarInscricaoEstadualNfeio(empresaId: string, inscricaoId: string,
+  tipo: TipoInscricaoEstadual, chave: string, consultar: Consulta = fetch) {
+  if (!idValido(empresaId) || !idValido(inscricaoId)) return { ok: false, motivo: 'identificacao_invalida' };
+  const retorno = await requisitar(`/v2/companies/${encodeURIComponent(empresaId)}/statetaxes/${encodeURIComponent(inscricaoId)}`,
+    'GET', chave, undefined, consultar);
+  if (!retorno.ok) return retorno;
+  const estadual = retorno.dados?.StateTax ?? retorno.dados?.stateTax;
+  if (texto(estadual?.CompanyId ?? estadual?.companyId) !== empresaId ||
+      texto(estadual?.Id ?? estadual?.id) !== inscricaoId ||
+      texto(estadual?.Type ?? estadual?.type).toLowerCase() !== tipo.toLowerCase()) {
+    return { ok: false, motivo: 'inscricao_divergente' };
+  }
+  return { ok: true, inscricao: estadual };
+}
+
+export async function ativarInscricaoEstadualNfeio(empresaId: string, inscricaoId: string,
+  tipo: TipoInscricaoEstadual, chave: string, consultar: Consulta = fetch) {
+  const atual = await consultarInscricaoEstadualNfeio(empresaId, inscricaoId, tipo, chave, consultar);
+  if (!atual.ok) return atual;
+  const ambiente = texto(atual.inscricao?.EnvironmentType ?? atual.inscricao?.environmentType).toLowerCase();
+  const status = texto(atual.inscricao?.Status ?? atual.inscricao?.status).toLowerCase();
+  if (status !== 'active') return { ok: false, motivo: 'inscricao_inativa' };
+  if (ambiente === 'production') return { ok: true, ja_ativa: true };
+  const retorno = await requisitar(`/v2/companies/${encodeURIComponent(empresaId)}/statetaxes/${encodeURIComponent(inscricaoId)}`,
+    'PUT', chave, { StateTax: { EnvironmentType: 'Production' } }, consultar);
+  if (!retorno.ok) return retorno;
+  const estadual = retorno.dados?.StateTax ?? retorno.dados?.stateTax;
+  if (texto(estadual?.Id ?? estadual?.id) !== inscricaoId ||
+      texto(estadual?.CompanyId ?? estadual?.companyId) !== empresaId ||
+      texto(estadual?.EnvironmentType ?? estadual?.environmentType).toLowerCase() !== 'production' ||
+      texto(estadual?.Status ?? estadual?.status).toLowerCase() !== 'active') {
+    return { ok: false, motivo: 'ativacao_nao_confirmada' };
+  }
+  return { ok: true, ja_ativa: false };
+}

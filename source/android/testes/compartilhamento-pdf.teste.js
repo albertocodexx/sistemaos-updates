@@ -120,13 +120,13 @@ const ler = rel => fs.readFileSync(path.join(raiz, rel), 'utf8');
     assert.match(garantia, /compartilharPdfHtml/);
     assert.match(desbloqueio, /compartilharPdfHtml/);
     assert.match(consulta, /compartilharPdfPorUrl/);
-    assert.match(fiscal, /Compartilhar DANFSe/);
+    assert.match(fiscal, /Compartilhar ' \+ rotuloAuxiliar/);
     assert.match(fiscal, /compartilharPdfPorUrl/);
-    assert.match(fiscal, /Segue o DANFSe da NFS-e/);
+    assert.match(fiscal, /'Segue o ' \+ rotuloAuxiliar \+ ' da ' \+ rotuloDocumento/);
     assert.match(ler('www/js/compartilhar-arquivo.js'), /TEMPO_LIMITE_DOWNLOAD_PDF_MS/,
       'download do PDF remoto deve ter limite para não deixar o botão preso indefinidamente');
 
-    console.log('OK: OS, compra, venda, entrega, garantia, desbloqueio e DANFSe compartilham PDF com mensagem pronta no Android.');
+    console.log('OK: OS, compra, venda, entrega, garantia, desbloqueio e DANFSe/DANFE compartilham PDF com mensagem pronta no Android.');
   } finally {
     dom.window.close();
   }
