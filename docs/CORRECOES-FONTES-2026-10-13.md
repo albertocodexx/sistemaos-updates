@@ -20,15 +20,18 @@ A auditoria Cloudflare deep foi encerrada explicitamente como incompleta por mud
 
 ## Verificações realizadas
 
-Leitura dos caminhos atuais e duas rodadas de revisão focada por agentes para autenticação, Android e renderização; checagem de sintaxe Node --check nos fontes/testes alterados; conferência do diff e arquivos destinados ao commit. Os validadores da auditoria conferiram o formato do ledger e de findings.json vazio (nenhum candidato concluído nas fases 3/5), não o comportamento do produto.
+Leitura dos caminhos atuais e duas rodadas de revisão focada por agentes para autenticação, Android e renderização; checagem de sintaxe `node --check` nos fontes/testes alterados; conferência do diff e arquivos destinados ao commit. Os validadores da auditoria conferiram o formato do ledger e de `findings.json` vazio (nenhum candidato concluído nas fases 3/5), não o comportamento integral do produto.
 
-## Testes preparados, não executados
+Em 13/10/2026, um runner no Windows Sandbox foi validado com rede ausente, entrada somente leitura, ambiente vazio com allowlist, scratch privado, limites de CPU, memória, processos, tempo, stdout e disco, além de encerramento conferido dos jobs. Foram executadas três regressões direcionadas com dados fictícios:
 
-- PC: testes/smoke/teste-revogacao-sessao-cloud.js; teste-render-com-icones-seguro.js ampliado; fixture de cliente estável do backup; novo teste incluído no runner smoke.
-- Android: npm run test:security-regression (cache/permissão/troca de usuário e lote/lookup de documento atrasado); fixtures antigas atualizadas com autorização explícita; contrato do retry interrompido ajustado para não exigir escrita na conta sucessora.
+- PC: `testes/smoke/teste-revogacao-sessao-cloud.js` — aprovado, código 0.
+- Android: `testes/seguranca/estoque-cache-autorizacao.teste.js` — aprovado, código 0.
+- Android: `testes/seguranca/documentos-escopo-assinatura.teste.js` — aprovado, código 0.
 
-A skill exige sandbox OS com rede isolada, ambiente vazio allowlisted, alvo/toolchain somente leitura, scratch exclusivo e todos os limites de recursos. Esse conjunto não existe neste host; portanto testes de execução, browsers, builds e emuladores não foram rodados. Validar em ambiente isolado com fixtures fictícias antes de integrar à main ou gerar release.
+As três execuções terminaram sem timeout; sete arquivos de fonte/teste usados mantiveram hashes SHA-256 idênticos antes e depois. O runner não reteve arquivos do alvo. Os metadados locais ficam em `outputs/sandbox-2026-10-13/scratch/export-v2/readonly-test-metadata.json` e não contêm credenciais nem dados de produção.
+
+Os resultados permitem integrar somente as correções cobertas por essas regressões direcionadas. Não equivalem a build de release, teste completo do PC/Android ou certificação do sistema inteiro.
 
 ## Pendências
 
-Executar as regressões e suítes completas, validar comportamento real do SDK com transporte simulado, revisar as demais hipóteses da auditoria e os fluxos não tratados (recuperação de senha, operações já enviadas, outros serviços de sync). Guards não desfazem requisições remotas que já saíram. Sem prova de funcionamento integral de Mercado Pago, fiscal, WhatsApp, backup/restauração ou isolamento em produção nesta rodada.
+Executar as suítes completas, builds de release e validações de interface; validar comportamento real do SDK com transporte simulado; revisar as demais hipóteses da auditoria e os fluxos não tratados (recuperação de senha, operações já enviadas, outros serviços de sync). Guards não desfazem requisições remotas que já saíram. Sem prova nova de funcionamento integral de Mercado Pago, fiscal, WhatsApp, backup/restauração ou isolamento em produção nesta rodada. Instalador e APK permanecem nas versões já publicadas PC 40.5.24 e Android 20.5.23.
