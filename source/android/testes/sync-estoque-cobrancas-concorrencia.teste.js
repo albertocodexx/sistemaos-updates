@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const clone = x => JSON.parse(JSON.stringify(x));
 const storage = new Map();
 global.localStorage = {getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)};
-global.SistemaOSPermissoes = {obterContexto:()=>({empresa_id:'empresa-teste'})};
+global.SistemaOSPermissoes = {obterContexto:()=>({empresa_id:'empresa-teste',usuario_id:'usuario-teste'}),pode:()=>true};
 global.SistemaOSSupabaseSync = {obterDispositivoId:async()=> 'dispositivo'};
 let offline = true;
 let bloquear = null;

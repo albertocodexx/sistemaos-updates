@@ -211,8 +211,19 @@
     return blobParaDataUrl(download.data);
   }
 
-  async function sincronizarConfiguracoesEmpresa(contexto) {
+  async function sincronizarConfiguracoesEmpresa(contexto, escopoValido) {
     if (!contexto || contexto.administrador_global === true || !root.ConfigApp) return null;
+    var empresa = String(contexto.empresa_id || '');
+    function exigirEscopo() {
+      var ativa = root.SistemaOSHistorico && root.SistemaOSHistorico.obterEmpresaAtiva
+        ? String(root.SistemaOSHistorico.obterEmpresaAtiva() || '') : empresa;
+      if (ativa !== empresa || (escopoValido && !escopoValido())) {
+        var erro = new Error('A conta ativa mudou durante a atualização dos dados da empresa.');
+        erro.tipo = 'sessao-alterada';
+        throw erro;
+      }
+    }
+    exigirEscopo();
     // A identidade da empresa tem uma unica fonte de verdade: o Sistema OS
     // no PC. O Android nunca reenviara uma copia local antiga, nem mesmo para
     // administradores. Isso evita que reinstalacao, cache ou uso simultaneo
@@ -220,6 +231,7 @@
     limparConfigPendente(contexto);
     var cliente = root.SupabaseClientApp.obterCliente();
     var identidade = await carregarIdentidade(contexto);
+    exigirEscopo();
     if (!identidade) return null;
     var possuiConfigMobile = !!(identidade.configMobile &&
       typeof identidade.configMobile === 'object' &&
@@ -233,16 +245,19 @@
     // assinatura local antes do primeiro salvamento pelo APK novo.
     if (identidade.logoStoragePath) {
       patch.logoBase64 = await baixarImagemIdentidade(cliente, identidade.logoStoragePath);
+      exigirEscopo();
     } else if (possuiConfigMobile) {
       patch.logoBase64 = '';
     }
     if (identidade.assinaturaStoragePath) {
       patch.assinaturaAssistenciaBase64 = await baixarImagemIdentidade(cliente, identidade.assinaturaStoragePath);
+      exigirEscopo();
     } else if (possuiConfigMobile) {
       patch.assinaturaAssistenciaBase64 = '';
     }
     if (!Object.keys(patch).length) return null;
     patch.configAtualizadaEm = identidade.configMobileAtualizadaEm || patch.configAtualizadaEm || '';
+    exigirEscopo();
     root.ConfigApp.salvarConfig(patch);
     marcarConfigSincronizada(contexto, identidade.configMobileAtualizadaEm);
     marcarConfigReconciliada(contexto);

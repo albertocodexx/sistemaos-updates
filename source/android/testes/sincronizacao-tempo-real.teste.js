@@ -45,7 +45,7 @@ function clienteFake(nome, log) {
     const eventos = [];
     let clienteAtual = clienteFake('original', eventos);
     global.SupabaseClientApp = { obterCliente() { return clienteAtual; } };
-    global.SistemaOSPermissoes = { obterContexto() { return { empresa_id: 'empresa-a' }; } };
+    global.SistemaOSPermissoes = { obterContexto() { return { empresa_id: 'empresa-a', usuario_id: 'usuario-a' }; }, pode: () => true };
     const modulo = require(caminho);
     const cancelar = modulo.assinar(() => {});
     clienteAtual = clienteFake('novo', eventos);

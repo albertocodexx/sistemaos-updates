@@ -230,6 +230,7 @@ class DesktopSupabaseRuntime {
     this.client = null;
     this.contexto = null;
     this.usuario = null;
+    this.geracaoAutenticacao = 0;
     this.stateStore = null;
     this.sessionStore = null;
     this.fileService = null;
@@ -343,7 +344,12 @@ class DesktopSupabaseRuntime {
     });
     this.assinaturaAuth = client.auth.onAuthStateChange?.((evento, sessao) => {
       // Callback síncrono: chamar Auth/RPC aqui disputa o lock do próprio SDK.
-      if (!escrita.permitida || !['TOKEN_REFRESHED', 'SIGNED_IN', 'INITIAL_SESSION'].includes(evento)) return;
+      if (!escrita.permitida || this.escritaSessao !== escrita) return;
+      if (evento === 'SIGNED_OUT') {
+        this._invalidarAutenticacao();
+        return;
+      }
+      if (!['TOKEN_REFRESHED', 'SIGNED_IN', 'INITIAL_SESSION'].includes(evento)) return;
       if (!sessao?.user?.id || !sessao.access_token || !sessao.refresh_token) return;
       try {
         const conta = this.sessionStore.obterContaRapida?.(sessao.user.id);
@@ -357,6 +363,33 @@ class DesktopSupabaseRuntime {
       }
     })?.data?.subscription;
     return client;
+  }
+
+  _capturarAutenticacao() {
+    return { client: this.client, geracao: this.geracaoAutenticacao };
+  }
+
+  _autenticacaoAtual(operacao) {
+    return operacao.client === this.client && operacao.geracao === this.geracaoAutenticacao;
+  }
+
+  _exigirAutenticacaoAtual(operacao) {
+    if (!this._autenticacaoAtual(operacao)) {
+      const erro = new Error('Sua sessão mudou. Entre novamente para continuar.');
+      erro.code = 'SESSAO_ALTERADA';
+      throw erro;
+    }
+  }
+
+  _invalidarAutenticacao() {
+    // Revogação conhecida não é timeout/offline: perde a autoridade local,
+    // mas preserva os dados, filas e contas rápidas do cofre.
+    this.geracaoAutenticacao++;
+    this.parar();
+    this.contexto = null;
+    this.usuario = null;
+    this.ultimoStatus = { ativo: !!this.client, autenticado: false, conectado: false,
+      modo: this.client ? 'supabase' : 'legado' };
   }
 
   _recriarServicoArquivosDoEscopo() {
@@ -381,7 +414,7 @@ class DesktopSupabaseRuntime {
   }
 
   async reconfigurar({ restaurar = true } = {}) {
-    this.parar();
+    this._invalidarAutenticacao();
     if (this.escritaSessao) this.escritaSessao.permitida = false;
     this.assinaturaAuth?.unsubscribe?.();
     try { Promise.resolve(this.client?.auth?.stopAutoRefresh?.()).catch(() => {}); } catch (_) {}
@@ -411,6 +444,7 @@ class DesktopSupabaseRuntime {
       this.companyCloudService = new CompanyCloudService({
         getClient: () => this.client,
         getContext: () => this.contexto,
+        getGeneration: () => this.geracaoAutenticacao,
         db: this.db,
         stateStore: this.stateStore,
         appVersion: APP_VERSION
@@ -456,11 +490,14 @@ class DesktopSupabaseRuntime {
   }
 
   async _carregarContexto(user, usuarioInformado) {
-    const { data, error } = await this.client.rpc('obter_contexto_comercial');
+    const operacao = this._capturarAutenticacao();
+    const { data, error } = await operacao.client.rpc('obter_contexto_comercial');
+    this._exigirAutenticacaoAtual(operacao);
     if (error) throw error;
     const contexto = primeiraLinha(data);
     if (!contexto) throw new Error('Usuário sem perfil ou empresa vinculada.');
     await this._verificarCompatibilidadeAplicativo();
+    this._exigirAutenticacaoAtual(operacao);
     if (!contexto.usuario_ativo) throw new Error('Usuário inativo.');
     const suporteGlobal = contexto.administrador_global === true;
     if (!suporteGlobal && !contexto.empresa_ativa) throw new Error('Empresa inativa.');
@@ -477,7 +514,8 @@ class DesktopSupabaseRuntime {
       (contexto.licenca_status === 'vencida' || venceuPelaData);
     if (contexto.acesso_somente_cobranca) contexto.licenca_status = 'vencida';
     if (suporteGlobal) {
-      const papel = await this.client.rpc('obter_papel_suporte');
+      const papel = await operacao.client.rpc('obter_papel_suporte');
+      this._exigirAutenticacaoAtual(operacao);
       if (!papel.error) contexto.papel_suporte = String(papel.data || 'suporte');
     }
     const empresaAnterior = this.stateStore.obter()?.empresaId || '';
@@ -502,6 +540,7 @@ class DesktopSupabaseRuntime {
         console.error('[Supabase] Nao foi possivel preparar o backup da empresa:', mensagemErro(erro));
         return { restaurado: false };
       });
+      this._exigirAutenticacaoAtual(operacao);
       this.db.migrarSegredosParaArmazenamentoSeguro?.();
       if (escopo?.novo && !escopo.migradoLegado && !restauracao?.restaurado) {
         this.db.salvarConfig({
@@ -513,14 +552,19 @@ class DesktopSupabaseRuntime {
       await this.companyCloudService?.publicarConfiguracaoMobileSeAusente(this.db?.obterConfig?.() || {}).catch((erro) => {
         console.error('[Supabase] Nao foi possivel preparar a configuracao do celular:', mensagemErro(erro));
       });
+      this._exigirAutenticacaoAtual(operacao);
       await this.companyCloudService?.sincronizarConfiguracaoCompartilhada().catch((erro) => {
         console.error('[Supabase] Nao foi possivel atualizar os dados compartilhados da empresa:', mensagemErro(erro));
       });
+      this._exigirAutenticacaoAtual(operacao);
       await this.companyCloudService?.sincronizarLogo().catch((erro) => {
         console.error('[Supabase] Nao foi possivel sincronizar a logo da empresa:', mensagemErro(erro));
       });
+      this._exigirAutenticacaoAtual(operacao);
       await this.registrarAcessoComercial().catch(() => {});
+      this._exigirAutenticacaoAtual(operacao);
       await this.enviarHeartbeat();
+      this._exigirAutenticacaoAtual(operacao);
       this.iniciar();
     } else if (escopo?.novo) {
       this.db.salvarConfig({
@@ -679,33 +723,40 @@ class DesktopSupabaseRuntime {
 
   async login(empresa, usuario, senha) {
     if (!this.client) return { sucesso: false, erro: 'Supabase não está ativo ou configurado.', codigo: 'supabase_inativo' };
-    const sessaoAnterior = await this.client.auth.getSession().then((r) => r.data?.session || null).catch(() => null);
+    const operacao = this._capturarAutenticacao();
+    const sessaoAnterior = await operacao.client.auth.getSession().then((r) => r.data?.session || null).catch(() => null);
     const contextoAnterior = this.contexto;
     const usuarioAnterior = this.usuario;
     try {
+      this._exigirAutenticacaoAtual(operacao);
       if (contextoAnterior && contextoAnterior.administrador_global !== true) {
         await this.sincronizarAgora().catch(() => {});
+        this._exigirAutenticacaoAtual(operacao);
       }
       this.parar();
-      const resposta = await comTempoLimite(this.client.functions.invoke('auth-login', {
+      const resposta = await comTempoLimite(operacao.client.functions.invoke('auth-login', {
         body: {
           empresa: String(empresa || '').trim(),
           usuario: String(usuario || '').trim(),
           senha: String(senha || '')
         }
       }), 20000);
+      this._exigirAutenticacaoAtual(operacao);
       if (resposta.error) throw new Error(await erroDaEdgeFunction(resposta.error));
       const credenciais = resposta.data || {};
       if (!credenciais.access_token || !credenciais.refresh_token) {
         throw new Error('Não foi possível validar as credenciais.');
       }
-      const { data, error } = await this.client.auth.setSession({
+      const { data, error } = await operacao.client.auth.setSession({
         access_token: credenciais.access_token,
         refresh_token: credenciais.refresh_token
       });
+      this._exigirAutenticacaoAtual(operacao);
       if (error || !data?.user) throw error || new Error('Não foi possível iniciar a sessão.');
       const usuarioPublicoAtual = await comTempoLimite(this._carregarContexto(data.user, usuario), 20000);
+      this._exigirAutenticacaoAtual(operacao);
       await this._salvarContaRapida(data.session, empresa, usuario);
+      this._exigirAutenticacaoAtual(operacao);
       this.ultimoStatus = { ativo: true, autenticado: true, conectado: true, modo: 'supabase' };
       // Libera o login sem prender a tela ao primeiro ciclo completo. A
       // sincronização é agrupada e executada logo depois; falha de rede não
@@ -713,19 +764,33 @@ class DesktopSupabaseRuntime {
       if (!this.contexto?.acesso_somente_cobranca) this.solicitarSincronizacao(250);
       return { sucesso: true, usuario: usuarioPublicoAtual, contexto: this.contexto };
     } catch (erro) {
+      if (!this._autenticacaoAtual(operacao)) {
+        return { sucesso: false, erro: 'Sua sessão mudou. Entre novamente para continuar.', codigo: 'SESSAO_ALTERADA' };
+      }
+      // Cancela também a carga de contexto que perdeu uma corrida com timeout.
+      this.geracaoAutenticacao++;
+      const recuperacao = this._capturarAutenticacao();
       if (sessaoAnterior?.access_token && sessaoAnterior?.refresh_token) {
-        await this.client.auth.setSession({
+        const restaurada = await operacao.client.auth.setSession({
           access_token: sessaoAnterior.access_token,
           refresh_token: sessaoAnterior.refresh_token
-        }).catch(() => {});
+        }).catch(() => null);
+        if (!this._autenticacaoAtual(recuperacao)) return { sucesso: false, erro: 'Sua sessão mudou. Entre novamente para continuar.' };
+        if (!restaurada || restaurada.error) {
+          this._invalidarAutenticacao();
+          return { sucesso: false, erro: traduzirErroLogin(mensagemErro(erro)) };
+        }
         this.contexto = contextoAnterior;
         this.usuario = usuarioAnterior;
         if (contextoAnterior?.empresa_id) this._ativarEscopoLocal(contextoAnterior);
         if (contextoAnterior && contextoAnterior.administrador_global !== true && !contextoAnterior.acesso_somente_cobranca) this.iniciar();
       } else {
-        await this.client.auth.signOut({ scope: 'local' }).catch(() => {});
-        this.contexto = null;
-        this.usuario = null;
+        this._invalidarAutenticacao();
+        const encerramento = this._capturarAutenticacao();
+        await operacao.client.auth.signOut({ scope: 'local' }).catch(() => {});
+        // SIGNED_OUT do mesmo cliente também incrementa a geração; já limpou
+        // o status. Nenhum retorno tardio deve limpar a próxima identidade.
+        if (!this._autenticacaoAtual(encerramento)) return { sucesso: false, erro: traduzirErroLogin(mensagemErro(erro)) };
       }
       const mensagemPublica = traduzirErroLogin(mensagemErro(erro));
       this.ultimoStatus = { ativo: true, autenticado: false, conectado: false, erro: mensagemPublica, modo: 'supabase' };
@@ -742,6 +807,7 @@ class DesktopSupabaseRuntime {
 
   async _restaurarSessaoInterna() {
     if (!this.client) return { sucesso: false, codigo: 'supabase_inativo' };
+    const operacao = this._capturarAutenticacao();
     // O processo principal restaura a sessão antes de criar a janela. O
     // renderer consulta a mesma sessão logo depois; repetir getSession + RPC
     // nesse intervalo podia disputar a renovação do token e devolver a tela
@@ -750,7 +816,8 @@ class DesktopSupabaseRuntime {
       return { sucesso: true, usuario: this.usuario, contexto: this.contexto };
     }
     try {
-      const { data, error } = await this.client.auth.getSession();
+      const { data, error } = await operacao.client.auth.getSession();
+      this._exigirAutenticacaoAtual(operacao);
       if (error) {
         if (['refresh_token_already_used', 'refresh_token_not_found', 'session_not_found', 'session_expired'].includes(error.code)) {
           throw new Error('Sua sessão salva expirou. Digite a senha para entrar novamente.');
@@ -762,15 +829,24 @@ class DesktopSupabaseRuntime {
         return { sucesso: false, codigo: 'sem_sessao' };
       }
       if (this.contaTrocaEsperadaId && String(data.session.user.id || '') !== this.contaTrocaEsperadaId) {
-        await this.client.auth.signOut({ scope: 'local' }).catch(() => {});
-        throw new Error('A conta escolhida não pôde ser aberta. Entre novamente com a senha.');
+        const mensagem = 'A conta escolhida não pôde ser aberta. Entre novamente com a senha.';
+        this.sessionStore?.setItem?.(CHAVE_TROCA_CONTA_ERRO, JSON.stringify({
+          mensagem, contaId: this.contaTrocaEsperadaId
+        }));
+        this.contaTrocaEsperadaId = '';
+        this._invalidarAutenticacao();
+        await operacao.client.auth.signOut({ scope: 'local' }).catch(() => {});
+        return { sucesso: false, erro: mensagem, codigo: 'conta_divergente' };
       }
       const usuario = await this._carregarContexto(data.session.user);
+      this._exigirAutenticacaoAtual(operacao);
       await this._salvarContaRapida(data.session, this.contexto?.empresa_codigo, this.usuario?.usuario);
+      this._exigirAutenticacaoAtual(operacao);
       this.contaTrocaEsperadaId = '';
       this.ultimoStatus = { ativo: true, autenticado: true, conectado: true, modo: 'supabase' };
       return { sucesso: true, usuario, contexto: this.contexto };
     } catch (erro) {
+      if (!this._autenticacaoAtual(operacao)) return { sucesso: false, erro: 'Sua sessão mudou. Entre novamente para continuar.', codigo: 'SESSAO_ALTERADA' };
       if (this.contaTrocaEsperadaId) {
         this.sessionStore?.setItem?.(CHAVE_TROCA_CONTA_ERRO, JSON.stringify({
           mensagem: mensagemErro(erro), contaId: this.contaTrocaEsperadaId
@@ -785,11 +861,9 @@ class DesktopSupabaseRuntime {
   }
 
   async logout() {
-    this.parar();
-    try { if (this.client) await this.client.auth.signOut({ scope: 'local' }); } catch (_) { /* limpa local abaixo */ }
-    this.contexto = null;
-    this.usuario = null;
-    this.ultimoStatus = { ativo: !!this.client, autenticado: false, conectado: false, modo: this.client ? 'supabase' : 'legado' };
+    const client = this.client;
+    this._invalidarAutenticacao();
+    try { if (client) await client.auth.signOut({ scope: 'local' }); } catch (_) { /* autoridade já retirada */ }
     return { sucesso: true };
   }
 
@@ -1014,19 +1088,23 @@ class DesktopSupabaseRuntime {
 
   async atualizarSenha(senha) {
     if (!this.client) return { sucesso: false, erro: 'Supabase não está ativo.' };
+    const operacao = this._capturarAutenticacao();
     const novaSenha = String(senha || '');
     if (novaSenha.length < 8) return { sucesso: false, erro: 'A nova senha precisa ter pelo menos 8 caracteres.' };
     try {
-      const { data, error } = await invocarFuncaoComTempoLimite(this.client, 'admin-global', {
+      const { data, error } = await invocarFuncaoComTempoLimite(operacao.client, 'admin-global', {
         body: { acao: 'concluir_troca_senha', dados: { novaSenha } }
       });
+      this._exigirAutenticacaoAtual(operacao);
       if (error) throw new Error(await erroDaEdgeFunction(error));
       if (data?.erro) throw new Error(data.erro);
-      const atualizada = await this.client.auth.refreshSession();
+      const atualizada = await operacao.client.auth.refreshSession();
+      this._exigirAutenticacaoAtual(operacao);
       if (atualizada.error) throw atualizada.error;
       const usuarioAuth = atualizada.data?.user || atualizada.data?.session?.user;
       if (!usuarioAuth) throw new Error('Não foi possível atualizar a sessão com a nova senha.');
       const usuario = await this._carregarContexto(usuarioAuth);
+      this._exigirAutenticacaoAtual(operacao);
       this.ultimoStatus = { ativo: true, autenticado: true, conectado: true, modo: 'supabase' };
       return { sucesso: true, usuario, contexto: this.contexto };
     } catch (erro) {

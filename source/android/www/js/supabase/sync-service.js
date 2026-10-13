@@ -279,6 +279,7 @@
   }
 
   async function enfileirar(operacao, motivo) {
+    validarIdentidadeOperacao(operacao);
     var salvo = await historico().enfileirarOperacaoNuvem(operacao);
     emitir('sistema-os:operacao-nuvem-enfileirada', salvo);
     return { enviado: false, enfileirado: true, motivo: motivo || 'offline', operacao: salvo, origem: 'supabase' };
@@ -291,19 +292,24 @@
   }
 
   async function confirmarLocal(operacao, dadosRemotos) {
+    validarIdentidadeOperacao(operacao);
     if (operacao.entidade === 'assinatura_remota' && operacao.registroLocalId &&
         historico().obterDocumentoRecebidoPorId && historico().salvarDocumentoRecebido) {
       var documento = await historico().obterDocumentoRecebidoPorId(operacao.registroLocalId);
+      validarIdentidadeOperacao(operacao);
       if (documento && ['assinado', 'nao_assinado', 'enviado'].indexOf(documento.statusLocal) !== -1) {
         documento.statusLocal = 'enviado';
         documento.enviadoAoPostgresqlEm = new Date().toISOString();
-        await historico().salvarDocumentoRecebido(documento);
+        await historico().salvarDocumentoRecebido(documento, function () {
+          try { validarIdentidadeOperacao(operacao); return true; } catch (_) { return false; }
+        });
       }
       return 0;
     }
     if (['ordem_servico', 'compra', 'venda', 'entrega'].indexOf(operacao.entidade) === -1) return 0;
     if (operacao.registroLocalId && historico().gravarEstadoSupabase) {
       try { await historico().gravarEstadoSupabase(operacao.registroLocalId, dadosRemotos); } catch (_) {}
+      validarIdentidadeOperacao(operacao);
     }
     if (operacao.registroLocalId && root.SistemaOSSupabaseArquivo &&
         root.SistemaOSSupabaseArquivo.enfileirarArquivosDocumento) {
@@ -326,6 +332,7 @@
       var respostaAssinatura = await root.SupabaseClientApp.obterCliente().functions.invoke('assinaturas-remotas', {
         body: { acao: 'responder', dados: operacao.dados }
       });
+      validarIdentidadeOperacao(operacao);
       if (respostaAssinatura.error) throw respostaAssinatura.error;
       if (respostaAssinatura.data && respostaAssinatura.data.erro) {
         throw new Error(respostaAssinatura.data.erro);
@@ -340,6 +347,7 @@
     }
     if (operacao.entidade === 'entrega') {
       var dispositivoEntregaId = await registrarDispositivo();
+      validarIdentidadeOperacao(operacao);
       var respostaEntrega = await root.SupabaseClientApp.obterCliente().rpc(
         operacao.operacao === 'insert' ? 'criar_entrega_mobile' : 'atualizar_entrega_mobile',
         operacao.operacao === 'insert' ? {
@@ -352,6 +360,7 @@
           p_dados: operacao.dados
         }
       );
+      validarIdentidadeOperacao(operacao);
       if (respostaEntrega.error) {
         respostaEntrega.error.tipo = servico()._classificarErro(respostaEntrega.error);
         throw respostaEntrega.error;
@@ -360,6 +369,7 @@
     }
     if (operacao.entidade === 'compra' || operacao.entidade === 'venda') {
       var dispositivoDocumentoId = await registrarDispositivo();
+      validarIdentidadeOperacao(operacao);
       var respostaDocumento = await root.SupabaseClientApp.obterCliente().rpc(
         operacao.operacao === 'insert' ? 'criar_documento_comercial_mobile' : 'atualizar_documento_comercial_mobile',
         operacao.operacao === 'insert' ? {
@@ -374,6 +384,7 @@
           p_dados: operacao.dados
         }
       );
+      validarIdentidadeOperacao(operacao);
       if (respostaDocumento.error) {
         respostaDocumento.error.tipo = servico()._classificarErro(respostaDocumento.error);
         throw respostaDocumento.error;
@@ -382,6 +393,7 @@
     }
     if (operacao.operacao === 'insert') {
       var dispositivoId = await registrarDispositivo();
+      validarIdentidadeOperacao(operacao);
       return servico().criar(operacao.dados, operacao.idExportacao, dispositivoId);
     }
     if (operacao.operacao === 'update') {
@@ -434,6 +446,7 @@
     if (!podeEnviarAgora()) return enfileirar(operacao, 'offline');
     try {
       var dados = await executarComRetryOcupado(operacao);
+      validarIdentidadeOperacao(operacao);
       await confirmarLocal(operacao, dados);
       return {
         enviado: true,
@@ -444,6 +457,9 @@
         origem: 'supabase'
       };
     } catch (erro) {
+      try { validarIdentidadeOperacao(operacao); } catch (mudanca) {
+        return { enviado: false, enfileirado: false, motivo: 'sessao-alterada', erro: mudanca, origem: 'supabase' };
+      }
       var tipo = erro.tipo || servico()._classificarErro(erro);
       // DELETE e idempotente: se o servidor confirma que a OS ja nao existe,
       // o estado final desejado foi alcancado. Tratar como sucesso impede que
@@ -559,16 +575,19 @@
           (item.usuarioId && item.usuarioId !== atual.usuarioId)) continue;
       var tentativas = Number(item.tentativas || 0) + 1;
       var inicioTentativa = new Date();
-      await historico().atualizarOperacaoNuvem(item.id, {
-        status: 'enviando',
-        tentativas: tentativas,
-        ultimaTentativaEm: inicioTentativa.toISOString(),
-        // Uma WebView encerrada durante a requisicao nao deve repetir a mesma
-        // operacao assim que o aplicativo abrir novamente.
-        proximaTentativaEm: new Date(inicioTentativa.getTime() + (5 * 60 * 1000)).toISOString()
-      });
       try {
+        validarIdentidadeOperacao(item);
+        await historico().atualizarOperacaoNuvem(item.id, {
+          status: 'enviando',
+          tentativas: tentativas,
+          ultimaTentativaEm: inicioTentativa.toISOString(),
+          // Uma WebView encerrada durante a requisicao nao deve repetir a mesma
+          // operacao assim que o aplicativo abrir novamente.
+          proximaTentativaEm: new Date(inicioTentativa.getTime() + (5 * 60 * 1000)).toISOString()
+        });
+        validarIdentidadeOperacao(item);
         var remoto = await executarComRetryOcupado(item);
+        validarIdentidadeOperacao(item);
         await historico().atualizarOperacaoNuvem(item.id, {
           status: 'concluido',
           concluidoEm: new Date().toISOString(),
@@ -587,6 +606,12 @@
         contagem.enviados += 1;
         emitir('sistema-os:operacao-nuvem-concluida', { operacao: item, dados: remoto });
       } catch (erro) {
+        try { validarIdentidadeOperacao(item); } catch (_) {
+          // Não gravar a fila antiga no banco da nova conta. A entrada no
+          // banco original continua durável e poderá ser retomada lá.
+          contagem.motivo = 'sessao-alterada';
+          break;
+        }
         var tipo = erro.tipo || servico()._classificarErro(erro);
         if (tipo === 'sessao-alterada') {
           // Trocar de conta enquanto uma rodada está começando não é falha

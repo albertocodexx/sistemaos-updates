@@ -5,7 +5,7 @@ const path = require('path');
 const raiz = path.resolve(__dirname, '..');
 const chamadas = [];
 
-global.SistemaOSPermissoes = { obterContexto: () => ({ empresa_id: 'empresa-teste' }) };
+global.SistemaOSPermissoes = { obterContexto: () => ({ empresa_id: 'empresa-teste', usuario_id: 'usuario-teste' }), pode: () => true };
 global.SistemaOSSupabaseSync = { obterDispositivoId: async () => '11111111-1111-1111-1111-111111111111' };
 global.SupabaseClientApp = {
   obterCliente: () => ({

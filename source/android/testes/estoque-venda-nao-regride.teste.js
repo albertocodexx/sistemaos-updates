@@ -4,6 +4,7 @@ const assert = require('assert');
 const path = require('path');
 
 let dadosEnviados = null;
+global.SistemaOSPermissoes = { obterContexto: () => ({ empresa_id: 'empresa-teste', usuario_id: 'usuario-teste' }), pode: () => true };
 const remoto = {
   id: 'uuid-remoto', tipo: 'aparelho', local_id: 'EST-0001', revision: 9,
   updated_at: new Date().toISOString(),

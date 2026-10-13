@@ -10,7 +10,8 @@
     "test:auth": "node testes/supabase-auth-etapa3.teste.js",
     "test:consultas": "node testes/supabase-consultas-etapa4.teste.js",
     "test:escritas": "node testes/supabase-escritas-etapa5.teste.js",
-    "test:arquivos": "node testes/supabase-arquivos-etapa6.teste.js"
+    "test:arquivos": "node testes/supabase-arquivos-etapa6.teste.js",
+    "test:security-regression": "node testes/estoque-cache-autorizacao.teste.js && node testes/documentos-escopo-assinatura.teste.js"
   },
   "keywords": [],
   "author": "",

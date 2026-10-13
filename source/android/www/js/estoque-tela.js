@@ -13,10 +13,11 @@
   function $(id) { return document.getElementById(id); }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
   function dinheiro(v) { return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
-  function pode(acao) { return !root.SistemaOSPermissoes || root.SistemaOSPermissoes.pode('estoque', acao); }
+  function pode(acao) { return !!(root.SistemaOSPermissoes && root.SistemaOSPermissoes.pode('estoque', acao)); }
   function toast(msg, erro) { if (root.SistemaOSToast) root.SistemaOSToast.mostrar(msg, { ehErro: !!erro }); }
 
   function renderAparelhos() {
+    if (!pode('ler')) aparelhos = [];
     var alvo = $('estoque-lista-aparelhos');
     var termo = ($('estoque-busca-aparelhos').value || '').trim().toLowerCase();
     var lista = aparelhos.filter(function (item) {
@@ -37,6 +38,7 @@
   }
 
   function renderPecas() {
+    if (!pode('ler')) pecas = [];
     var alvo = $('estoque-lista-pecas');
     var termo = ($('estoque-busca-pecas').value || '').trim().toLowerCase();
     var lista = pecas.filter(function (item) {
@@ -67,6 +69,11 @@
   }
 
   async function carregar(silencioso) {
+    if (!pode('ler')) {
+      aparelhos = []; pecas = []; render();
+      $('estoque-mobile-status').textContent = 'Seu usuário não possui acesso ao estoque.';
+      return;
+    }
     if (carregando) { recarregarPendente = true; return; }
     carregando = true;
     var contextoInicio = revisaoContexto;
@@ -79,17 +86,23 @@
     try {
       var fila = root.SistemaOSEstoque.processarFila
         ? await root.SistemaOSEstoque.processarFila() : { enviados: 0, pendentes: 0 };
+      if (contextoInicio !== revisaoContexto || !pode('ler')) return;
       var resposta = await Promise.all([
         root.SistemaOSEstoque.listar('aparelho'),
         root.SistemaOSEstoque.listar('peca')
       ]);
-      if (contextoInicio !== revisaoContexto) return;
+      if (contextoInicio !== revisaoContexto || !pode('ler')) return;
       aparelhos = resposta[0]; pecas = resposta[1]; render();
       $('estoque-mobile-status').textContent = fila.pendentes
         ? 'Atualizado agora. ' + fila.pendentes + ' alteração(ões) aguardam conexão.'
         : 'Atualizado agora pela nuvem · ' + aparelhos.length + ' aparelho(s) e ' + pecas.length + ' item(ns). Funciona mesmo com o PC desligado.';
     } catch (erro) {
       if (contextoInicio !== revisaoContexto) return;
+      if (!pode('ler') || erro.tipo === 'permissao' || erro.tipo === 'sessao-alterada') {
+        aparelhos = []; pecas = []; render();
+        $('estoque-mobile-status').textContent = 'Acesso alterado. Entre novamente ou fale com o administrador.';
+        return;
+      }
       if (cacheAparelhos.length || cachePecas.length) {
         $('estoque-mobile-status').textContent = 'Sem conexao: mostrando o ultimo estoque salvo neste celular.';
         return;
@@ -229,19 +242,23 @@
   }
 
   async function persistirAparelho() {
+    var revisao = revisaoContexto;
     if (!aparelhoEmEdicao) throw new Error('Selecione um aparelho para editar.');
     if (!$('form-editar-aparelho-mobile').reportValidity()) throw new Error('Preencha os campos obrigatórios do aparelho.');
     var salvo = await root.SistemaOSEstoque.salvarAparelho(alteracoesAparelhoDoFormulario(), aparelhoEmEdicao);
+    if (revisao !== revisaoContexto) throw new Error('A conta ativa mudou. Abra o aparelho novamente.');
     aparelhoEmEdicao = salvo;
     return salvo;
   }
 
   async function salvarAparelho(evento) {
+    var revisao = revisaoContexto;
     evento.preventDefault();
     var botao = $('btn-salvar-aparelho-mobile');
     botao.disabled = true; botao.textContent = 'Salvando…';
     try {
       var salvo = await persistirAparelho();
+      if (revisao !== revisaoContexto) return;
       $('modal-editar-aparelho-mobile').hidden = true;
       toast(salvo._pendenteNuvem
         ? 'Alteracao salva neste celular e colocada na fila de sincronizacao.'
@@ -252,10 +269,12 @@
   }
 
   async function iniciarVendaDoModal() {
+    var revisao = revisaoContexto;
     var botao = $('btn-vender-aparelho-mobile');
     botao.disabled = true; botao.textContent = 'Preparando…';
     try {
       var salvo = await persistirAparelho();
+      if (revisao !== revisaoContexto) return;
       $('modal-editar-aparelho-mobile').hidden = true;
       if (!root.SistemaOSVendaEstoque || !root.SistemaOSVendaEstoque.iniciar) throw new Error('Fluxo de venda indisponível. Reinicie o aplicativo.');
       root.SistemaOSVendaEstoque.iniciar(salvo);
@@ -264,6 +283,7 @@
   }
 
   async function salvarPeca(evento) {
+    var revisao = revisaoContexto;
     evento.preventDefault();
     var botao = $('btn-salvar-peca-mobile'); botao.disabled = true; botao.textContent = 'Salvando…';
     try {
@@ -279,6 +299,7 @@
         localizacao: $('peca-mobile-local').value,
         observacoes: $('peca-mobile-obs').value
       }, pecaEmEdicao);
+      if (revisao !== revisaoContexto) return;
       $('modal-nova-peca-mobile').hidden = true;
       toast(pecaEmEdicao ? 'Item atualizado e enviado ao PC.' : 'Item adicionado e enviado ao PC.');
       pecaEmEdicao = null;
@@ -288,6 +309,7 @@
   }
 
   async function acaoLista(evento) {
+    var revisao = revisaoContexto;
     var mover = evento.target.closest('.estoque-movimentar');
     var excluir = evento.target.closest('.estoque-excluir');
     var editar = evento.target.closest('.estoque-editar');
@@ -314,6 +336,7 @@
         }
         mover.disabled = true;
         await root.SistemaOSEstoque.movimentar(peca, operacao === 'saida' ? -quantidade : quantidade);
+        if (revisao !== revisaoContexto) return;
         toast((operacao === 'saida' ? 'Saída' : 'Entrada') + ' registrada e sincronizada com o PC.');
         await carregar(true);
       } else if (excluir) {
@@ -321,7 +344,9 @@
         var item = lista.find(function (registro) { return registro.id === excluir.dataset.id; });
         if (!item) return;
         if (root.SistemaOSExclusao && !await root.SistemaOSExclusao.autorizar('excluir ' + (item.nome || [item.marca, item.modelo].join(' ')))) return;
+        if (revisao !== revisaoContexto) return;
         await root.SistemaOSEstoque.excluir(item);
+        if (revisao !== revisaoContexto) return;
         toast('Item excluído no celular e no PC.');
         await carregar(true);
       }
@@ -330,6 +355,7 @@
 
   function abrir() {
     carregar(false);
+    if (!pode('ler')) return;
     if (!cancelarTempoReal) cancelarTempoReal = root.SistemaOSEstoque.assinar(function () { carregar(true); });
   }
   function fechar() {
@@ -369,6 +395,8 @@
     revisaoContexto += 1;
     aparelhos = []; pecas = [];
     aparelhoEmEdicao = null; pecaEmEdicao = null;
+    if ($('modal-nova-peca-mobile')) $('modal-nova-peca-mobile').hidden = true;
+    if ($('modal-editar-aparelho-mobile')) $('modal-editar-aparelho-mobile').hidden = true;
     fechar();
     if ($('estoque-lista-aparelhos')) render();
     if (carregando) recarregarPendente = true;

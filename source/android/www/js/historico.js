@@ -609,8 +609,12 @@
   // dados já vem com a assinatura embutida assim que statusLocal vira
   // 'assinado' (mesmo princípio do campo `os` em 'historico').
 
-  function salvarDocumentoRecebido(registro) {
+  function salvarDocumentoRecebido(registro, escopoValido) {
+    var empresa = empresaAtivaId;
     return abrirBanco().then(function (db) {
+      if (empresa !== empresaAtivaId || (escopoValido && !escopoValido())) {
+        throw new Error('A conta ativa mudou antes de salvar o documento.');
+      }
       return new Promise(function (resolve, reject) {
         var tx = db.transaction(NOME_LOJA_DOCS, 'readwrite');
         tx.objectStore(NOME_LOJA_DOCS).put(registro);
@@ -706,12 +710,14 @@
     });
   }
 
-  function confirmarExclusaoDocumentoRecebido(id) {
+  function confirmarExclusaoDocumentoRecebido(id, escopoValido) {
+    var empresa = empresaAtivaId;
     return obterDocumentoRecebidoPorId(id).then(function (registro) {
+      if (empresa !== empresaAtivaId || (escopoValido && !escopoValido())) return false;
       if (!registro || registro.statusLocal !== 'excluido') return false;
       registro.exclusaoNuvemConfirmada = true;
       registro.exclusaoNuvemConfirmadaEm = new Date().toISOString();
-      return salvarDocumentoRecebido(registro).then(function () { return true; });
+      return salvarDocumentoRecebido(registro, escopoValido).then(function () { return true; });
     });
   }
 

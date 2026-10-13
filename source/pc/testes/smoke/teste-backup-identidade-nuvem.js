@@ -125,8 +125,7 @@ const {
   assert.equal(desktop.termosOS, 'Termo da empresa');
 
   let configMembro = { nomeEmpresa: 'Cache antigo' };
-  const servicoMembro = new CompanyCloudService({
-    getClient: () => ({
+  const clienteMembro = {
       from() {
         const consulta = {
           select() { return consulta; }, eq() { return consulta; },
@@ -139,7 +138,9 @@ const {
         };
         return consulta;
       }
-    }),
+  };
+  const servicoMembro = new CompanyCloudService({
+    getClient: () => clienteMembro,
     getContext: () => ({ empresa_id: empresaId, cargo: 'Tecnico' }),
     db: {
       obterConfig: () => Object.assign({}, configMembro),

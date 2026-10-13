@@ -10,6 +10,7 @@
   var VERSAO_CACHE = 2;
   var PREFIXO_CACHE = 'sistema-os-estoque-cache-v2:';
   var filasEmCurso = Object.create(null);
+  var revisaoSessao = 0;
   var conciliador = root.SistemaOSCobrancasSync || (typeof require === 'function' ? require('./cobrancas-sync') : null);
   var TIPOS_ITEM_ESTOQUE = ['Peça / Componente', 'Consumível', 'Acessório'];
   var STATUS_APARELHO = ['Aguardando chegada', 'Em análise', 'Aguardando peça', 'Em reparo', 'Pronto para venda', 'Reservado', 'Vendido', 'Cancelado'];
@@ -33,6 +34,33 @@
     var contexto = root.SistemaOSPermissoes && root.SistemaOSPermissoes.obterContexto
       ? root.SistemaOSPermissoes.obterContexto() : {};
     return String((contexto || {}).empresa_id || (contexto || {}).empresaId || 'sem-sessao');
+  }
+
+  function podeEstoque(acao) {
+    return !!(root.SistemaOSPermissoes && root.SistemaOSPermissoes.pode &&
+      root.SistemaOSPermissoes.pode('estoque', acao));
+  }
+
+  function capturarEscopo(acao) {
+    if (!podeEstoque(acao)) {
+      var erro = new Error('Seu usuário não possui permissão para esta ação no estoque.');
+      erro.tipo = 'permissao';
+      throw erro;
+    }
+    var contexto = root.SistemaOSPermissoes.obterContexto() || {};
+    var estado = root.SistemaOSSessao && root.SistemaOSSessao.obterEstado ? root.SistemaOSSessao.obterEstado() : {};
+    return { empresa: empresaIdAtual(), usuario: String(contexto.usuario_id || contexto.usuarioId || estado.usuario && estado.usuario.id || ''),
+      revisao: revisaoSessao, acao: acao };
+  }
+
+  function exigirEscopo(escopo) {
+    var atual = capturarEscopo(escopo.acao);
+    if (escopo.empresa === 'sem-sessao' || escopo.empresa !== atual.empresa ||
+        escopo.usuario !== atual.usuario || escopo.revisao !== atual.revisao) {
+      var erro = new Error('A conta ativa mudou durante a operação. Tente novamente na conta correta.');
+      erro.tipo = 'sessao-alterada';
+      throw erro;
+    }
   }
 
   function chaveCache() { return PREFIXO_CACHE + empresaIdAtual(); }
@@ -60,7 +88,10 @@
 
   function chaveLista(tipo) { return tipo === 'peca' ? 'pecas' : 'aparelhos'; }
 
-  function listarCache(tipo) { return estadoCache()[chaveLista(tipo)].slice(); }
+  function listarCache(tipo) {
+    if (!podeEstoque('ler')) return [];
+    return estadoCache()[chaveLista(tipo)].slice();
+  }
 
   function atualizarCache(tipo, lista) {
     var estado = estadoCache();
@@ -168,13 +199,13 @@
   }
 
   async function listar(tipo) {
-    var empresa = empresaIdAtual();
+    var escopo = capturarEscopo('ler');
     var resposta = await cliente().from('estoque_itens')
       .select('id,tipo,local_id,dados,revision,updated_at')
       .eq('tipo', tipo).is('deleted_at', null)
       .order('updated_at', { ascending: false }).limit(1000);
     if (resposta.error) throw resposta.error;
-    if (empresa !== empresaIdAtual()) throw new Error('Sessão alterada durante a consulta.');
+    exigirEscopo(escopo);
     var itens = (resposta.data || []).map(mapearItem);
     if (tipo === 'aparelho') {
       var fila = estadoCache().fila;
@@ -188,13 +219,13 @@
   }
 
   async function obterAparelho(localId) {
-    var empresa = empresaIdAtual();
+    var escopo = capturarEscopo('ler');
     if (!estaOnline()) return listarCache('aparelho').find(function (item) { return item.id === localId; }) || null;
     var resposta = await cliente().from('estoque_itens')
       .select('id,tipo,local_id,dados,revision,updated_at')
       .eq('tipo', 'aparelho').eq('local_id', localId).is('deleted_at', null).maybeSingle();
     if (resposta.error) throw resposta.error;
-    if (empresa !== empresaIdAtual()) throw new Error('Sessão alterada durante a consulta.');
+    exigirEscopo(escopo);
     return mapearItem(resposta.data);
   }
 
@@ -212,9 +243,11 @@
   }
 
   async function salvarAparelho(alteracoes, atual) {
+    var escopo = capturarEscopo('editar');
     var empresa = empresaIdAtual();
     var pendenteInicial = estadoCache().fila.find(function (item) { return item.id === (atual && atual.id || alteracoes && alteracoes.id); });
     atual = atual || await obterAparelho(alteracoes && alteracoes.id);
+    exigirEscopo(escopo);
     if (!atual || !atual.id) throw new Error('Aparelho não encontrado no estoque sincronizado. Atualize a lista e tente novamente.');
     var baseAtual = semMetadados(atual);
     var dados = Object.assign({}, baseAtual, alteracoes || {}, { id: atual.id });
@@ -234,24 +267,25 @@
 
     async function enviar(base) {
       var dispositivo = await dispositivoId();
-      if (empresa !== empresaIdAtual()) throw new Error('Sessão alterada. Salve novamente na empresa correta.');
+      exigirEscopo(escopo);
       var resposta = await cliente().rpc('salvar_item_estoque', {
         p_tipo: 'aparelho', p_local_id: base.id, p_dados: dados,
         p_revision: base._revision || null,
         p_dispositivo_id: dispositivo
       });
       if (resposta.error) throw resposta.error;
-      if (empresa !== empresaIdAtual()) throw new Error('Sessão alterada durante o envio.');
+      exigirEscopo(escopo);
       return mapearItem(linha(resposta.data));
     }
 
     try {
       var salvo = await enviar(atual);
+      exigirEscopo(escopo);
       atualizarItemCache('aparelho', salvo);
       if (pendenteInicial) removerEdicaoPendenteAparelho(salvo.id, pendenteInicial.versao);
       return salvo;
     } catch (erro) {
-      if (empresa !== empresaIdAtual()) throw erro;
+      exigirEscopo(escopo);
       if (erroDeRede(erro) || !estaOnline()) {
         var pendente = Object.assign({}, dados, {
           _idRemoto: atual._idRemoto || '', _revision: atual._revision || null,
@@ -263,9 +297,11 @@
       }
       if (!/conflito_revision_estoque|revision/i.test(String(erro && (erro.message || erro)))) throw erro;
       var recente = await obterAparelho(atual.id);
+      exigirEscopo(escopo);
       if (!recente) throw erro;
       dados = mesclarPatch(semMetadados(recente), patch);
       var conciliado = await enviar(recente);
+      exigirEscopo(escopo);
       atualizarItemCache('aparelho', conciliado);
       if (pendenteInicial) removerEdicaoPendenteAparelho(conciliado.id, pendenteInicial.versao);
       return conciliado;
@@ -273,12 +309,14 @@
   }
 
   function processarFila() {
+    if (!podeEstoque('ler') || !podeEstoque('editar')) return Promise.resolve({ enviados: 0, pendentes: 0, semPermissao: true });
     var empresa = empresaIdAtual();
     if (!filasEmCurso[empresa]) filasEmCurso[empresa] = processarFilaEmpresa(empresa).finally(function () { delete filasEmCurso[empresa]; });
     return filasEmCurso[empresa];
   }
 
   async function processarFilaEmpresa(empresa) {
+    var escopo = capturarEscopo('editar');
     if (!estaOnline()) return { enviados: 0, pendentes: estadoCache().fila.length, offline: true };
     var estado = estadoCache();
     var pendentes = estado.fila || [];
@@ -292,23 +330,31 @@
         // Rele a revision no servidor antes de aplicar o patch pendente. O
         // PC pode ter sido ligado e atualizado o mesmo item nesse intervalo.
         var remoto = await obterAparelho(item.id);
+        exigirEscopo(escopo);
         if (!remoto) throw new Error('Aparelho removido do estoque antes da sincronizacao.');
         // A fila pode ter mudado enquanto a consulta estava em andamento.
         var vigente = estadoCache().fila.find(function (p) { return p.id === item.id; });
         if (!vigente || vigente.versao !== item.versao) continue;
         var salvo = await salvarAparelho(mesclarPatch(remoto, item.dados), remoto);
+        exigirEscopo(escopo);
         if (salvo._pendenteNuvem) throw new Error('Conexao ainda indisponivel.');
         enviados += 1;
-      } catch (_) { /* Mantém a operação durável para a próxima tentativa. */ }
+      } catch (erro) {
+        if (erro.tipo === 'sessao-alterada' || erro.tipo === 'permissao') throw erro;
+        /* Mantém a operação durável para a próxima tentativa. */
+      }
     }
+    exigirEscopo(escopo);
     estado = estadoCache();
     return { enviados: enviados, pendentes: estado.fila.length };
   }
 
   async function registrarVenda(venda) {
+    var escopo = capturarEscopo('editar');
     if (!venda || !venda.estoqueLocalId) throw new Error('Venda sem vínculo com o aparelho do estoque.');
     if (!(Number(venda.valorVenda) > 0)) throw new Error('Informe um valor de venda maior que zero.');
     var atual = await obterAparelho(venda.estoqueLocalId);
+    exigirEscopo(escopo);
     if (!atual) throw new Error('Aparelho não encontrado no estoque sincronizado.');
     var pendente = venda.assinaturaPendente === true && venda.naoAssinado !== true && !venda.assinaturaCompradorBase64;
     // Uma solicitação antiga de assinatura não pode rebaixar uma venda que o
@@ -338,6 +384,7 @@
   }
 
   async function salvarPeca(dados, atual) {
+    var escopo = capturarEscopo(atual ? 'editar' : 'criar');
     var localId = atual && atual.id
       ? atual.id
       : 'PCA-MOB-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase();
@@ -361,39 +408,51 @@
       observacoes: String(dados.observacoes || '').trim()
     };
     if (!peca.nome || !peca.categoria) throw new Error('Informe o nome e a categoria do item.');
+    var dispositivo = await dispositivoId();
+    exigirEscopo(escopo);
     var resposta = await cliente().rpc('salvar_item_estoque', {
       p_tipo: 'peca', p_local_id: localId, p_dados: peca,
       p_revision: atual && atual._revision ? atual._revision : null,
-      p_dispositivo_id: await dispositivoId()
+      p_dispositivo_id: dispositivo
     });
+    exigirEscopo(escopo);
     if (resposta.error) throw resposta.error;
     return linha(resposta.data);
   }
 
   async function movimentar(peca, delta) {
+    var escopo = capturarEscopo('editar');
     delta = parseInt(delta, 10);
     if (!Number.isInteger(delta) || delta === 0) throw new Error('Informe uma quantidade diferente de zero.');
     var saldoAtual = Math.max(0, parseInt(peca && peca.quantidade, 10) || 0);
     if (delta < 0 && saldoAtual + delta < 0) throw new Error('Estoque insuficiente para registrar esta saída.');
+    var dispositivo = await dispositivoId();
+    exigirEscopo(escopo);
     var resposta = await cliente().rpc('movimentar_quantidade_peca', {
       p_id: peca._idRemoto, p_delta: delta,
       p_revision: peca._revision || null,
-      p_dispositivo_id: await dispositivoId()
+      p_dispositivo_id: dispositivo
     });
+    exigirEscopo(escopo);
     if (resposta.error) throw resposta.error;
     return linha(resposta.data);
   }
 
   async function excluir(item) {
+    var escopo = capturarEscopo('excluir');
+    var dispositivo = await dispositivoId();
+    exigirEscopo(escopo);
     var resposta = await cliente().rpc('excluir_item_estoque', {
       p_id: item._idRemoto, p_revision: item._revision || null,
-      p_dispositivo_id: await dispositivoId()
+      p_dispositivo_id: dispositivo
     });
+    exigirEscopo(escopo);
     if (resposta.error) throw resposta.error;
     return linha(resposta.data);
   }
 
   function assinar(onChange) {
+    if (!podeEstoque('ler')) return function () {};
     var clienteAtual = cliente();
     if (typeof clienteAtual.channel !== 'function') return function () {};
     var canal = clienteAtual.channel('estoque-mobile-' + Date.now())
@@ -407,6 +466,9 @@
 
   if (root.addEventListener) {
     root.addEventListener('online', function () { processarFila().catch(function () {}); });
+  }
+  if (root.document && root.document.addEventListener) {
+    root.document.addEventListener('sistema-os:sessao-alterada', function () { revisaoSessao += 1; });
   }
 
   return {

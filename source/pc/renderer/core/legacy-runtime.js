@@ -732,7 +732,7 @@ function _renderComIcones(msg) {
 function _renderMarkdownSeguro(msg) {
   const partes = normalizarReferenciasOS(String(msg)).split(/(<svg[\s\S]*?<\/svg>)/g);
   return partes.map(p => {
-    if (p.startsWith('<svg')) return p;
+    if (Object.values(window.RendererIcons || {}).includes(p)) return p;
     const div = document.createElement('div');
     div.textContent = p;
     return div.innerHTML
@@ -4037,8 +4037,8 @@ function renderizarEstoque() {
     if (termoBusca) {
       infoEl.style.display = 'block';
       infoEl.innerHTML = filtrado.length > 0
-        ? `<b>${filtrado.length}</b> aparelho${filtrado.length !== 1 ? 's' : ''} para "<b>${termoBusca}</b>"`
-        : `Nenhum resultado para "<b>${termoBusca}</b>"`;
+        ? `<b>${filtrado.length}</b> aparelho${filtrado.length !== 1 ? 's' : ''} para "<b>${_escHtml(termoBusca)}</b>"`
+        : `Nenhum resultado para "<b>${_escHtml(termoBusca)}</b>"`;
     } else {
       infoEl.style.display = estoqueAtual.length > 0 ? 'block' : 'none';
       if (estoqueAtual.length > 0)
@@ -4058,21 +4058,21 @@ function renderizarEstoque() {
       ? [item.tipoPeca, item.compatibilidade ? `Compat: ${item.compatibilidade}` : '', item.condicaoPeca].filter(Boolean).join(' · ')
       : [item.cor, item.imei ? 'IMEI: '+item.imei : ''].filter(Boolean).join(' · ');
     const qtdBadge = isPeca && item.quantidade > 1
-      ? `<span style="font-size:11px;background:var(--primario);color:var(--ds-texto-invert);border-radius:10px;padding:1px 7px;margin-left:6px;">x${item.quantidade}</span>`
+      ? `<span style="font-size:11px;background:var(--primario);color:var(--ds-texto-invert);border-radius:10px;padding:1px 7px;margin-left:6px;">x${_escHtml(item.quantidade)}</span>`
       : '';
     const pecasRegistradas = Array.isArray(item.pecasUsadas) ? item.pecasUsadas.filter(peca => peca?.nome) : [];
     const resumoPecas = pecasRegistradas.length
       ? `<div class="card-est-pecas" title="${_escHtml(pecasRegistradas.map(peca => peca.nome).join(', '))}">Peças: ${_escHtml(pecasRegistradas.slice(0, 2).map(peca => peca.nome).join(' + '))}${pecasRegistradas.length > 2 ? ` +${pecasRegistradas.length - 2}` : ''}</div>`
       : '';
-    return `<div class="card-estoque" onclick="abrirModalEstoque('${item.id}')">
+    return `<div class="card-estoque" onclick="abrirModalEstoque(decodeURIComponent('${_argJsUri(item.id)}'))">
       <div class="card-est-header">
         <div>
-          <div class="card-est-marca">${ICONE_TIPO_EQUIPAMENTO[item.tipoEquipamento]||''} ${item.marca||'—'} ${item.modelo||''}${qtdBadge}</div>
-          <div class="card-est-modelo">${subInfo}</div>
+          <div class="card-est-marca">${ICONE_TIPO_EQUIPAMENTO[item.tipoEquipamento]||''} ${_escHtml(item.marca||'—')} ${_escHtml(item.modelo||'')}${qtdBadge}</div>
+          <div class="card-est-modelo">${_escHtml(subInfo)}</div>
         </div>
-        <span class="${statusClass(item.status)}">${item.status}</span>
+        <span class="${statusClass(item.status)}">${_escHtml(item.status)}</span>
       </div>
-      <div style="font-size:12px;color:var(--texto-sec);">${item.id} · ${fmtData(item.dataEntrada||item.dataCadastro)}</div>
+      <div style="font-size:12px;color:var(--texto-sec);">${_escHtml(item.id)} · ${_escHtml(fmtData(item.dataEntrada||item.dataCadastro))}</div>
       <div class="card-est-valores">
         <span>Investido: ${fmtMoeda(investido)}</span>
         ${item.status === 'Vendido' ? `<span class="${lucroClass}">Lucro: ${fmtMoeda(lucro)}</span>` : `<span>Venda: ${fmtMoeda(item.valorVenda)}</span>`}
@@ -9217,20 +9217,20 @@ async function carregarPecas() {
       let badgeClass = 'badge-qtd-ok';
       if (p.quantidade === 0) badgeClass = 'badge-qtd-zero';
       else if (p.quantidade <= p.estoqueMinimo) badgeClass = 'badge-qtd-critico';
-      return `<div class="card-peca" onclick="abrirModalPeca('${p.id}')">
+      return `<div class="card-peca" onclick="abrirModalPeca(decodeURIComponent('${_argJsUri(p.id)}'))">
         <div class="card-peca-header">
           <div>
-            <div class="card-peca-nome">${p.nome}</div>
-            <div class="card-peca-cat">${p.tipoItem || 'Peça / Componente'} · ${p.categoria}${p.compatibilidade ? ' · ' + p.compatibilidade.slice(0,40) : ''}</div>
+            <div class="card-peca-nome">${_escHtml(p.nome)}</div>
+            <div class="card-peca-cat">${_escHtml(p.tipoItem || 'Peça / Componente')} · ${_escHtml(p.categoria)}${p.compatibilidade ? ' · ' + _escHtml(String(p.compatibilidade).slice(0,40)) : ''}</div>
           </div>
-          <span class="badge-qtd ${badgeClass}">${p.quantidade} un</span>
+          <span class="badge-qtd ${badgeClass}">${_escHtml(String(p.quantidade ?? 0))} un</span>
         </div>
         <div class="card-peca-valores">
           <span>Custo: ${fmtMoeda(p.custo)}</span>
           <span>Total: ${fmtMoeda(p.custo * p.quantidade)}</span>
-          ${p.localizacao ? `<span>${ICONE_PIN} ${p.localizacao}</span>` : ''}
+          ${p.localizacao ? `<span>${ICONE_PIN} ${_escHtml(p.localizacao)}</span>` : ''}
         </div>
-        <div style="font-size:11px;color:var(--texto-sec);margin-top:6px;">${p.id} · ${fmtData(p.dataEntrada||p.dataCadastro)}</div>
+        <div style="font-size:11px;color:var(--texto-sec);margin-top:6px;">${_escHtml(p.id)} · ${_escHtml(fmtData(p.dataEntrada||p.dataCadastro))}</div>
       </div>`;
     }).join('');
   } catch(e) {

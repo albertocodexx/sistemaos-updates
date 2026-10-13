@@ -9,6 +9,7 @@ const testes = [
   'teste-notas-assinatura.js',
   'teste-chamados-historico-anexos.js',
   'teste-autorizacao-runtime.js',
+  'teste-revogacao-sessao-cloud.js',
   'teste-autorizacao-edge-functions.js',
   'teste-postgresql-cache-offline.js',
   'teste-seguranca-intensiva-local.js',

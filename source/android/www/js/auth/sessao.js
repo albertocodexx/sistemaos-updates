@@ -146,7 +146,10 @@
     temporizadorIdentidadeEmpresa = root.setInterval(function () {
       if (root.document && root.document.hidden) return;
       if (!root.SistemaOSEmpresaService || typeof root.SistemaOSEmpresaService.sincronizarConfiguracoesEmpresa !== 'function') return;
-      root.SistemaOSEmpresaService.sincronizarConfiguracoesEmpresa(contexto).catch(function (erro) {
+      var numero = validacaoNumero;
+      root.SistemaOSEmpresaService.sincronizarConfiguracoesEmpresa(contexto, function () {
+        return numero === validacaoNumero;
+      }).catch(function (erro) {
         if (root.console) root.console.warn('Sincronização temporária da identidade da empresa falhou.', erro);
       });
     }, 60000);
@@ -165,7 +168,20 @@
     agendarSincronizacaoIdentidadeEmpresa(tipo, contexto);
   }
 
+  function invalidarTrocaUsuario(sessao) {
+    var anterior = estadoAtual.usuario && estadoAtual.usuario.id;
+    var proximo = sessao && sessao.user && sessao.user.id;
+    if (anterior && anterior !== proximo) {
+      ++validacaoNumero;
+      pararSincronizacaoIdentidadeEmpresa();
+      if (root.SistemaOSPermissoes) root.SistemaOSPermissoes.limpar();
+      definirEscopoLocal(null);
+      emitir({ tipo: 'carregando_sessao', mensagem: 'Validando nova conta…' });
+    }
+  }
+
   async function validarSessao(sessao, mostrarCarregamento, renovacaoTentada) {
+    invalidarTrocaUsuario(sessao);
     var numero = ++validacaoNumero;
     var appJaVisivel = estadoAtual.tipo === 'autenticado' || estadoAtual.tipo === 'offline_com_sessao';
     if (mostrarCarregamento !== false && !appJaVisivel) {
@@ -182,6 +198,7 @@
     try {
       // getUser valida o JWT no servidor; não confiamos só no conteúdo local.
       var usuario = await comTempoLimite(root.SistemaOSAuthService.obterUsuario(), 18000);
+      if (numero !== validacaoNumero) return obterEstado();
       if (!usuario || usuario.id !== usuarioSessao.id) throw new Error('A sessão não corresponde ao usuário autenticado.');
       if (usuario.app_metadata && usuario.app_metadata.troca_senha_obrigatoria === true) {
         pararSincronizacaoIdentidadeEmpresa();
@@ -221,10 +238,13 @@
         // A identidade visual pertence a empresa, nao ao aparelho nem ao
         // usuario. Falha de rede nao bloqueia o login; o cache local anterior
         // continua sendo usado ate a proxima validacao online.
-        await root.SistemaOSEmpresaService.sincronizarConfiguracoesEmpresa(contexto).catch(function (erroConfig) {
+        await root.SistemaOSEmpresaService.sincronizarConfiguracoesEmpresa(contexto, function () {
+          return numero === validacaoNumero;
+        }).catch(function (erroConfig) {
           if (root.console) root.console.warn('Nao foi possivel sincronizar as configuracoes da empresa.', erroConfig);
         });
       }
+      if (numero !== validacaoNumero) return obterEstado();
       salvarCache(usuario, contexto);
       aplicarContexto('autenticado', usuario, contexto, '');
       return obterEstado();
@@ -237,11 +257,13 @@
         try {
           ignorarProximoTokenRefresh = true;
           var sessaoRenovada = await root.SistemaOSAuthService.renovarSessao();
+          if (numero !== validacaoNumero) return obterEstado();
           if (sessaoRenovada && sessaoRenovada.user) {
             return validarSessao(sessaoRenovada, false, true);
           }
           ignorarProximoTokenRefresh = false;
         } catch (erroRenovacao) {
+          if (numero !== validacaoNumero) return obterEstado();
           ignorarProximoTokenRefresh = false;
           if (ehSessaoExpirada(erroRenovacao)) erro = erroRenovacao;
         }
@@ -260,6 +282,7 @@
       if (ehSessaoExpirada(erro)) {
         pararSincronizacaoIdentidadeEmpresa();
         try { await root.SistemaOSAuthService.sair(); } catch (_) {}
+        if (numero !== validacaoNumero) return obterEstado();
         limparCachesContexto();
         if (root.SistemaOSPermissoes) root.SistemaOSPermissoes.limpar();
         emitir({ tipo: 'deslogado', mensagem: 'Sua sessão expirou. Entre novamente.' });
@@ -351,6 +374,10 @@
     } catch (_) {}
     assinaturaEventosAuth = root.SistemaOSAuthService.escutar(function (evento, sessao) {
       // Não execute chamadas Supabase dentro do callback síncrono do SDK.
+      if (evento === 'SIGNED_IN' || evento === 'SIGNED_OUT' || evento === 'PASSWORD_RECOVERY') {
+        ++validacaoNumero;
+        invalidarTrocaUsuario(sessao);
+      }
       if (evento === 'TOKEN_REFRESHED' && ignorarProximoTokenRefresh) {
         ignorarProximoTokenRefresh = false;
         return;
@@ -399,12 +426,17 @@
   }
 
   async function sair() {
-    ++validacaoNumero;
+    var numero = ++validacaoNumero;
     pararSincronizacaoIdentidadeEmpresa();
+    if (root.SistemaOSPermissoes) root.SistemaOSPermissoes.limpar();
+    definirEscopoLocal(null);
+    emitir({ tipo: 'deslogado', mensagem: '' });
     try { await root.SistemaOSAuthService.sair(); } finally {
-      limparCachesContexto();
-      if (root.SistemaOSPermissoes) root.SistemaOSPermissoes.limpar();
-      emitir({ tipo: 'deslogado', mensagem: '' });
+      if (numero === validacaoNumero) {
+        limparCachesContexto();
+        if (root.SistemaOSPermissoes) root.SistemaOSPermissoes.limpar();
+        emitir({ tipo: 'deslogado', mensagem: '' });
+      }
     }
   }
 

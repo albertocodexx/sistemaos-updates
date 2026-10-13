@@ -24,7 +24,7 @@ assert.match(fluxo, /respostaAutomatica\.naoAssinado = registro\.statusLocal ===
 assert.match(fluxo, /cancelar_solicitacao_assinatura_remota/);
 assert.match(fluxo, /marcarDocumentoRecebidoExcluido\(registro, false\)[\s\S]*cancelarSolicitacaoNaNuvem\(registro\)/,
   'o bloqueio local durável deve ser gravado antes da tentativa de exclusão na nuvem');
-assert.match(fluxo, /sincronizarExclusoesPendentes\(\)\.then\(buscarPeloSupabase\)/,
+assert.match(fluxo, /sincronizarExclusoesPendentes\(escopo\)\.then\(buscarPeloSupabase\)/,
   'a exclusão pendente deve ser sincronizada antes de buscar novamente a fila');
 assert.match(fluxo, /existente && existente\.statusLocal === 'excluido'/,
   'um documento com tombstone nunca deve ser reimportado');

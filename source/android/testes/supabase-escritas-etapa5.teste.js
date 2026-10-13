@@ -327,7 +327,7 @@ async function executar() {
     assert.equal(exclusaoChamada, false);
   });
 
-  await teste('troca de conta durante o retry devolve a operação à fila original sem consumir tentativa', async () => {
+  await teste('troca de conta durante o retry preserva a fila original sem escrever na empresa sucessora', async () => {
     const item = {
       id: 'os:create:troca-conta', empresaId: 'empresa-a', usuarioId: 'usuario-a',
       entidade: 'ordem_servico', operacao: 'insert', idExportacao: 'troca-conta',
@@ -336,6 +336,7 @@ async function executar() {
     };
     let atual = { empresaId: 'empresa-a', usuarioId: 'usuario-a' };
     let estadoOperacao = Object.assign({}, item);
+    const escritasPorEmpresa = [];
     let envioRemoto = false;
     Object.defineProperty(global, 'navigator', { value: { onLine: true }, configurable: true });
     global.SistemaOSSessao = {
@@ -357,6 +358,7 @@ async function executar() {
         return estadoOperacao.status === 'pendente' ? [Object.assign({}, estadoOperacao)] : [];
       },
       async atualizarOperacaoNuvem(id, patch) {
+        escritasPorEmpresa.push(atual.empresaId);
         estadoOperacao = Object.assign({}, estadoOperacao, patch);
         if (patch.status === 'enviando') atual = { empresaId: 'empresa-b', usuarioId: 'usuario-b' };
         return estadoOperacao;
@@ -367,10 +369,10 @@ async function executar() {
     const resultado = await sync.processarFila();
     assert.equal(resultado.motivo, 'sessao-alterada');
     assert.equal(envioRemoto, false, 'nenhuma escrita pode ocorrer sob a empresa recém-aberta');
-    assert.equal(estadoOperacao.status, 'pendente');
-    assert.equal(estadoOperacao.tentativas, 0);
-    assert.equal(estadoOperacao.ultimoErro, null);
-    assert.equal(estadoOperacao.proximaTentativaEm, null);
+    assert.deepEqual(escritasPorEmpresa, ['empresa-a'], 'nenhum ajuste de retry pode alcançar a empresa B');
+    assert.equal(estadoOperacao.status, 'enviando', 'envio interrompido permanece durável na empresa A');
+    assert.equal(estadoOperacao.tentativas, 1);
+    assert.ok(estadoOperacao.proximaTentativaEm, 'janela de recuperação do envio interrompido deve ser preservada');
   });
 
   await teste('IndexedDB preserva a operação até confirmação e grava número/revision no histórico', async () => {

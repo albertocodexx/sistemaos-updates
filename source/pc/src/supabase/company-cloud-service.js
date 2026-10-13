@@ -140,12 +140,30 @@ function configuracaoDesktopDoMobile(configuracao) {
 }
 
 class CompanyCloudService {
-  constructor({ getClient, getContext, db, stateStore, appVersion = '' }) {
+  constructor({ getClient, getContext, getGeneration = () => 0, db, stateStore, appVersion = '' }) {
     this.getClient = getClient;
     this.getContext = getContext;
+    this.getGeneration = getGeneration;
     this.db = db;
     this.stateStore = stateStore;
     this.appVersion = appVersion;
+  }
+
+  _capturarEscopo() {
+    const contexto = this._contexto();
+    return { empresa: contexto.empresa_id, usuario: contexto.usuario_id || '',
+      geracao: this.getGeneration(), cliente: this._cliente(), root: this.db.getRootDir?.() || '' };
+  }
+
+  _exigirEscopo(escopo) {
+    const atual = this.getContext?.();
+    if (!atual || atual.empresa_id !== escopo.empresa || (atual.usuario_id || '') !== escopo.usuario ||
+        this.getGeneration() !== escopo.geracao || this.getClient?.() !== escopo.cliente ||
+        (this.db.getRootDir?.() || '') !== escopo.root) {
+      const erro = new Error('A sessão mudou durante a atualização dos dados da empresa.');
+      erro.code = 'SESSAO_ALTERADA';
+      throw erro;
+    }
   }
 
   _contexto() {
@@ -171,6 +189,7 @@ class CompanyCloudService {
   async publicarBackup(caminhoArquivo) {
     const contexto = this._contexto();
     if (!this._ehAdministrador()) throw new Error('Somente o administrador pode acessar o backup completo.');
+    const escopo = this._capturarEscopo();
     const cliente = this._cliente();
     const buffer = fs.readFileSync(caminhoArquivo);
     // Valida o JSON antes de substituir a copia boa da nuvem.
@@ -194,6 +213,7 @@ class CompanyCloudService {
       upsert: false,
       cacheControl: '0'
     });
+    this._exigirEscopo(escopo);
     if (envioHistorico.error && !/already exists|duplicate/i.test(envioHistorico.error.message || '')) {
       throw envioHistorico.error;
     }
@@ -205,17 +225,21 @@ class CompanyCloudService {
       bufferAnterior = await bufferDeDownload(await storage.download(storagePath));
     } catch {}
 
+    this._exigirEscopo(escopo);
+
     const envio = await storage.upload(storagePath, buffer, {
       contentType: 'application/json',
       upsert: true,
       cacheControl: '0'
     });
+    this._exigirEscopo(escopo);
     if (envio.error) throw envio.error;
     const registro = await cliente.rpc('registrar_backup_empresa', {
       p_tamanho_bytes: buffer.length,
       p_sha256: hash,
       p_versao_aplicativo: this.appVersion
     });
+    this._exigirEscopo(escopo);
     if (registro.error) {
       if (bufferAnterior?.length) {
         try {
@@ -257,11 +281,13 @@ class CompanyCloudService {
   async baixarUltimoBackup() {
     const contexto = this._contexto();
     if (!this._ehAdministrador()) throw new Error('Somente o administrador pode acessar o backup completo.');
+    const escopo = this._capturarEscopo();
     const cliente = this._cliente();
     const consulta = await cliente.from('backups_empresa')
       .select('storage_bucket,storage_path,tamanho_bytes,sha256,updated_at')
       .eq('empresa_id', contexto.empresa_id)
       .maybeSingle();
+    this._exigirEscopo(escopo);
     if (consulta.error) throw consulta.error;
     if (!consulta.data) return { sucesso: true, disponivel: false };
     const meta = consulta.data;
@@ -273,8 +299,10 @@ class CompanyCloudService {
     let recuperadoDoHistorico = false;
     try {
       buffer = await bufferDeDownload(await storage.download(meta.storage_path));
+      this._exigirEscopo(escopo);
       validarBufferBackup(buffer, meta.tamanho_bytes, meta.sha256);
     } catch (erroPrincipal) {
+      this._exigirEscopo(escopo);
       // Se o computador caiu entre o upload e o registro dos metadados, o
       // arquivo principal pode estar uma versao a frente. Localizamos a copia
       // imutavel que possui exatamente o checksum ainda registrado.
@@ -284,10 +312,12 @@ class CompanyCloudService {
         limit: 100,
         sortBy: { column: 'name', order: 'desc' }
       });
+      this._exigirEscopo(escopo);
       if (lista.error) throw erroPrincipal;
       const candidato = (lista.data || []).find((item) => String(item.name || '').includes(meta.sha256));
       if (!candidato) throw erroPrincipal;
       buffer = await bufferDeDownload(await storage.download(`${pastaHistorico}/${candidato.name}`));
+      this._exigirEscopo(escopo);
       validarBufferBackup(buffer, meta.tamanho_bytes, meta.sha256);
       recuperadoDoHistorico = true;
       // Repara a copia principal sem alterar os metadados, que ja descrevem
@@ -295,8 +325,10 @@ class CompanyCloudService {
       const reparo = await storage.upload(meta.storage_path, buffer, {
         contentType: 'application/json', upsert: true, cacheControl: '0'
       });
+      this._exigirEscopo(escopo);
       if (reparo.error) console.warn('[Backup Nuvem] Copia historica recuperada; reparo do arquivo principal ficou pendente.');
     }
+    this._exigirEscopo(escopo);
     const destino = path.join(this.db.getBackupAutoDir(), `cloud-ultimo-backup-${contexto.empresa_id}.json`);
     const temporario = `${destino}.tmp`;
     fs.mkdirSync(path.dirname(destino), { recursive: true });
@@ -318,7 +350,9 @@ class CompanyCloudService {
     // Usuarios operacionais recebem somente dados autorizados pelo sincronizador.
     // Um backup completo inclui modulos que esse usuario pode nao acessar.
     if (!this._ehAdministrador()) return { sucesso: true, disponivel: false, restaurado: false };
+    const escopo = this._capturarEscopo();
     const baixado = await this.baixarUltimoBackup();
+    this._exigirEscopo(escopo);
     if (!baixado.disponivel || !bancoOperacionalVazio(this.db)) {
       return Object.assign({}, baixado, { restaurado: false });
     }
@@ -332,11 +366,13 @@ class CompanyCloudService {
   }
 
   async obterIdentidade() {
+    const escopo = this._capturarEscopo();
     const contexto = this._contexto();
     const consulta = await this._cliente().from('configuracoes_empresa')
       .select('configuracoes,updated_at')
       .eq('empresa_id', contexto.empresa_id)
       .maybeSingle();
+    this._exigirEscopo(escopo);
     if (consulta.error) throw consulta.error;
     return consulta.data?.configuracoes?.identidadeEmpresa || null;
   }
@@ -351,9 +387,11 @@ class CompanyCloudService {
     if (!this._ehAdministrador()) {
       return { sucesso: false, ignorado: true, erro: 'Somente o administrador pode publicar as configuracoes da empresa.' };
     }
+    const escopo = this._capturarEscopo();
 
     try {
       const identidade = await this.obterIdentidade() || {};
+      this._exigirEscopo(escopo);
       const { data, error } = await this._cliente().rpc('salvar_configuracao_mobile', {
         p_config_mobile: configuracaoMobileDoDesktop(configuracao),
         // A RPC remove a assinatura quando recebe caminho vazio. Por isso o
@@ -362,6 +400,7 @@ class CompanyCloudService {
         p_assinatura_storage_path: String(identidade.assinaturaStoragePath || ''),
         p_assinatura_sha256: String(identidade.assinaturaSha256 || '')
       });
+      this._exigirEscopo(escopo);
       if (error) throw error;
       return { sucesso: true, identidade: data || null };
     } catch (erro) {
@@ -380,8 +419,10 @@ class CompanyCloudService {
     if (!contexto?.empresa_id || contexto.administrador_global === true || !this._ehAdministrador()) {
       return { sucesso: true, ignorado: true };
     }
+    const escopo = this._capturarEscopo();
     try {
       const identidade = await this.obterIdentidade() || {};
+      this._exigirEscopo(escopo);
       const existente = identidade.configMobile;
       if (existente && typeof existente === 'object' && !Array.isArray(existente) && Object.keys(existente).length) {
         return { sucesso: true, ignorado: true, motivo: 'configuracao_mobile_existente' };
@@ -397,6 +438,7 @@ class CompanyCloudService {
     if (!contexto?.empresa_id || contexto.administrador_global === true) {
       return { sucesso: true, ignorado: true };
     }
+    const escopo = this._capturarEscopo();
     // O desktop administrador e a fonte oficial dos dados da assistencia.
     // Publica em cada verificacao para reparar uma copia antiga do Android,
     // inclusive depois de reinstalacao ou uso offline do aplicativo.
@@ -404,6 +446,7 @@ class CompanyCloudService {
       return this.publicarConfiguracaoMobile(this.db.obterConfig());
     }
     const identidade = await this.obterIdentidade();
+    this._exigirEscopo(escopo);
     const configMobile = identidade?.configMobile;
     if (!configMobile || typeof configMobile !== 'object' || Array.isArray(configMobile)) {
       return { sucesso: true, ignorado: true, motivo: 'configuracao_mobile_ausente' };
@@ -422,7 +465,9 @@ class CompanyCloudService {
   }
 
   async sincronizarLogo() {
+    const escopo = this._capturarEscopo();
     const identidade = await this.obterIdentidade();
+    this._exigirEscopo(escopo);
     const storagePath = String(identidade?.logoStoragePath || '');
     const atual = this.db.obterConfig();
     // Assim como os demais dados cadastrais, a logo do desktop administrador
@@ -445,8 +490,10 @@ class CompanyCloudService {
       return { sucesso: true, possuiLogo: true, cache: true };
     }
     const download = await this._cliente().storage.from(BUCKET_IDENTIDADE).download(storagePath);
+    this._exigirEscopo(escopo);
     if (download.error) throw download.error;
     const buffer = Buffer.from(await download.data.arrayBuffer());
+    this._exigirEscopo(escopo);
     if (!buffer.length || buffer.length > LIMITE_LOGO) throw new Error('Logo da empresa invalida.');
     const hash = sha256(buffer);
     if (hashEsperado && hash !== hashEsperado) throw new Error('A logo da empresa falhou na verificacao de integridade.');
@@ -458,13 +505,16 @@ class CompanyCloudService {
 
   async atualizarLogo(dataUrl) {
     if (!this._ehAdministrador()) throw new Error('Somente o administrador ou proprietario pode alterar a logo da empresa.');
+    const escopo = this._capturarEscopo();
     const contexto = this._contexto();
     const cliente = this._cliente();
     const storagePath = `${contexto.empresa_id}/logo.png`;
     if (!dataUrl) {
       const remocao = await cliente.storage.from(BUCKET_IDENTIDADE).remove([storagePath]);
+      this._exigirEscopo(escopo);
       if (remocao.error && !/not found/i.test(remocao.error.message || '')) throw remocao.error;
       const registro = await cliente.rpc('definir_logo_empresa', { p_storage_path: '', p_sha256: '' });
+      this._exigirEscopo(escopo);
       if (registro.error) throw registro.error;
       this.db.salvarConfig({ logoPath: '', logoBase64: '' });
       this.stateStore.alterar((s) => { s.logoEmpresa = { sha256: '', storagePath: '', atualizadoEm: new Date().toISOString() }; });
@@ -478,8 +528,10 @@ class CompanyCloudService {
     const envio = await cliente.storage.from(BUCKET_IDENTIDADE).upload(storagePath, imagem.buffer, {
       contentType: 'image/png', upsert: true, cacheControl: '0'
     });
+    this._exigirEscopo(escopo);
     if (envio.error) throw envio.error;
     const registro = await cliente.rpc('definir_logo_empresa', { p_storage_path: storagePath, p_sha256: hash });
+    this._exigirEscopo(escopo);
     if (registro.error) throw registro.error;
     const base64 = `data:image/png;base64,${imagem.buffer.toString('base64')}`;
     this.db.salvarConfig({ logoPath: '', logoBase64: base64 });

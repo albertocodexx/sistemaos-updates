@@ -35,6 +35,29 @@
 
   var documentoEmEdicaoId = null; // id do registro (IndexedDB) aberto agora
   var verificacaoAutomaticaEmAndamento = null;
+  var revisaoSessao = 0;
+
+  function capturarEscopo() {
+    var estado = window.SistemaOSSessao && window.SistemaOSSessao.obterEstado ? window.SistemaOSSessao.obterEstado() : {};
+    var contexto = estado.contexto || {};
+    return { valido: estado.tipo === 'autenticado' || estado.tipo === 'offline_com_sessao',
+      revisao: revisaoSessao, usuario: String(estado.usuario && estado.usuario.id || contexto.usuario_id || ''),
+      empresa: window.SistemaOSHistorico.obterEmpresaAtiva ? String(window.SistemaOSHistorico.obterEmpresaAtiva() || '') : String(contexto.empresa_id || '') };
+  }
+
+  function escopoValido(escopo) {
+    var atual = capturarEscopo();
+    return !!(escopo.valido && atual.valido && escopo.usuario && escopo.empresa &&
+      escopo.revisao === atual.revisao && escopo.usuario === atual.usuario && escopo.empresa === atual.empresa);
+  }
+
+  function exigirEscopo(escopo) {
+    if (!escopoValido(escopo)) {
+      var erro = new Error('A conta ativa mudou. Abra o documento novamente na conta correta.');
+      erro.tipo = 'sessao-alterada';
+      throw erro;
+    }
+  }
 
   // Mesma troca aplicada em app.js: o destino da mensagem passa a ser o
   // toast flutuante (js/toast.js) em vez do elemento .feedback-acao fixo
@@ -68,6 +91,7 @@
   // verificarDocsParaCelularAutomatico).
   function importarPacoteRecebido(pacote, opcoes) {
     var silencioso = !!(opcoes && opcoes.silencioso);
+    var escopo = opcoes && opcoes.escopo || capturarEscopo();
     function falhar(msg) {
       if (!silencioso) mostrarFeedback(msg, true);
       return Promise.resolve(false);
@@ -79,12 +103,14 @@
     if (!pacote.tipoDocumento || !pacote.dados || !pacote.idEnvioAssinatura) {
       return falhar('Arquivo incompleto: faltam campos obrigatórios do pacote.');
     }
+    if (!escopoValido(escopo)) return Promise.resolve(false);
 
     // Idempotência na importação: mesmo pacote importado de novo não
     // duplica o registro — atualiza o existente (mantendo statusLocal
     // se já estiver assinado, para não perder uma assinatura já feita).
     return window.SistemaOSHistorico.obterDocumentoRecebidoPorIdEnvio(pacote.idEnvioAssinatura)
       .then(function (existente) {
+        exigirEscopo(escopo);
         if (existente && existente.statusLocal === 'excluido') return null;
         var registro = existente || {
           id: 'doc-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
@@ -103,11 +129,11 @@
         if (['assinado', 'nao_assinado', 'enviado'].indexOf(registro.statusLocal) === -1) {
           registro.dados = pacote.dados;
         }
-        return window.SistemaOSHistorico.salvarDocumentoRecebido(registro);
+        return window.SistemaOSHistorico.salvarDocumentoRecebido(registro, function () { return escopoValido(escopo); });
       })
       .then(function (registroSalvo) { return !!registroSalvo; })
       .catch(function (err) {
-        if (!silencioso) {
+        if (!silencioso && escopoValido(escopo)) {
           mostrarFeedback('Falha ao importar: ' + (err && err.message ? err.message : String(err)), true);
         }
         return false;
@@ -121,31 +147,36 @@
   // técnico abre a aba); só avisa quando importa algo de fato novo.
   function verificarDocsParaCelularAutomatico() {
     if (verificacaoAutomaticaEmAndamento) return verificacaoAutomaticaEmAndamento;
+    var escopo = capturarEscopo();
+    if (!escopoValido(escopo)) return Promise.resolve();
     function buscarPeloSupabase() {
+      if (!escopoValido(escopo)) return Promise.resolve([]);
       if (!window.SupabaseClientApp) return Promise.resolve([]);
       var cliente;
       try { cliente = window.SupabaseClientApp.obterCliente(); } catch (_) { return Promise.resolve([]); }
       return cliente.functions.invoke('assinaturas-remotas', { body: { acao: 'buscar_pendentes', dados: {} } })
         .then(function (resposta) {
+          if (!escopoValido(escopo)) return [];
           if (resposta.error || resposta.data?.erro) return [];
           return (resposta.data?.solicitacoes || []).map(function (solicitacao) {
             return Object.assign({}, solicitacao.pacote || {}, { _origemSupabase: true });
           });
         }).catch(function () { return []; });
     }
-    verificacaoAutomaticaEmAndamento = sincronizarExclusoesPendentes().then(buscarPeloSupabase).then(function (pacotes) {
+    var verificacao = sincronizarExclusoesPendentes(escopo).then(buscarPeloSupabase).then(function (pacotes) {
+      if (!escopoValido(escopo)) return;
       if (!pacotes.length) return;
       var importados = 0;
       var promessa = Promise.resolve();
       pacotes.forEach(function (pacote) {
         promessa = promessa.then(function () {
-          return importarPacoteRecebido(pacote, { silencioso: true }).then(function (ok) {
+          return importarPacoteRecebido(pacote, { silencioso: true, escopo: escopo }).then(function (ok) {
             if (ok) importados++;
           });
         });
       });
       return promessa.then(function () {
-        if (importados > 0) {
+        if (importados > 0 && escopoValido(escopo)) {
           mostrarFeedback(
             importados === 1
               ? '1 documento novo recebido do PC para assinar.'
@@ -156,10 +187,11 @@
       });
     }).catch(function () { /* verificação automática nunca deve quebrar a tela */ })
       .then(function (resultado) {
-        verificacaoAutomaticaEmAndamento = null;
+        if (verificacaoAutomaticaEmAndamento === verificacao) verificacaoAutomaticaEmAndamento = null;
         return resultado;
       });
-    return verificacaoAutomaticaEmAndamento;
+    verificacaoAutomaticaEmAndamento = verificacao;
+    return verificacao;
   }
 
   function cancelarSolicitacaoNaNuvem(registro) {
@@ -181,15 +213,19 @@
     });
   }
 
-  function sincronizarExclusoesPendentes() {
+  function sincronizarExclusoesPendentes(escopo) {
+    escopo = escopo || capturarEscopo();
     if (!window.SistemaOSHistorico.listarDocumentosRecebidosExcluidos) return Promise.resolve();
     return window.SistemaOSHistorico.listarDocumentosRecebidosExcluidos().then(function (registros) {
+      exigirEscopo(escopo);
       var sequencia = Promise.resolve();
       registros.forEach(function (registro) {
         sequencia = sequencia.then(function () {
+          exigirEscopo(escopo);
           return cancelarSolicitacaoNaNuvem(registro)
             .then(function () {
-              return window.SistemaOSHistorico.confirmarExclusaoDocumentoRecebido(registro.id);
+              exigirEscopo(escopo);
+              return window.SistemaOSHistorico.confirmarExclusaoDocumentoRecebido(registro.id, function () { return escopoValido(escopo); });
             })
             .catch(function () { return false; });
         });
@@ -200,6 +236,7 @@
 
   // ── Importar .json do PC ─────────────────────────────────────────
   inputImportar.addEventListener('change', function () {
+    var escopo = capturarEscopo();
     var arquivo = inputImportar.files && inputImportar.files[0];
     inputImportar.value = ''; // permite reimportar o mesmo arquivo depois
     if (!arquivo) return;
@@ -209,6 +246,7 @@
       mostrarFeedback('Não foi possível ler o arquivo selecionado.', true);
     };
     leitor.onload = function () {
+      if (!escopoValido(escopo)) return;
       var pacote;
       try {
         pacote = JSON.parse(String(leitor.result || ''));
@@ -216,8 +254,8 @@
         mostrarFeedback('Arquivo inválido: não é um .json legível.', true);
         return;
       }
-      importarPacoteRecebido(pacote).then(function (ok) {
-        if (ok) {
+      importarPacoteRecebido(pacote, { escopo: escopo }).then(function (ok) {
+        if (ok && escopoValido(escopo)) {
           mostrarFeedback('Documento importado com sucesso.');
           carregarListaDocumentos();
         }
@@ -325,10 +363,12 @@
   }
 
   function carregarListaDocumentos() {
+    var escopo = capturarEscopo();
     listaDocs.innerHTML = '<p class="historico-carregando">Carregando…</p>';
     window.SistemaOSHistorico.listarDocumentosRecebidos()
-      .then(renderizarLista)
+      .then(function (registros) { if (escopoValido(escopo)) renderizarLista(registros); })
       .catch(function (err) {
+        if (!escopoValido(escopo)) return;
         listaDocs.innerHTML = '';
         var erro = document.createElement('p');
         erro.className = 'historico-erro';
@@ -338,10 +378,12 @@
   }
 
   async function excluirDocumento(registro, elementoItem) {
+    var escopo = capturarEscopo();
     var confirmou = window.confirm('Excluir este documento do celular e da nuvem? Ele não voltará após reinstalar o app.');
     if (!confirmou) return;
     try {
       if (window.SistemaOSExclusao && !await window.SistemaOSExclusao.autorizar('excluir este documento')) return;
+      exigirEscopo(escopo);
     } catch (erroAutorizacao) {
       if (window.SistemaOSToast) {
         window.SistemaOSToast.mostrar(erroAutorizacao.message || String(erroAutorizacao), 'erro');
@@ -353,11 +395,13 @@
     // nuvem é repetida automaticamente até ser confirmada.
     window.SistemaOSHistorico.marcarDocumentoRecebidoExcluido(registro, false)
       .then(function () {
+        exigirEscopo(escopo);
         if (elementoItem && elementoItem.parentNode) elementoItem.parentNode.removeChild(elementoItem);
         if (!listaDocs.querySelector('.item-historico')) renderizarLista([]);
         return cancelarSolicitacaoNaNuvem(registro)
           .then(function () {
-            return window.SistemaOSHistorico.confirmarExclusaoDocumentoRecebido(registro.id);
+            exigirEscopo(escopo);
+            return window.SistemaOSHistorico.confirmarExclusaoDocumentoRecebido(registro.id, function () { return escopoValido(escopo); });
           })
           .then(function () {
             mostrarFeedback('Documento excluído do celular e da nuvem.');
@@ -475,10 +519,13 @@
   }
 
   function abrirDocumento(id) {
+    var escopo = capturarEscopo();
     window.SistemaOSHistorico.obterDocumentoRecebidoPorId(id)
       .then(function (registro) {
+        exigirEscopo(escopo);
         if (!registro) throw new Error('Documento não encontrado (pode ter sido excluído).');
         return aguardarTemplates().then(function () {
+          exigirEscopo(escopo);
           documentoEmEdicaoId = registro.id;
           var tipo = registro.tipoDocumento || 'os';
           var html = aplicarAssinaturas(tipo, gerarHtmlParaTipo(tipo, registro.dados), registro.dados);
@@ -487,10 +534,12 @@
         });
       })
       .then(function () {
+        exigirEscopo(escopo);
         painelDocLista.hidden = true;
         painelDocDetalhe.hidden = false;
       })
       .catch(function (err) {
+        if (!escopoValido(escopo)) return;
         mostrarFeedback('Não foi possível abrir: ' + (err && err.message ? err.message : String(err)), true);
       });
   }
@@ -504,9 +553,13 @@
 
   btnAssinarDoc.addEventListener('click', function () {
     if (!documentoEmEdicaoId) return;
+    var escopo = capturarEscopo();
+    var documentoId = documentoEmEdicaoId;
     window.SistemaOSAssinatura.abrir(function (dataUrl) {
-      window.SistemaOSHistorico.obterDocumentoRecebidoPorId(documentoEmEdicaoId)
+      if (!escopoValido(escopo) || documentoId !== documentoEmEdicaoId) return;
+      window.SistemaOSHistorico.obterDocumentoRecebidoPorId(documentoId)
         .then(function (registro) {
+          exigirEscopo(escopo);
           if (!registro) throw new Error('Documento não encontrado.');
           var tipo = registro.tipoDocumento || 'os';
           var campo = campoAssinaturaPorTipo(tipo);
@@ -516,15 +569,18 @@
           registro.dados.dataHoraAssinatura = new Date().toISOString();
           registro.statusLocal = 'assinado';
           registro.resultadoAssinatura = 'assinado';
-          return window.SistemaOSHistorico.salvarDocumentoRecebido(registro).then(function () {
+          return window.SistemaOSHistorico.salvarDocumentoRecebido(registro, function () { return escopoValido(escopo); }).then(function () {
+            exigirEscopo(escopo);
             var html = aplicarAssinaturas(tipo, gerarHtmlParaTipo(tipo, registro.dados), registro.dados);
             return definirConteudoDoFrameDoc(html);
           });
         })
         .then(function () {
-          return window.SistemaOSHistorico.obterDocumentoRecebidoPorId(documentoEmEdicaoId);
+          exigirEscopo(escopo);
+          return window.SistemaOSHistorico.obterDocumentoRecebidoPorId(documentoId);
         })
         .then(function (registroAtualizado) {
+          exigirEscopo(escopo);
           atualizarAcoesDetalhe(registroAtualizado);
         })
         .catch(function (err) {
@@ -548,9 +604,11 @@
   }
 
   function marcarComoNaoAssinado(id, manterDetalhe) {
+    var escopo = capturarEscopo();
     if (!window.confirm('Confirmar que este documento não foi assinado?')) return Promise.resolve(false);
     return window.SistemaOSHistorico.obterDocumentoRecebidoPorId(id)
       .then(function (registro) {
+        exigirEscopo(escopo);
         if (!registro) throw new Error('Documento não encontrado.');
         var tipo = registro.tipoDocumento || 'os';
         var campo = campoAssinaturaPorTipo(tipo);
@@ -560,14 +618,16 @@
         registro.dados.dataHoraAssinatura = new Date().toISOString();
         registro.statusLocal = 'nao_assinado';
         registro.resultadoAssinatura = 'nao_assinado';
-        return window.SistemaOSHistorico.salvarDocumentoRecebido(registro).then(function () { return registro; });
+        return window.SistemaOSHistorico.salvarDocumentoRecebido(registro, function () { return escopoValido(escopo); }).then(function () { return registro; });
       })
       .then(function (registro) {
+        exigirEscopo(escopo);
         mostrarFeedback('Documento marcado como não assinado. Envie a decisão para o PC.');
         if (manterDetalhe) {
           var tipo = registro.tipoDocumento || 'os';
           var html = aplicarAssinaturas(tipo, gerarHtmlParaTipo(tipo, registro.dados), registro.dados);
           return definirConteudoDoFrameDoc(html).then(function () {
+            exigirEscopo(escopo);
             atualizarAcoesDetalhe(registro);
             return true;
           });
@@ -604,8 +664,10 @@
 
   btnExportarRespostaDoc.addEventListener('click', function () {
     if (!documentoEmEdicaoId) return;
+    var escopo = capturarEscopo();
     window.SistemaOSHistorico.obterDocumentoRecebidoPorId(documentoEmEdicaoId)
       .then(function (registro) {
+        exigirEscopo(escopo);
         if (!registro || ['assinado', 'nao_assinado'].indexOf(registro.statusLocal) === -1) {
           throw new Error('Assine ou marque como não assinado antes de enviar a resposta.');
         }
@@ -634,18 +696,20 @@
             respostaAutomatica,
             registro.id
           ).then(function (resultado) {
+            exigirEscopo(escopo);
             if (!resultado || (!resultado.enviado && !resultado.enfileirado)) {
               throw (resultado && resultado.erro) || new Error('O servidor não confirmou nem guardou o envio.');
             }
             if (resultado.enfileirado) {
               mostrarFeedback('Servidor indisponível. A assinatura ficou salva no aparelho e será enviada automaticamente.');
               registro.envioPostgresqlPendente = true;
-              return window.SistemaOSHistorico.salvarDocumentoRecebido(registro);
+              return window.SistemaOSHistorico.salvarDocumentoRecebido(registro, function () { return escopoValido(escopo); });
             }
             mostrarFeedback('Assinatura confirmada no PostgreSQL e enviada ao PC.');
             registro.statusLocal = 'enviado';
             registro.envioPostgresqlPendente = false;
-            return window.SistemaOSHistorico.salvarDocumentoRecebido(registro).then(function () {
+            return window.SistemaOSHistorico.salvarDocumentoRecebido(registro, function () { return escopoValido(escopo); }).then(function () {
+              exigirEscopo(escopo);
               btnExportarRespostaDoc.hidden = true;
             });
           });
@@ -654,6 +718,7 @@
         return exportarRespostaManual(tipo, registro, campo, assinaturaBase64);
       })
       .catch(function (err) {
+        if (!escopoValido(escopo)) return;
         mostrarFeedback('Não foi possível exportar: ' + (err && err.message ? err.message : String(err)), true);
       });
   });
@@ -705,6 +770,13 @@
     if (!document.hidden) verificarDocsParaCelularAutomatico();
   });
   document.addEventListener('sistema-os:sessao-alterada', function (evento) {
+    revisaoSessao += 1;
+    verificacaoAutomaticaEmAndamento = null;
+    documentoEmEdicaoId = null;
+    listaDocs.textContent = '';
+    painelDocDetalhe.hidden = true;
+    painelDocLista.hidden = false;
+    frameDoc.srcdoc = '';
     if (evento && evento.detail && evento.detail.tipo === 'autenticado') {
       verificarDocsParaCelularAutomatico();
     }
