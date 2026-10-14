@@ -1,5 +1,5 @@
 ; ============================================================
-;  installer.nsh — Customizações NSIS para Sistema OS v26.6.1
+;  installer.nsh — Customizações NSIS para Sistema OS
 ;  Inserido automaticamente pelo electron-builder via
 ;  build.nsis.include = "build-resources/installer.nsh"
 ; ============================================================
@@ -65,7 +65,7 @@
 
   ; ── Textos da página de boas-vindas ────────────────────────
   !ifndef MUI_WELCOMEPAGE_TITLE
-    !define MUI_WELCOMEPAGE_TITLE         "Bem-vindo ao Sistema OS v26.6.1"
+    !define MUI_WELCOMEPAGE_TITLE         "Bem-vindo ao Sistema OS ${VERSION}"
   !endif
   !ifndef MUI_WELCOMEPAGE_TEXT
     !define MUI_WELCOMEPAGE_TEXT          "Este assistente irá guiá-lo na instalação do$\r$\n\
@@ -98,7 +98,7 @@ Para abrir o sistema, use o atalho na Área de Trabalho."
     !define MUI_FINISHPAGE_LINK           "Precisa de ajuda? Acesse o suporte"
   !endif
   !ifndef MUI_FINISHPAGE_LINK_LOCATION
-    !define MUI_FINISHPAGE_LINK_LOCATION  "https://suaempresa.com.br/suporte"
+    !define MUI_FINISHPAGE_LINK_LOCATION  "https://aureviontecnologia.vercel.app/"
   !endif
 
   ; ── Página de desinstalação ─────────────────────────────────

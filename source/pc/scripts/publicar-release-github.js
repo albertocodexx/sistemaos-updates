@@ -117,6 +117,7 @@ async function publicarArquivo(token, release, arquivo, nome, tipo) {
     return;
   }
   const installer = path.join(dist, `SistemaOS-${VERSAO_PC}-Setup.exe`);
+  const installerHash = `${installer}.sha256`;
   const blockmap = `${installer}.blockmap`;
   const latest = path.join(dist, 'latest.yml');
   // O nome versionado identifica sem ambiguidade a linha Android. O alias
@@ -125,14 +126,16 @@ async function publicarArquivo(token, release, arquivo, nome, tipo) {
   const apk = path.join(dist, `SistemaOS-Android-${VERSAO_ANDROID}.apk`);
   const apkHash = `${apk}.sha256`;
   const fontePc = path.join(dist, `SistemaOS-PC-Codigo-Fonte-v${VERSAO_PC}.zip`);
+  const fontePcHash = `${fontePc}.sha256`;
   const fonteAndroid = path.join(dist, `SistemaOS-Android-Codigo-Fonte-v${VERSAO_ANDROID}.zip`);
-  for (const arquivo of [installer, blockmap, latest, apk, apkHash, fontePc, fonteAndroid]) {
+  for (const arquivo of [installer, installerHash, blockmap, latest, apk, apkHash, fontePc, fontePcHash, fonteAndroid]) {
     if (!fs.existsSync(arquivo) || fs.statSync(arquivo).size === 0) throw new Error(`Arquivo de release ausente: ${arquivo}`);
   }
 
   let release = await obterOuCriarRelease(token);
   const arquivos = [
     [installer, path.basename(installer), 'application/vnd.microsoft.portable-executable'],
+    [installerHash, path.basename(installerHash), 'text/plain'],
     [blockmap, path.basename(blockmap), 'application/octet-stream'],
     [latest, 'latest.yml', 'text/yaml'],
     [apk, path.basename(apk), 'application/vnd.android.package-archive'],
@@ -141,6 +144,7 @@ async function publicarArquivo(token, release, arquivo, nome, tipo) {
     [apk, 'SistemaOS-Android.apk', 'application/vnd.android.package-archive'],
     [apkHash, 'SistemaOS-Android.apk.sha256', 'text/plain'],
     [fontePc, path.basename(fontePc), 'application/zip'],
+    [fontePcHash, path.basename(fontePcHash), 'text/plain'],
     [fonteAndroid, path.basename(fonteAndroid), 'application/zip']
   ];
   for (const item of arquivos) await publicarArquivo(token, release, ...item);

@@ -30,4 +30,6 @@ A execução usou rede desativada, ambiente allowlisted, fontes/ferramentas some
 
 Checagens sintáticas, revisão do diff, verificação de espaços e varredura do patch por formatos conhecidos de segredo aprovadas. Os cinco fixtures Android modificados anteriormente e os demais arquivos do espelho foram preservados.
 
-Esta publicação contém fontes e testes. Não gera novo instalador/APK, não altera versão distribuída, não muda políticas RLS nem aplica migração em produção. A auditoria ampla anterior permanece incompleta; não há garantia de segurança ou funcionamento absoluto.
+A primeira publicação deste patch continha somente fontes e testes. Na continuação, o instalador Windows 40.5.25 foi recompilado com dependências locais e ambiente sem credenciais de publicação. O arquivo `app.asar` foi conferido: 13 arquivos essenciais idênticos aos fontes corrigidos, dependências de produção presentes, zero arquivos de banco/credenciais proibidos e zero candidatos aos formatos de segredo pesquisados em 108 arquivos próprios. O manifesto do atualizador usa versão, tamanho e SHA-512 do novo instalador; também são distribuídos hashes SHA-256.
+
+O APK permanece 20.5.23. Não houve alteração de políticas RLS nem migração em produção. O instalador permanece sem certificado comercial. A auditoria ampla anterior continua incompleta; a release não representa garantia absoluta de segurança nem teste manual de todos os fluxos/impressoras.
