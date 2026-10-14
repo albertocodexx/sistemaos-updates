@@ -88,6 +88,7 @@ function configuracaoMobileDoDesktop(configuracao) {
     tamanhoLogoPdf: Math.max(40, Number(config.tamanhoLogoPdf) || 80),
     logoPdfMonocromatica: config.logoPdfMonocromatica === true,
     tamanhoFonteTermosPdf: Math.max(0, Number(config.tamanhoFonteTermosPdf) || 0),
+    formatoTermicoPadrao: config.formatoTermicoPadrao === '58mm' ? '58mm' : '80mm',
     temaModo: tema === 'light' || tema === 'claro' ? 'claro' : 'escuro',
     exigirAssinaturaAssistencia: config.exigirAssinaturaAssistencia !== false,
     garantiaDiasPadrao: garantia ? Math.max(0, Number(garantia[0]) || 0) : 90
@@ -132,6 +133,7 @@ function configuracaoDesktopDoMobile(configuracao) {
     tamanhoLogoPdf: Math.max(40, Number(config.tamanhoLogoPdf) || 80),
     logoPdfMonocromatica: config.logoPdfMonocromatica === true,
     tamanhoFonteTermosPdf: Math.max(0, Number(config.tamanhoFonteTermosPdf) || 0),
+    formatoTermicoPadrao: config.formatoTermicoPadrao === '58mm' ? '58mm' : '80mm',
     temaModo: String(config.temaModo || '').toLowerCase() === 'claro' ? 'light' : 'dark',
     exigirAssinaturaAssistencia: config.exigirAssinaturaAssistencia !== false,
     garantiaPadrao: `${garantiaDias} dias`,

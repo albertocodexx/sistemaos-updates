@@ -558,19 +558,33 @@ function _montarContextoDados(categorias, usuario) {
   }
 
   // Chaves curtas: n=numero, d=data, st=status, sp=statusPagamento,
-  // cli=cliente, tel=telefone, ap=aparelho, def=defeito, vl=valor,
+  // cli=cliente, tel=telefone, ap=aparelho, def=defeito, vl=valor total,
+  // grat=servico explicitamente gratuito,
   // dp=dataPrevista, atr=atrasada
   if (quer('os')) {
-    ctx.ordensRecentes = db.listarOrdens().slice(0, 60).map(os => ({
-      n: os.numero, d: os.data, st: os.status, sp: os.statusPagamento,
-      cli: os.cliente?.nome, tel: os.cliente?.telefone,
-      ap: [os.aparelho?.marca, os.aparelho?.modelo].filter(Boolean).join(' '),
-      def: os.aparelho?.defeitoRelatado, vl: os.valorInvestido,
-      dp: os.dataPrevista, atr: !!os.atrasada,
-      cob: (os.lembretesCobranca || []).slice(0, 12).map(item => ({
-        id: item.id || item.data, d: item.data, vl: Number(item.valor || 0), st: _statusCobranca(item)
-      }))
-    }));
+    ctx.ordensRecentes = db.listarOrdens().slice(0, 60).map(os => {
+      const candidatosValor = [
+        os.valorTotalServico,
+        os.diagnosticoTecnico?.valorEstimado,
+        os.valorInvestido,
+        os.valor
+      ];
+      const valorInformado = candidatosValor
+        .map(valor => Number(valor))
+        .find(valor => Number.isFinite(valor) && valor > 0);
+      return {
+        n: os.numero, d: os.data, st: os.status, sp: os.statusPagamento,
+        cli: os.cliente?.nome, tel: os.cliente?.telefone,
+        ap: [os.aparelho?.marca, os.aparelho?.modelo].filter(Boolean).join(' '),
+        def: os.aparelho?.defeitoRelatado,
+        vl: valorInformado ?? null,
+        grat: os.servicoGratuito === true,
+        dp: os.dataPrevista, atr: !!os.atrasada,
+        cob: (os.lembretesCobranca || []).slice(0, 12).map(item => ({
+          id: item.id || item.data, d: item.data, vl: Number(item.valor || 0), st: _statusCobranca(item)
+        }))
+      };
+    });
   }
 
   // Chaves curtas: n=nome, tel=telefone, cpf=cpf, os=totalOS, vd=totalVendas,
@@ -707,7 +721,7 @@ ${manualTexto}
   // curtas está presente no contexto, pra não gastar tokens à toa quando o
   // contexto é só o resumo (ou está vazio, ex. "oi").
   const LEGENDAS = {
-    os: 'ordensRecentes: n=número, d=data, st=status, sp=statusPagamento, cli=cliente, tel=telefone, ap=aparelho, def=defeito relatado, vl=valor, dp=dataPrevista, atr=atrasada, cob=cobranças programadas (id, d=data, vl=valor, st=situação)',
+    os: 'ordensRecentes: n=número, d=data, st=status, sp=statusPagamento, cli=cliente, tel=telefone, ap=aparelho, def=defeito relatado, vl=valor total do serviço (null=não informado), grat=serviço explicitamente gratuito, dp=dataPrevista, atr=atrasada, cob=cobranças programadas (id, d=data, vl=valor, st=situação)',
     clientes: 'clientes: n=nome, tel=telefone, cpf=cpf, os=totalOS, vd=totalVendas, cp=totalCompras, int=qtdInteracoes, uv=últimaVisita',
     estoque: 'estoque: tp=tipo, mc=marca, md=modelo, st=status, vv=valorVenda, cp=compradorNome',
     pecas: 'pecas: n=nome, cat=categoria, qt=quantidade, ct=custo',
@@ -752,6 +766,7 @@ REGRAS PARA RESPONDER PERGUNTAS:
 - Perguntas sobre números, OS, clientes, estoque, compras, financeiro ou conversas específicas: responda com base nos DADOS ATUAIS.
 - Os dados fornecidos são uma AMOSTRA recente e limitada (não o banco completo). Se a pergunta exigir um dado que claramente não está na amostra, diga isso em vez de inventar.
 - Nunca invente números, nomes, valores ou instruções que não estejam nas fontes acima.
+- Em OS, use \`vl\` como valor total. Se \`vl\` for null, diga "valor não informado". Só diga "serviço gratuito" quando \`grat\` for true; valor ausente ou zero isolado nunca prova gratuidade.
 - Se não encontrar a resposta em nenhuma das duas fontes, diga isso claramente.
 - Para perguntas sobre a hora ou data atual no Brasil, use exatamente a DATA E HORA ATUAL NO BRASIL acima; não estime nem use conhecimento antigo.
 - Quando a pesquisa na web estiver habilitada, use-a apenas para fatos externos e atuais; deixe claro quando não encontrar uma fonte confiável.

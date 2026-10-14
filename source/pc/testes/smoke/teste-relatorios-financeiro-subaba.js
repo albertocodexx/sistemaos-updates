@@ -5,6 +5,8 @@ const path = require('path');
 const raiz = path.resolve(__dirname, '..', '..');
 const html = fs.readFileSync(path.join(raiz, 'renderer', 'index.html'), 'utf8');
 const runtime = fs.readFileSync(path.join(raiz, 'renderer', 'core', 'legacy-runtime.js'), 'utf8');
+const style = fs.readFileSync(path.join(raiz, 'renderer', 'style.css'), 'utf8');
+const ipc = fs.readFileSync(path.join(raiz, 'src', 'ipc', 'register-legacy.js'), 'utf8');
 
 assert.doesNotMatch(html, /class="aba"[^>]*data-aba="financeiro"/, 'Financeiro não deve continuar no menu principal');
 assert.match(html, /data-aba="relatorios"[^>]*data-permissao-alternativa="financeiro"/, 'Relatórios deve aceitar usuários com permissão financeira');
@@ -14,5 +16,13 @@ assert.match(runtime, /function trocarSubabaRelatorios\(destino\)/, 'runtime dev
 assert.match(runtime, /if \(financeiro\) carregarFinanceiro\(\)/, 'subaba financeira deve carregar seus dados');
 assert.match(html, /id="icone-estrela"[\s\S]*M12 2l2\.5 6\.5L21 11/, 'assistente deve usar a estrela definida na identidade visual');
 assert.match(html, /data-aba="log-ia"[\s\S]*?#icone-estrela/, 'Log IA deve apresentar a estrela no menu');
+assert.match(style, /\.relatorios-subabas\s*\{\s*border-bottom-color:\s*transparent/,
+  'a barra do contêiner não pode parecer seleção nas duas subabas');
+assert.match(style, /\.relatorios-subabas \.aba-interna\.ativa/,
+  'somente a subaba ativa deve exibir o indicador');
+assert.match(ipc, /gerarHtmlRelatorioPainel/,
+  'exportação deve gerar documento de dados em vez de imprimir a janela principal');
+assert.doesNotMatch(ipc, /body\.classList\.add\('modo-print-painel'\)/,
+  'exportação não deve capturar a interface');
 
 console.log('OK: Financeiro é subaba de Relatórios e estrela do assistente está aplicada.');

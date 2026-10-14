@@ -369,6 +369,12 @@ function escolherOpcaoModal(opcoes = {}) {
 
     const corpo = document.createElement('div');
     corpo.style.cssText = 'padding:20px 22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;';
+    if (opcoes.mensagem) {
+      const mensagem = document.createElement('p');
+      mensagem.style.cssText = 'grid-column:1/-1;margin:0 0 4px;color:var(--texto-sec);font-size:13px;line-height:1.45;';
+      mensagem.textContent = String(opcoes.mensagem);
+      corpo.appendChild(mensagem);
+    }
     const alternativas = Array.isArray(opcoes.alternativas) ? opcoes.alternativas : [];
     alternativas.forEach((alternativa) => {
       const botao = document.createElement('button');
@@ -383,6 +389,12 @@ function escolherOpcaoModal(opcoes = {}) {
       descricao.textContent = alternativa.descricao || '';
       botao.appendChild(nome);
       if (descricao.textContent) botao.appendChild(descricao);
+      if (alternativa.selecionada) {
+        botao.classList.add('ativa');
+        botao.style.outline = '2px solid var(--cor-links)';
+        botao.style.outlineOffset = '2px';
+        botao.setAttribute('aria-current', 'true');
+      }
       botao.addEventListener('click', () => finalizar(alternativa.valor));
       corpo.appendChild(botao);
     });
@@ -415,9 +427,31 @@ function escolherOpcaoModal(opcoes = {}) {
     }
     document.addEventListener('keydown', aoTeclar);
     overlay.addEventListener('mousedown', (evento) => { if (evento.target === overlay) finalizar(null); });
-    corpo.querySelector('button')?.focus();
+    (corpo.querySelector('button[aria-current="true"]') || corpo.querySelector('button'))?.focus();
   });
 }
+
+async function escolherSaidaTermicaModal({ titulo, mensagem, incluirA4 = false } = {}) {
+  const config = await window.api.configobter().catch(() => ({}));
+  const padrao = config?.formatoTermicoPadrao === '58mm' ? '58mm' : '80mm';
+  const outro = padrao === '80mm' ? '58mm' : '80mm';
+  const alternativas = [
+    { valor: `visualizar|${padrao}`, titulo: `Pré-visualizar ${padrao}`, descricao: 'Tamanho padrão da empresa. Confira todo o comprovante antes de imprimir.', selecionada: true },
+    { valor: `imprimir|${padrao}`, titulo: `Imprimir ${padrao}`, descricao: 'Imprime usando o tamanho padrão da empresa.' },
+    { valor: `visualizar|${outro}`, titulo: `Pré-visualizar ${outro}`, descricao: 'Troca somente nesta operação e abre a conferência.' },
+    { valor: `imprimir|${outro}`, titulo: `Imprimir ${outro}`, descricao: 'Troca somente nesta operação.' }
+  ];
+  if (incluirA4) alternativas.push({ valor: 'visualizar|a4', titulo: 'Visualizar PDF A4', descricao: 'Abre a versão completa em folha A4.' });
+  const escolha = await escolherOpcaoModal({
+    titulo: titulo || 'Comprovante térmico',
+    mensagem: mensagem || `Padrão atual: ${padrao}. Você pode conferir ou trocar somente para esta impressão.`,
+    alternativas
+  });
+  if (!escolha) return null;
+  const [modo, formato] = String(escolha).split('|');
+  return { modo, formato };
+}
+window.escolherSaidaTermicaModal = escolherSaidaTermicaModal;
 
 // ══════════════════════════════════════════
 // ETAPA 8.6 — CAMPOS DINÂMICOS POR TIPO DE EQUIPAMENTO
@@ -1405,6 +1439,7 @@ $('btnConfig').addEventListener('click', async () => {
   if ($('usarTermosPredefinidosGarantia')) $('usarTermosPredefinidosGarantia').checked = !!c.usarTermosPredefinidosGarantia;
   $('textoRodapePdf').value = c.textoRodapePdf || '';
   if ($('tamanhoLogoPdf')) $('tamanhoLogoPdf').value = String(c.tamanhoLogoPdf || 80);
+  if ($('formatoTermicoPadrao')) $('formatoTermicoPadrao').value = c.formatoTermicoPadrao === '58mm' ? '58mm' : '80mm';
   if ($('tamanhoFonteTermosPdf') && $('tamanhoFonteTermosPdfRange')) {
     var _fonteTermosAtual = c.tamanhoFonteTermosPdf || 0;
     $('tamanhoFonteTermosPdf').value = _fonteTermosAtual > 0 ? String(_fonteTermosAtual) : '';
@@ -1714,6 +1749,7 @@ $('btnSalvarConfig').addEventListener('click', async () => {
     textoRodapePdf: $('textoRodapePdf').value.trim(),
     tamanhoLogoPdf: parseInt($('tamanhoLogoPdf')?.value || '80') || 80,
     tamanhoFonteTermosPdf: parseFloat($('tamanhoFonteTermosPdf')?.value || '0') || 0,
+    formatoTermicoPadrao: $('formatoTermicoPadrao')?.value === '58mm' ? '58mm' : '80mm',
     temaModo: $('modoEscuroConfig').checked ? 'dark' : 'light'
   };
   // v20: Integrações
@@ -3108,37 +3144,21 @@ window.emitirComprovanteOS = async function(numero) {
     ? await solicitarNomeRecebedorComprovante(numero, osDoComprovante)
     : undefined;
   if (comprovanteDeRetirada && !dadosEntrega) return;
-  const escolha = await escolherOpcaoModal({
+  const escolha = await escolherSaidaTermicaModal({
     titulo: `Emitir comprovante da OS ${numero}`,
-    alternativas: [
-      { valor: '1', titulo: 'Visualizar térmico 80 mm', descricao: 'Abre a prévia para conferir antes de imprimir.' },
-      { valor: '2', titulo: 'Imprimir térmico 80 mm', descricao: comprovanteDeRetirada ? 'Envia duas vias para a impressora.' : 'Envia uma via para a impressora.' },
-      { valor: '3', titulo: 'Imprimir térmico 58 mm', descricao: comprovanteDeRetirada ? 'Envia duas vias na bobina compacta.' : 'Envia uma via na bobina compacta.' },
-      { valor: '4', titulo: 'Visualizar PDF A4', descricao: 'Abre a versão completa em página A4.' }
-    ]
+    mensagem: comprovanteDeRetirada
+      ? 'A impressão gera duas vias. Confira o tamanho da bobina antes de continuar.'
+      : 'Confira o tamanho da bobina ou abra a pré-visualização antes de imprimir.',
+    incluirA4: true
   });
-  if (escolha === null) return;
-  const opcao = String(escolha || '').trim();
+  if (!escolha) return;
   try {
-    if (opcao === '1') {
-      await window.api.osabrircomprovante(numero, '80mm', dadosEntrega);
-      return;
-    }
-    if (opcao === '2') {
-      await window.api.osimprimircomprovante(numero, '80mm', undefined, comprovanteDeRetirada ? 2 : 1, dadosEntrega);
+    if (escolha.modo === 'visualizar') {
+      await window.api.osabrircomprovante(numero, escolha.formato, dadosEntrega);
+    } else {
+      await window.api.osimprimircomprovante(numero, escolha.formato, undefined, comprovanteDeRetirada ? 2 : 1, dadosEntrega);
       toast(comprovanteDeRetirada ? 'Duas vias enviadas para a impressão.' : 'Comprovante enviado para a impressão.', 'sucesso');
-      return;
     }
-    if (opcao === '3') {
-      await window.api.osimprimircomprovante(numero, '58mm', undefined, comprovanteDeRetirada ? 2 : 1, dadosEntrega);
-      toast(comprovanteDeRetirada ? 'Duas vias enviadas para a impressão.' : 'Comprovante enviado para a impressão.', 'sucesso');
-      return;
-    }
-    if (opcao === '4') {
-      await window.api.osabrircomprovante(numero, 'a4', dadosEntrega);
-      return;
-    }
-    toast('Opção inválida. Digite 1, 2, 3 ou 4.', 'aviso');
   } catch (erro) {
     toast('Não foi possível emitir o comprovante: ' + (erro?.message || erro), 'erro');
   }
@@ -5365,7 +5385,8 @@ if ($('btnExportarPainelPDF')) {
     btn.disabled = true;
     btn.innerHTML = `${ICONE_RELOGIO} Gerando PDF...`;
     try {
-      const r = await window.api.backupexportarpainelpdf();
+      const intervalo = _relCalcularIntervaloPeriodo(_relFiltroPeriodoAtivo);
+      const r = await window.api.backupexportarpainelpdf(intervalo || {});
       if (r.cancelado) return;
       if (r.sucesso) toast(`${ICONE_CHECK} Painel exportado em PDF com sucesso!`, 'sucesso');
       else toast('Erro ao exportar painel: ' + (r.erro || 'falha desconhecida'), 'erro');
@@ -10186,6 +10207,7 @@ window.abrirEtiqueta = async function(numero) {
     _etiquetaOSAtual = os;
     _etiquetaQrAtual = qr;
     _etiquetaConfigAtual = config || {};
+    if ($('etiquetaFormato')) $('etiquetaFormato').value = config?.formatoTermicoPadrao === '58mm' ? '58' : '80';
     _atualizarPreviewEtiqueta();
     if (imprimir) imprimir.disabled = false;
   } catch (erro) {
@@ -11469,8 +11491,13 @@ async function gerarComprovantePDF(pagId) {
 
 async function imprimirComprovanteTermicoPagamento(pagId) {
   try {
-    const r = await window.api.pagimprimirtermico(pagId);
-    if (r?.sucesso) toast('Comprovante térmico enviado para impressão.', 'sucesso');
+    const escolha = await escolherSaidaTermicaModal({
+      titulo: 'Comprovante térmico de pagamento',
+      mensagem: 'Escolha a pré-visualização ou a impressão. O tamanho padrão da empresa já vem destacado.'
+    });
+    if (!escolha) return;
+    const r = await window.api.pagimprimirtermico(pagId, escolha.formato, escolha.modo);
+    if (r?.sucesso) toast(escolha.modo === 'visualizar' ? 'Pré-visualização aberta.' : `Comprovante ${escolha.formato} enviado para impressão.`, 'sucesso');
     else if (!r?.cancelado) toast('Erro: ' + (r?.erro || 'Não foi possível imprimir.'), 'erro');
   } catch (e) {
     toast('Erro ao imprimir: ' + e.message, 'erro');

@@ -309,7 +309,16 @@
     } catch (erro) { avisar(erro?.message || 'Não foi possível atualizar a cobrança.', 'erro'); }
   }
 
-  document.querySelector('[data-aba="cobrancas"]')?.addEventListener('click', sincronizarSeVisivel);
+  function carregarAposAbrirAba() {
+    // O controlador geral troca a classe da aba no mesmo clique. Adiar para o
+    // próximo frame garante que a visibilidade já esteja atualizada antes da
+    // checagem; assim o primeiro acesso não depende do botão Atualizar.
+    window.requestAnimationFrame(() => {
+      if (abaCobrancasAtiva()) carregar({ sincronizar: true });
+    });
+  }
+
+  document.querySelector('[data-aba="cobrancas"]')?.addEventListener('click', carregarAposAbrirAba);
   $('btnAtualizarCobrancasPC')?.addEventListener('click', () => carregar({ sincronizar: true }));
   $('btnNovaCobrancaPC')?.addEventListener('click', () => abrirFormulario(null));
   $('btnFecharCobrancaPC')?.addEventListener('click', fecharFormulario);
@@ -343,6 +352,10 @@
   window.addEventListener('focus', sincronizarSeVisivel);
   document.addEventListener('visibilitychange', sincronizarSeVisivel);
   window.addEventListener('beforeunload', () => clearInterval(estado.atualizacaoAutomatica), { once: true });
+
+  // Também cobre restauração de sessão e carregamento do módulo quando
+  // Cobranças já era a aba selecionada.
+  carregarAposAbrirAba();
 
   window.carregarCobrancas = carregar;
   window.SistemaOSCobrancasPC = { achatar, situacao, prepararSituacao, normalizarLembretes };

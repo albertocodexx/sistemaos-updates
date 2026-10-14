@@ -658,7 +658,7 @@ function registerLegacyHandlers(deps) {
       'possuiCnpj', 'cnpj', 'inscricaoEstadual', 'exibirCnpjDocumentos',
       'usarTermosPredefinidosOS', 'termosOS', 'usarTermosPredefinidosVenda', 'termosVenda',
       'usarTermosPredefinidosCompra', 'termosCompra', 'usarTermosPredefinidosGarantia', 'termosGarantia',
-      'textoRodapePdf', 'tamanhoLogoPdf', 'tamanhoFonteTermosPdf', 'logoBase64', 'logoPath'
+      'textoRodapePdf', 'tamanhoLogoPdf', 'tamanhoFonteTermosPdf', 'formatoTermicoPadrao', 'logoBase64', 'logoPath'
     ];
     if (supabaseDesktop?.podeAlterarConfiguracoesEmpresa?.() === false) {
       const atual = db.obterConfig() || {};
@@ -1138,6 +1138,10 @@ function registerLegacyHandlers(deps) {
     if (!documento) throw new Error('Autorização de desbloqueio não encontrada.');
     return pdf.imprimirDesbloqueioTermico(documento, formato, nomeImpressora);
   });
+  ipcMain.handle('desbloqueio:abrirTermico', async (_e, numero, formato) => {
+    const documento = db.obterDesbloqueio(numero);
+    return pdf.abrirDesbloqueioTermico(documento, formato);
+  });
   ipcMain.handle('desbloqueio:abrirPdf', async (_e, caminho) => {
     if (!caminho || !caminhoDentroDe(caminho) || !fs.existsSync(caminho)) throw new Error('PDF não encontrado.');
     // Refaz PDFs antigos antes de abrir. Isso aplica o layout atual (uma
@@ -1200,70 +1204,48 @@ function registerLegacyHandlers(deps) {
     return backup.fazerBackupAutoDiario();
   });
   
-  // ── Backup visual do Painel (Relatórios) — PDF com cards e gráficos ──
-  // Captura a própria aba de Relatórios já renderizada na janela principal
-  // (cards, KPIs e gráficos são calculados dinamicamente e não fazem parte
-  // do backup de dados em JSON). Aplica um CSS temporário que esconde o
-  // cabeçalho/menu/controles de interação, imprime só o conteúdo da aba,
-  // e remove o CSS em seguida — sem alterar a tela do usuário.
-  ipcMain.handle('backup:exportarPainelPDF', async () => {
-    const fs = require('fs');
-    if (!getJanelaPrincipal() || getJanelaPrincipal().isDestroyed()) {
-      return { sucesso: false, erro: 'Janela principal indisponível.' };
+  // Relatório gerencial próprio. Não imprime a janela do aplicativo: os
+  // dados são consolidados novamente no processo principal e renderizados em
+  // um documento isolado, sem menus, botões ou Assistente de IA.
+  ipcMain.handle('backup:exportarPainelPDF', async (_e, filtrosEntrada) => {
+    const filtros = {};
+    for (const chave of ['dataInicio', 'dataFim']) {
+      const valor = String(filtrosEntrada?.[chave] || '').slice(0, 10);
+      if (valor && /^\d{4}-\d{2}-\d{2}$/.test(valor)) filtros[chave] = valor;
     }
-  
+    if (filtros.dataInicio && filtros.dataFim && filtros.dataInicio > filtros.dataFim) {
+      return { sucesso: false, erro: 'O período do relatório é inválido.' };
+    }
     const config = db.obterConfig();
     const empresa = config.nomeEmpresa || config.nomeFantasia || 'Assistência Técnica';
-    const sugestao = `painel-relatorios-${empresa.replace(/[^a-zA-Z0-9]+/g,'_')}-${new Date().toISOString().slice(0,10)}.pdf`;
+    const sugestao = `relatorio-gerencial-${empresa.replace(/[^a-zA-Z0-9]+/g,'_')}-${new Date().toISOString().slice(0,10)}.pdf`;
   
     const { canceled, filePath } = await dialog.showSaveDialog(getJanelaPrincipal(), {
-      title: 'Exportar Painel (PDF)', defaultPath: sugestao,
+      title: 'Exportar relatório gerencial (PDF)', defaultPath: sugestao,
       filters: [{ name: 'PDF', extensions: ['pdf'] }]
     });
     if (canceled || !filePath) return { sucesso: false, cancelado: true };
   
-    const CSS_IMPRESSAO = `
-      body.modo-print-painel .topo,
-      body.modo-print-painel .abas,
-      body.modo-print-painel #btnAtualizarRelatorios,
-      body.modo-print-painel #btnExportarPainelPDF {
-        display: none !important;
-      }
-      body.modo-print-painel .conteudo { padding: 12px 20px; max-width: none; }
-      body.modo-print-painel .secao-aba { display: none !important; }
-      body.modo-print-painel #aba-relatorios { display: block !important; }
-      body.modo-print-painel #aba-relatorios .card { break-inside: avoid; }
-      body.modo-print-painel::before {
-        content: "${empresa.replace(/"/g,'\\"')} — Painel de Relatórios — ${new Date().toLocaleString('pt-BR')}";
-        display: block; font-size: 11px; color: #666; margin-bottom: 14px;
-        border-bottom: 1px solid #ccc; padding-bottom: 8px;
-      }
-    `;
-  
-    let cssKey = null;
     try {
-      cssKey = await getJanelaPrincipal().webContents.insertCSS(CSS_IMPRESSAO);
-      await getJanelaPrincipal().webContents.executeJavaScript(
-        `document.body.classList.add('modo-print-painel'); void 0;`
-      );
-      // Pequena espera para garantir reflow antes de capturar
-      await new Promise(r => setTimeout(r, 150));
-  
-      const buffer = await getJanelaPrincipal().webContents.printToPDF({
+      const { gerarHtmlRelatorioPainel } = require('../relatorio-painel');
+      const incluirFinanceiro = require('../access-policy').podeModulo(getUsuarioAutenticado?.(), 'financeiro', 'ler');
+      const html = gerarHtmlRelatorioPainel({
+        config,
+        statsOS: db.obterEstatisticasOS(filtros),
+        statsEst: db.obterEstatisticasEstoque(),
+        statsFin: incluirFinanceiro ? db.obterRelatorioFinanceiro(filtros) : {},
+        filtros,
+        incluirFinanceiro
+      });
+      const buffer = await pdf.renderizarHtmlParaPdf(html, {
         printBackground: true, landscape: false, pageSize: 'A4',
-        margins: { marginType: 'default' }
+        preferCSSPageSize: true,
+        margins: { marginType: 'none' }
       });
       fs.writeFileSync(filePath, buffer);
       return { sucesso: true, caminho: filePath };
     } catch (err) {
       return { sucesso: false, erro: err.message };
-    } finally {
-      try {
-        await getJanelaPrincipal().webContents.executeJavaScript(
-          `document.body.classList.remove('modo-print-painel'); void 0;`
-        );
-        if (cssKey) await getJanelaPrincipal().webContents.removeInsertedCSS(cssKey);
-      } catch { /* melhor esforço — não bloqueia o retorno */ }
     }
   });
   
@@ -2871,9 +2853,12 @@ function registerLegacyHandlers(deps) {
     return gerarComprovantePagamentoPDF(pagamentoId);
   });
 
-  ipcMain.handle('pag:imprimirTermico', async (_e, pagamentoId) => {
+  ipcMain.handle('pag:imprimirTermico', async (_e, pagamentoId, formatoEntrada, modoEntrada) => {
     const pag = db.obterPagamento(pagamentoId);
     if (!pag) return { sucesso: false, erro: 'Pagamento não encontrado.' };
+    const formato = formatoEntrada === '58mm' ? '58mm' : '80mm';
+    const larguraMm = formato === '58mm' ? 58 : 80;
+    const modo = modoEntrada === 'visualizar' ? 'visualizar' : 'imprimir';
     const config = db.obterConfig();
     const osPagamento = db.obterOSPorNumero(pag.osNumero) || {};
     const esc = valor => String(valor == null ? '' : valor)
@@ -2894,11 +2879,11 @@ function registerLegacyHandlers(deps) {
       : `<div class="linha"><span>${esc(rotulo)}</span><strong>${esc(valor)}</strong></div>`;
     const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>
       *,*::before,*::after{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}
-      .bobina{width:80mm;padding:4mm 3mm 7mm;font-size:10px;line-height:1.32}.topo{text-align:center;border-bottom:2px solid #000;padding-bottom:7px;margin-bottom:7px}
-      h1{font-size:15px;margin:0 0 2px}.contato{font-size:8px}.titulo{text-align:center;font-size:12px;font-weight:800;margin:8px 0}.numero{text-align:center;font-size:18px;font-weight:900;margin-bottom:8px}
+      .bobina{width:${larguraMm}mm;padding:4mm 3mm 7mm;font-size:${formato === '58mm' ? '9px' : '10px'};line-height:1.32}.topo{text-align:center;border-bottom:2px solid #000;padding-bottom:7px;margin-bottom:7px}
+      h1{font-size:${formato === '58mm' ? '13px' : '15px'};margin:0 0 2px}.contato{font-size:8px}.titulo{text-align:center;font-size:12px;font-weight:800;margin:8px 0}.numero{text-align:center;font-size:18px;font-weight:900;margin-bottom:8px}
       .linha{display:flex;gap:7px;align-items:flex-start;border-top:1px dashed #777;padding:4px 0}.linha span{flex:0 0 38%;text-transform:uppercase;font-size:8px}.linha strong{flex:1;overflow-wrap:anywhere}
       .valor{border:2px solid #000;text-align:center;margin:9px 0;padding:8px}.valor small{display:block;font-size:8px;text-transform:uppercase}.valor b{display:block;font-size:22px}
-      .rodape{text-align:center;border-top:1px dashed #777;margin-top:9px;padding-top:7px;font-size:8px}@page{size:80mm auto;margin:0}
+      .rodape{text-align:center;border-top:1px dashed #777;margin-top:9px;padding-top:7px;font-size:8px}@page{size:${larguraMm}mm auto;margin:0}
     </style></head><body><main class="bobina"><header class="topo"><h1>${esc(empresa)}</h1><div class="contato">${esc(contato)}</div></header>
       <div class="titulo">COMPROVANTE DE PAGAMENTO</div><div class="numero">${esc(pag.osNumero || '')}</div>
       ${linha('Cliente', pag.clienteNome || '—')}${linha('Aparelho', pag.aparelho || '—')}${linha('Data', new Date(pag.dataPagamento).toLocaleString('pt-BR'))}
@@ -2913,9 +2898,29 @@ function registerLegacyHandlers(deps) {
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } });
     try {
       await janela.loadFile(tmpPath);
+      if (modo === 'visualizar') {
+        const pixels = await janela.webContents.executeJavaScript(
+          'Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)', true
+        );
+        const alturaPolegadas = Math.max(2.4, Math.min(19.6, Number(pixels || 0) / 96 + 0.2));
+        const buffer = await janela.webContents.printToPDF({
+          printBackground: true,
+          pageSize: { width: larguraMm / 25.4, height: alturaPolegadas },
+          margins: { marginType: 'none' },
+          preferCSSPageSize: false
+        });
+        const dir = path.join(db.getPdfDir(), 'Comprovantes-Pagamento');
+        fs.mkdirSync(dir, { recursive: true });
+        const nomeSeguro = String(pag.id || pagamentoId).replace(/[\\/:*?"<>|]/g, '_');
+        const arquivo = path.join(dir, `${nomeSeguro}-${formato}.pdf`);
+        fs.writeFileSync(arquivo, buffer);
+        const erroAbertura = await shell.openPath(arquivo);
+        if (erroAbertura) return { sucesso: false, erro: erroAbertura };
+        return { sucesso: true, caminho: arquivo, formato, modo };
+      }
       return await new Promise(resolve => {
         janela.webContents.print({ silent: false, printBackground: true, margins: { marginType: 'none' } }, (sucesso, motivo) => {
-          resolve(sucesso ? { sucesso: true } : { sucesso: false, cancelado: /cancel/i.test(String(motivo || '')), erro: motivo || 'A impressão não foi concluída.' });
+          resolve(sucesso ? { sucesso: true, formato, modo } : { sucesso: false, cancelado: /cancel/i.test(String(motivo || '')), erro: motivo || 'A impressão não foi concluída.' });
         });
       });
     } finally {

@@ -96,19 +96,17 @@
   }
   async function imprimirTermico(item) {
     try {
-      const escolha = typeof window.escolherOpcaoModal === 'function'
-        ? await window.escolherOpcaoModal({
-          titulo: 'Imprimir autorização',
-          mensagem: 'Escolha a largura da bobina configurada na impressora.',
-          alternativas: [
-            { valor: '80mm', titulo: 'Bobina 80 mm', descricao: 'Mais espaço e melhor leitura.' },
-            { valor: '58mm', titulo: 'Bobina 58 mm', descricao: 'Versão compacta.' }
-          ]
-        })
-        : '80mm';
+      const escolha = typeof window.escolherSaidaTermicaModal === 'function'
+        ? await window.escolherSaidaTermicaModal({ titulo: 'Autorização térmica de desbloqueio' })
+        : { modo: 'imprimir', formato: '80mm' };
       if (!escolha) return;
-      await window.api.desbloqueioimprimirtermico(item.numero, escolha, '');
-      mensagem(`${item.numero} enviada para impressão em ${escolha}.`);
+      if (escolha.modo === 'visualizar') {
+        await window.api.desbloqueioabrirtermico(item.numero, escolha.formato);
+        mensagem(`Pré-visualização ${escolha.formato} de ${item.numero} aberta.`);
+      } else {
+        await window.api.desbloqueioimprimirtermico(item.numero, escolha.formato, '');
+        mensagem(`${item.numero} enviada para impressão em ${escolha.formato}.`);
+      }
     } catch (erro) { mensagem(erro?.message || String(erro), true); }
   }
   async function excluir(item) {

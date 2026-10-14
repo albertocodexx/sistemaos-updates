@@ -3,7 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, shell } = require('electron');
 const db = require('./db');
 const { gerarHtmlOS } = require('./templates/os-template');
 const { gerarHtmlVenda } = require('./templates/venda-template');
@@ -384,6 +384,46 @@ async function imprimirDesbloqueioTermico(documento, formato = '80mm', nomeImpre
   return imprimirHtmlLocal(html, { nomeImpressora });
 }
 
+async function abrirDesbloqueioTermico(documento, formato = '80mm') {
+  if (!documento) throw new Error('Autorização de desbloqueio não encontrada.');
+  const tipo = String(formato).toLowerCase() === '58mm' ? '58mm' : '80mm';
+  const larguraMm = tipo === '58mm' ? 58 : 80;
+  let html = gerarHtmlDesbloqueioTermico(documento, db.obterConfig(), tipo);
+  html = injetarAssinaturaClienteDesbloqueioNoHtml(
+    html,
+    documento.assinaturaClienteBase64,
+    obterEstadoAssinatura(documento, 'assinaturaClienteBase64')
+  );
+  const tmpPath = path.join(os.tmpdir(), `sistema-os-previa-termica-${crypto.randomUUID()}.html`);
+  fs.writeFileSync(tmpPath, html, 'utf-8');
+  const janela = new BrowserWindow({ show: false, width: 600, height: 1000,
+    backgroundColor: '#FFFFFF', webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } });
+  try {
+    await janela.loadFile(tmpPath);
+    await prepararAssinaturasPdf(janela);
+    const pixels = await janela.webContents.executeJavaScript(
+      'Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)', true
+    );
+    const buffer = await janela.webContents.printToPDF({
+      printBackground: true,
+      pageSize: { width: larguraMm / 25.4, height: Math.max(2.4, Math.min(19.6, Number(pixels || 0) / 96 + 0.2)) },
+      margins: { marginType: 'none' },
+      preferCSSPageSize: false
+    });
+    const dir = path.join(db.getPdfDesbloqueioDir(), 'Termicos');
+    fs.mkdirSync(dir, { recursive: true });
+    const nomeSeguro = String(documento.numero || 'SEM-NUMERO').replace(/[\\/:*?"<>|]/g, '_');
+    const caminho = path.join(dir, `${nomeSeguro}-${tipo}.pdf`);
+    fs.writeFileSync(caminho, buffer);
+    const erro = await shell.openPath(caminho);
+    if (erro) throw new Error(`Não foi possível abrir a pré-visualização: ${erro}`);
+    return { sucesso: true, caminho, formato: tipo };
+  } finally {
+    janela.destroy();
+    fs.unlink(tmpPath, () => {});
+  }
+}
+
 // PDFs antigos são atualizados no primeiro acesso. Assim documentos gerados
 // antes dos campos assinaturaPendente/naoAssinado também passam a exibir o
 // estado correto sem exigir recriação manual pelo usuário.
@@ -407,7 +447,8 @@ async function atualizarPdfLegadoAntesDeAbrir(caminhoOriginal) {
 
 module.exports = {
   gerarPdfDaOS, regenerarPdfPorNumero, gerarPdfVenda, gerarPdfCompra,
-  gerarPdfEntrega, gerarPdfGarantia, gerarPdfDesbloqueio, imprimirDesbloqueioTermico, atualizarPdfLegadoAntesDeAbrir,
+  gerarPdfEntrega, gerarPdfGarantia, gerarPdfDesbloqueio, imprimirDesbloqueioTermico, abrirDesbloqueioTermico, atualizarPdfLegadoAntesDeAbrir,
+  renderizarHtmlParaPdf,
   // Mantidos públicos só para os testes de regressão do PDF.
   normalizarAssinaturaParaImagem,
   obterEstadoAssinatura,

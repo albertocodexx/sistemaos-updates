@@ -111,6 +111,8 @@ const testes = [
   'teste-migracao-supabase.js',
   'teste-cobrancas-pc-ia-sincronizadas.js',
   'teste-cobrancas-retry-sincronizacao.js',
+  'teste-ia-valor-os-cobrancas-auto.js',
+  'teste-relatorio-painel-dados.js',
   'teste-ia-custos-compra-local.js',
   'teste-ia-entrega-contexto.js',
   'teste-ia-chat-online.js',

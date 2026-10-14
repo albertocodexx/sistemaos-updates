@@ -523,10 +523,12 @@ body.tema-escuro select option {
 .compra-vinculo-chip { display: inline-flex; align-items: center; width: fit-content; margin-top: 9px; padding: 4px 8px; border-radius: 999px; background: color-mix(in srgb, var(--sucesso) 12%, transparent); color: var(--sucesso); font-size: 11px; font-weight: 700; }
 
 /* ─── ABAS INTERNAS ─────────────────────── */
-.abas-internas { display: flex; gap: 0; border-bottom: 2px solid var(--borda); margin-bottom: 16px; flex-wrap: wrap; }
+.abas-internas { display: flex; gap: 0; border-bottom: 2px solid transparent; margin-bottom: 16px; flex-wrap: wrap; }
 .aba-interna { background: none; border: none; border-bottom: 3px solid transparent; padding: 10px 16px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--texto-sec); margin-bottom: -2px; }
 .aba-interna:hover { color: var(--cor-links); }
 .aba-interna.ativa { color: var(--cor-links); border-bottom-color: var(--cor-links); }
+.relatorios-subabas { border-bottom-color: transparent; }
+.relatorios-subabas .aba-interna.ativa { border-bottom-color: var(--cor-links); }
 .sub-secao { padding: 4px 0; }
 
 /* ─── CHECKLIST ─────────────────────────── */

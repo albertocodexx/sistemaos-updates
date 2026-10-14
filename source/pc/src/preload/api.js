@@ -45,6 +45,7 @@ function criarApiPublica({ invocar, assinar, removerAssinatura }) {
   desbloqueiosalvar: (d, modo, u) => invocar('desbloqueio:salvar', d, modo, u),
   desbloqueiogerarpdf: n => invocar('desbloqueio:gerarPdf', n),
   desbloqueioimprimirtermico: (n, f, i) => invocar('desbloqueio:imprimirTermico', n, f, i),
+  desbloqueioabrirtermico: (n, f) => invocar('desbloqueio:abrirTermico', n, f),
   desbloqueioabrirpdf: c => invocar('desbloqueio:abrirPdf', c),
   desbloqueioexcluir: (n, u) => invocar('desbloqueio:excluir', n, u),
   // Supabase (Etapa 7 Electron). Tokens/sessão permanecem criptografados no
@@ -143,7 +144,7 @@ function criarApiPublica({ invocar, assinar, removerAssinatura }) {
   backupabrirpastauto: ()  => invocar('backup:abrirPastaAuto'),
   backupstatusautomatico: () => invocar('backup:statusAutomatico'),
   // Backup visual do painel (Relatórios) em PDF
-  backupexportarpainelpdf: () => invocar('backup:exportarPainelPDF'),
+  backupexportarpainelpdf: (filtros) => invocar('backup:exportarPainelPDF', filtros),
   // Manual
   abrirmanual: () => invocar('app:abrirManual'),
   // Licença (Etapa 11.1)
@@ -258,7 +259,7 @@ function criarApiPublica({ invocar, assinar, removerAssinatura }) {
   pagabrircomp:        (p)               => invocar('pag:abrirComprovante', p),
   paggerarpdf:         (id)              => invocar('pag:gerarComprovantePDF', id),
   paggerarpdfsilencioso: (id)            => invocar('pag:gerarComprovantePDFSilencioso', id),
-  pagimprimirtermico:  (id)              => invocar('pag:imprimirTermico', id),
+  pagimprimirtermico:  (id, formato, modo) => invocar('pag:imprimirTermico', id, formato, modo),
   // Fase 6: confirmar pagamento presencial (botão na tela de edição da OS,
   // visível quando statusPagamento === 'Aguardando Pagamento na Retirada')
   osconfirmarpagamentopresencial: apiOS.confirmarPagamentoPresencial,
